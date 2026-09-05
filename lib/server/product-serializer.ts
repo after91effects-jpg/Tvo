@@ -1,4 +1,5 @@
 import { jsonParseSafe } from './api';
+import { normalizeImageUrl } from '../imageUrl';
 
 export function serializeProduct(row: any) {
   if (!row) return null;
@@ -19,9 +20,7 @@ export function serializeProduct(row: any) {
     stockStatus: row.stock_status,
     weightOptions: jsonParseSafe(row.variations_json, []),
     images: jsonParseSafe(row.images_json, []).map((u: any) => {
-      let url = typeof u === 'string' ? u : (u?.url || '');
-      // Rewrite broken remote URLs and unnormalized Next.js paths to correct local static directory paths
-      url = url.replace('https://tvoflavours.com/wp-content', '').replace(/^\/\.\.\/\.\.\//, '/');
+      const url = normalizeImageUrl(typeof u === 'string' ? u : (u?.url || ''));
       return { url, isPrimary: true };
     }).filter((i: any) => i.url),
     flavours: jsonParseSafe(row.flavours, []),

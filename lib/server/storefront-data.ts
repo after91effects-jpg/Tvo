@@ -3,6 +3,7 @@ import { seedIfEmpty } from './seed';
 seedIfEmpty();
 import { serializeProduct } from './product-serializer';
 import { buildTree } from './category-tree';
+import { normalizeImageUrl } from '../imageUrl';
 
 export function getProducts(filter?: { category?: string; limit?: number; order?: string }) {
   let sql = 'SELECT p.*, c.name AS category_name, c.slug AS category_slug FROM products p LEFT JOIN categories c ON p.category_id=c.id WHERE p.deleted_at IS NULL AND p.published=1';
@@ -39,7 +40,7 @@ export function getCategories() {
         try {
           const imgs = JSON.parse(prod.images_json);
           if (imgs && imgs.length > 0) {
-            c.image = typeof imgs[0] === 'string' ? imgs[0] : imgs[0].url;
+            c.image = normalizeImageUrl(typeof imgs[0] === 'string' ? imgs[0] : (imgs[0]?.url || ''));
           }
         } catch {}
       }
@@ -82,6 +83,6 @@ export function getTestimonials() {
 }
 
 export function getImageObj(row: any): string[] {
-  try { return JSON.parse(row.images_json || '[]').map((i: any) => (typeof i === 'string' ? i : i.url)); }
+  try { return JSON.parse(row.images_json || '[]').map((i: any) => normalizeImageUrl(typeof i === 'string' ? i : (i?.url || ''))).filter(Boolean); }
   catch { return []; }
 }
