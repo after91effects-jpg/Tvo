@@ -203,7 +203,7 @@ export default function Home() {
               subcategories,
               tags,
               flavours,
-              images: images.map((im: any) => (typeof im === 'string' ? { url: im } : { url: im.url, thumbUrl: im.thumbUrl, alt: im.alt })).filter((i: any) => i.url),
+              images: images.map((im: any) => (typeof im === 'string' ? { url: im } : { url: im.url, mediumUrl: im.mediumUrl || im.url, thumbUrl: im.thumbUrl || im.mediumUrl || im.url, alt: im.alt })).filter((i: any) => i.url),
               weight: p.weight || '1.0 kg',
               weightOptions: normalizedOptions,
               flavourOptions: p.flavourOptions || undefined,
