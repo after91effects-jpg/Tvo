@@ -1,6 +1,6 @@
 import { db } from './db';
 import { logAudit, slugify, jsonParseSafe } from './api';
-import { normalizeImageUrl } from '../imageUrl';
+import { normalizeImageUrl, mediumImageUrl } from '../imageUrl';
 
 // ============================================================================
 // Shared helpers
@@ -11,8 +11,10 @@ export function serializeAdminProduct(row: any) {
     ...row,
     id: String(row.id),
     images: jsonParseSafe(row.images_json, []).map((i: any) => {
-      const url = normalizeImageUrl(typeof i === 'string' ? i : (i?.url || ''));
-      return typeof i === 'string' ? url : ({ ...(typeof i === 'object' && i ? i : {}), url });
+      const raw = typeof i === 'string' ? i : (i?.url || '');
+      if (!raw) return i;
+      const url = normalizeImageUrl(raw);
+      return typeof i === 'string' ? url : ({ ...(typeof i === 'object' && i ? i : {}), url, mediumUrl: mediumImageUrl(url) });
     }).filter((i: any) => i?.url),
     variations: jsonParseSafe(row.variations_json, []),
     flavours: jsonParseSafe(row.flavours, []),

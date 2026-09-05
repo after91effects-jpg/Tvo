@@ -370,7 +370,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           addons: item.selectedAddOns || [],
           unitPrice: item.selectedWeight?.price || 999,
           totalPrice: (item.selectedWeight?.price || 999) * item.quantity,
-          imageUrl: item.product.images?.[0]?.url || item.product.images?.[0] || '',
+          imageUrl: item.product.images?.[0]?.mediumUrl || item.product.images?.[0]?.url || '',
         })),
         subtotal,
         deliveryFee,

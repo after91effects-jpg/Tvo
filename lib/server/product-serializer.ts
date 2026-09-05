@@ -1,5 +1,5 @@
 import { jsonParseSafe } from './api';
-import { normalizeImageUrl } from '../imageUrl';
+import { normalizeImageUrl, mediumImageUrl } from '../imageUrl';
 
 export function serializeProduct(row: any) {
   if (!row) return null;
@@ -21,7 +21,7 @@ export function serializeProduct(row: any) {
     weightOptions: jsonParseSafe(row.variations_json, []),
     images: jsonParseSafe(row.images_json, []).map((u: any) => {
       const url = normalizeImageUrl(typeof u === 'string' ? u : (u?.url || ''));
-      return { url, isPrimary: true };
+      return { url, mediumUrl: mediumImageUrl(url), isPrimary: true };
     }).filter((i: any) => i.url),
     flavours: jsonParseSafe(row.flavours, []),
     badges: jsonParseSafe(row.badges, []),

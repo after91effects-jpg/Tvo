@@ -23,3 +23,12 @@ export function normalizeImageUrl(url: string): string {
   // Prefer the full-size image over WordPress "-<w>x<h>" resize variants.
   return clean.replace(/(-\d+x\d+)(\.[a-z0-9]+)$/i, '$2');
 }
+
+// Returns a compact WebP rendition (e.g. "/uploads/2026/05/Pineapple-Cake-w700.webp")
+// of a normalized image path, used for lightweight storefront cards so the
+// catalog never downloads 1-3 MB full-size files for every product.
+// Foreign/external URLs are returned unchanged.
+export function mediumImageUrl(url: string): string {
+  if (!url || !url.startsWith('/')) return url;
+  return url.replace(/\.[a-z0-9]+$/i, '-w700.webp');
+}
