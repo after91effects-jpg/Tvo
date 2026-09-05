@@ -1,6 +1,8 @@
 // Normalize image URLs coming from the DB (which may contain "../../" relative
 // prefixes or the old tvoflavours.com/wp-content origin) into clean root-absolute
 // static paths like "/uploads/2026/05/x.png" that Next serves from public/.
+// WordPress "resized" variants (e.g. "Pineapple-Cake-100x100.png") are remapped
+// to the full-size file so storefront images are never served from blurry thumbs.
 export function normalizeImageUrl(url: string): string {
   if (!url) return url;
   let u = String(url).trim();
@@ -17,5 +19,7 @@ export function normalizeImageUrl(url: string): string {
     if (seg === '..') { out.pop(); continue; }
     out.push(seg);
   }
-  return '/' + out.join('/');
+  const clean = '/' + out.join('/');
+  // Prefer the full-size image over WordPress "-<w>x<h>" resize variants.
+  return clean.replace(/(-\d+x\d+)(\.[a-z0-9]+)$/i, '$2');
 }
