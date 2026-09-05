@@ -1,0 +1,21 @@
+node_modules/
+.next/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+
+# Deployment cleanup (original files preserved on disk, sirf Git me nahi jayenge)
+public/images/
+public/uploads/
+*.zip
+*.tsbuildinfo
+/tvo-flavours.db
+/test*.js
+/scripts/
+/data/*.db-shm
+/data/*.db-wal
+/data/*.dev.db
+/data/import-validation-report.json
