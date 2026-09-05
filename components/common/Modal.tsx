@@ -31,14 +31,16 @@ export const Modal: React.FC<ModalProps> = ({
       }
     };
     if (isOpen) {
-      document.body.style.overflow = 'hidden';
+      if (!embedded) {
+        document.body.style.overflow = 'hidden';
+      }
       window.addEventListener('keydown', handleKeyDown);
     }
     return () => {
       document.body.style.overflow = '';
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, embedded]);
 
   if (!isOpen) return null;
 
