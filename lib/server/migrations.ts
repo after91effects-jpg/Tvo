@@ -15,7 +15,13 @@ function tableExists(table: string): boolean {
 
 function addColumn(table: string, column: string, ddl: string) {
   if (!columnExists(table, column)) {
-    db.exec(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
+    try {
+      db.exec(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
+    } catch (e: any) {
+      // A concurrently-initializing process/worker may have added the column
+      // between our existence check and the ALTER. Verify before rethrowing.
+      if (!columnExists(table, column)) throw e;
+    }
   }
 }
 
@@ -43,6 +49,28 @@ export function runMigrations() {
   addColumn('products', 'customization_json', 'customization_json TEXT');
   addColumn('products', 'duplicate_of', 'duplicate_of INTEGER');
   addColumn('products', 'status', "status TEXT DEFAULT 'publish'");
+  addColumn('products', 'selling_unit', "selling_unit TEXT");
+
+  // ---- Auto-infer selling_unit for existing products ----
+  if (columnExists('products', 'selling_unit') && columnExists('products', 'variations_json')) {
+    const rows = db.prepare(`SELECT id, variations_json FROM products WHERE selling_unit IS NULL`).all() as { id: number; variations_json: string | null }[];
+    const updateStmt = db.prepare(`UPDATE products SET selling_unit = ? WHERE id = ?`);
+    for (const row of rows) {
+      let inferredUnit: string | null = null;
+      if (row.variations_json) {
+        try {
+          const parsed = JSON.parse(row.variations_json);
+          const options: any[] = parsed?.options || parsed || [];
+          if (Array.isArray(options)) {
+            const hasPiece = options.some((o: any) => /piece|pcs/i.test(o.label || ''));
+            inferredUnit = hasPiece ? 'piece' : 'weight';
+          }
+        } catch { /* leave null */ }
+      }
+      if (!inferredUnit) inferredUnit = 'weight';
+      updateStmt.run(inferredUnit, row.id);
+    }
+  }
 
   // ---- product management helper tables ----
   addTable(`CREATE TABLE IF NOT EXISTS product_tags (

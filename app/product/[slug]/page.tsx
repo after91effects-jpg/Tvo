@@ -90,6 +90,7 @@ export default function ProductPage() {
             tags,
             flavours,
             eggless: !!p.eggless,
+            sellingUnit: p.sellingUnit || 'weight',
             weightOptions: weightOptionsArr.length ? weightOptionsArr.map((w: any) => ({
               label: w.label || w.value || `${w.weightKg || 0.5} kg`,
               weightKg: Number(w.weightKg ?? w.weight_kg ?? (parseFloat(w.label) || 0.5)),

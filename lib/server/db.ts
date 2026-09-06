@@ -146,6 +146,7 @@ CREATE TABLE IF NOT EXISTS products (
   focus_keyword TEXT,
   canonical_url TEXT,
   custom_order INTEGER DEFAULT 0,
+  selling_unit TEXT,
   catalog_source TEXT,
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT,

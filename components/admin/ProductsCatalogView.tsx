@@ -108,6 +108,7 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
     'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=800&q=80'
   );
   const [formPublished, setFormPublished] = useState(true);
+  const [formSellingUnit, setFormSellingUnit] = useState<'piece' | 'weight'>('weight');
 
   // Download Sample CSV Template
   const handleDownloadSampleCsv = () => {
@@ -593,6 +594,7 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
       'https://images.unsplash.com/photo-1606890737304-57a1ca8a5b62?auto=format&fit=crop&w=800&q=80'
     );
     setFormPublished(true);
+    setFormSellingUnit('weight');
     setIsAddModalOpen(true);
   };
 
@@ -612,6 +614,7 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
     setFormBadges(prod.badges?.join(', ') || '');
     setFormImageUrl(prod.images?.[0]?.url || '');
     setFormPublished(prod.published);
+    setFormSellingUnit((prod as any).sellingUnit ?? (prod as any).selling_unit ?? 'weight');
     setIsAddModalOpen(true);
   };
 
@@ -630,27 +633,35 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
       const mrpNum = parseFloat(formMrp) || Math.round(priceNum * 1.2);
       const stockNum = parseInt(formStock, 10) || 20;
 
-      const weightOptions: WeightOption[] = [
-        { label: '0.5 kg (Serves 4-6)', weightKg: 0.5, price: priceNum, mrp: mrpNum },
-        {
-          label: '1.0 kg (Serves 8-10)',
-          weightKg: 1.0,
-          price: Math.round(priceNum * 1.85),
-          mrp: Math.round(mrpNum * 1.85),
-        },
-        {
-          label: '1.5 kg (Serves 12-14)',
-          weightKg: 1.5,
-          price: Math.round(priceNum * 2.7),
-          mrp: Math.round(mrpNum * 2.7),
-        },
-        {
-          label: '2.0 kg (Serves 16-20)',
-          weightKg: 2.0,
-          price: Math.round(priceNum * 3.5),
-          mrp: Math.round(mrpNum * 3.5),
-        },
-      ];
+      const weightOptions: WeightOption[] = formSellingUnit === 'piece'
+        ? [
+            { label: '1 piece', weightKg: 0.1, price: priceNum, mrp: mrpNum, isDefault: true },
+            { label: '2 pieces (Pack of 2)', weightKg: 0.2, price: Math.round(priceNum * 1.9), mrp: Math.round(mrpNum * 1.9) },
+            { label: '4 pieces (Party Box)', weightKg: 0.4, price: Math.round(priceNum * 3.8), mrp: Math.round(mrpNum * 3.8) },
+            { label: '6 pieces (Family Box)', weightKg: 0.6, price: Math.round(priceNum * 5.5), mrp: Math.round(mrpNum * 5.5) },
+            { label: '12 pieces (Celebration Box)', weightKg: 1.2, price: Math.round(priceNum * 10), mrp: Math.round(mrpNum * 10) },
+          ]
+        : [
+            { label: '0.5 kg (Serves 4-6)', weightKg: 0.5, price: priceNum, mrp: mrpNum },
+            {
+              label: '1.0 kg (Serves 8-10)',
+              weightKg: 1.0,
+              price: Math.round(priceNum * 1.85),
+              mrp: Math.round(mrpNum * 1.85),
+            },
+            {
+              label: '1.5 kg (Serves 12-14)',
+              weightKg: 1.5,
+              price: Math.round(priceNum * 2.7),
+              mrp: Math.round(mrpNum * 2.7),
+            },
+            {
+              label: '2.0 kg (Serves 16-20)',
+              weightKg: 2.0,
+              price: Math.round(priceNum * 3.5),
+              mrp: Math.round(mrpNum * 3.5),
+            },
+          ];
 
       const prodId =
         editingProduct?.id ||
@@ -672,6 +683,7 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
         tags: formTags.split(',').map((s) => s.trim()).filter(Boolean),
         flavours: formFlavours.split(',').map((s) => s.trim()).filter(Boolean),
         eggless: formEggless,
+        sellingUnit: formSellingUnit,
         weightOptions,
         images: [
           {
@@ -713,6 +725,7 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
             short_description: productPayload.shortDescription,
             description: productPayload.description,
             eggless: formEggless ? 1 : 0,
+            selling_unit: formSellingUnit,
             images_json: productPayload.images,
             variations_json: {
               attribute: 'Select Weight',
@@ -1105,7 +1118,21 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-[var(--text-main)] mb-1">
+                Selling Unit
+              </label>
+              <select
+                value={formSellingUnit}
+                onChange={(e) => setFormSellingUnit(e.target.value as 'piece' | 'weight')}
+                className="w-full px-3 py-2 text-xs rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-main)] focus:outline-none font-medium"
+              >
+                <option value="weight">By Weight (KG)</option>
+                <option value="piece">By Piece</option>
+              </select>
+            </div>
+
             <div>
               <label className="block text-xs font-semibold text-[var(--text-main)] mb-1">
                 Category
@@ -1125,7 +1152,7 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
 
             <div>
               <label className="block text-xs font-semibold text-[var(--text-main)] mb-1">
-                0.5kg Base Price (₹)
+                {formSellingUnit === 'piece' ? 'Base Price per Piece (₹)' : '0.5kg Base Price (₹)'}
               </label>
               <input
                 type="number"
@@ -1139,7 +1166,7 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
 
             <div>
               <label className="block text-xs font-semibold text-[var(--text-main)] mb-1">
-                0.5kg Regular MRP (₹)
+                {formSellingUnit === 'piece' ? 'Regular MRP per Piece (₹)' : '0.5kg Regular MRP (₹)'}
               </label>
               <input
                 type="number"

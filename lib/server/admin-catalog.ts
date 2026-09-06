@@ -25,6 +25,7 @@ export function serializeAdminProduct(row: any) {
     upsells: jsonParseSafe(row.upsells, []),
     crossSells: jsonParseSafe(row.cross_sells, []),
     customization: jsonParseSafe(row.customization_json, []),
+    sellingUnit: row.selling_unit || 'weight',
     categoryName: row.category_name || '',
     categorySlug: row.category_slug || '',
     brandName: row.brand_name || '',
@@ -167,7 +168,7 @@ function buildProductPayload(body: any, existing: any, user: any) {
     'open_graph_title', 'open_graph_description', 'social_image',
     'visibility', 'product_type', 'tax_status', 'tax_class',
     'prep_time_minutes', 'min_advance_notice', 'sale_start', 'sale_end',
-    'backorders', 'status',
+    'backorders', 'status', 'selling_unit',
   ];
   for (const f of fields) {
     if (body[f] !== undefined) payload[f] = body[f] === '' ? null : body[f];
@@ -282,7 +283,7 @@ export function quickEdit(body: any, user: any) {
   const existing = db.prepare('SELECT * FROM products WHERE id=?').get(id) as any;
   if (!existing) throw new Error('Product not found');
   // Only allow safe fields through quick edit.
-  const safe = ['name', 'sku', 'regular_price', 'sale_price', 'stock', 'category_id', 'brand_id', 'status', 'published', 'featured', 'stock_status', 'product_type'];
+  const safe = ['name', 'sku', 'regular_price', 'sale_price', 'stock', 'category_id', 'brand_id', 'status', 'published', 'featured', 'stock_status', 'product_type', 'selling_unit'];
   const payload: any = {};
   const allow = safe.filter((k) => body[k] !== undefined);
   // Validate sku uniqueness if changing
@@ -326,15 +327,15 @@ export function duplicateProduct(id: number, user: any) {
      flavours, badges, tags, attributes_json, variations_json, images_json, related_products, upsells, cross_sells,
      seo_title, seo_description, focus_keyword, canonical_url, published, custom_order, product_type, visibility,
      tax_status, tax_class, sale_start, sale_end, enable_stock, backorders, customization_json, status, duplicate_of,
-     created_at, updated_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+     selling_unit, created_at, updated_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
     .run(sku, baseName, slug, src.short_description, src.description, src.regular_price, src.sale_price, src.cost_price,
       src.stock, src.low_stock_threshold, src.stock_status, src.category_id, src.brand_id, src.weight_kg, src.dimensions,
       src.featured, src.bestseller, src.new_arrival, src.deal, src.eggless, src.flavours, src.badges, src.tags,
       src.attributes_json, src.variations_json, src.images_json, src.related_products, src.upsells, src.cross_sells,
       src.seo_title, src.seo_description, src.focus_keyword, src.canonical_url, 0, src.custom_order, src.product_type || 'simple',
       src.visibility || 'public', src.tax_status || 'taxable', src.tax_class, src.sale_start, src.sale_end, src.enable_stock,
-      src.backorders || 'no', src.customization_json, 'draft', id, now, now);
+      src.backorders || 'no', src.customization_json, 'draft', id, src.selling_unit || 'weight', now, now);
   const newId = Number(info.lastInsertRowid);
   // copy pivots
   db.prepare('INSERT OR IGNORE INTO product_tags (product_id, tag_id) SELECT ?, tag_id FROM product_tags WHERE product_id=?').run(newId, id);

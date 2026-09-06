@@ -389,7 +389,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   <div>
                     <label className="block text-xs font-bold text-[var(--text-main)] uppercase tracking-wider mb-2 flex items-center gap-1.5">
                       <Package className="w-3.5 h-3.5 text-[var(--primary)]" />
-                      Select Cake Weight
+                      {product.sellingUnit === 'piece' ? 'Select Quantity' : 'Select Weight'}
                     </label>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                       {product.weightOptions.map((opt) => {
@@ -410,8 +410,14 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                                 {discount}% OFF
                               </div>
                             )}
-                            <div className="text-xs font-bold text-[var(--text-main)]">{opt.weightKg} kg</div>
-                            <div className="text-[10px] text-[var(--text-muted)] mt-0.5">Serves {Math.ceil(opt.weightKg * 8)}-{Math.ceil(opt.weightKg * 12)}</div>
+                            <div className="text-xs font-bold text-[var(--text-main)]">
+                              {product.sellingUnit === 'piece' ? opt.label : `${opt.weightKg} kg`}
+                            </div>
+                            <div className="text-[10px] text-[var(--text-muted)] mt-0.5">
+                              {product.sellingUnit === 'piece'
+                                ? `Serves ${Math.round(opt.weightKg * 10) * 2}-${Math.round(opt.weightKg * 10) * 3}`
+                                : `Serves ${Math.ceil(opt.weightKg * 8)}-${Math.ceil(opt.weightKg * 12)}`}
+                            </div>
                             <div className="flex items-baseline gap-1 mt-1">
                               <span className="text-sm font-bold text-[var(--primary)]">₹{opt.price}</span>
                               {opt.mrp && (
@@ -775,7 +781,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
               {/* Price Summary */}
               <div className="p-3 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border)] space-y-1.5">
                 <div className="flex justify-between text-xs text-[var(--text-muted)]">
-                  <span>Base Price ({selectedWeight.weightKg} kg)</span>
+                  <span>Base Price ({product.sellingUnit === 'piece' ? selectedWeight.label : `${selectedWeight.weightKg} kg`})</span>
                   <span>₹{selectedWeight.price}</span>
                 </div>
                 {addOnsTotal > 0 && (

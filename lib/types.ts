@@ -51,6 +51,7 @@ export interface Product {
   tags: string[];
   flavours: string[];
   eggless: boolean;
+  sellingUnit?: 'piece' | 'weight';
   weightOptions: WeightOption[];
   images: ProductImage[];
   rating: number;

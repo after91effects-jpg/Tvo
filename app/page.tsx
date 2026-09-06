@@ -211,6 +211,7 @@ export default function Home() {
               reviewCount: p.reviewCount || 0,
               published: p.published !== 0 && p.published !== false,
               eggless: Boolean(p.eggless),
+              sellingUnit: p.sellingUnit || 'weight',
               bestseller: Boolean(p.bestseller),
               newArrival: Boolean(p.newArrival),
               deal: Boolean(p.deal),

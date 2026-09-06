@@ -27,6 +27,7 @@ export function serializeProduct(row: any) {
     badges: jsonParseSafe(row.badges, []),
     tags: jsonParseSafe(row.tags, []),
     eggless: !!row.eggless,
+    sellingUnit: row.selling_unit || 'weight',
     featured: !!row.featured,
     bestseller: !!row.bestseller,
     newArrival: !!row.new_arrival,

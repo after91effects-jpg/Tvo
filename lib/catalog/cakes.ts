@@ -15,6 +15,7 @@ export const CSV_CAKE_PRODUCTS: Product[] = [
     tags: ['Choco Chip Cake', 'Truffle Cake', 'Chocolate Truffle', 'Birthday Cake', 'Eggless Chocolate'],
     flavours: ['Dark Chocolate Ganache', 'Dutch Cocoa Sponge'],
     eggless: true,
+    sellingUnit: 'weight',
     weightOptions: [
       { label: '0.5 Kg', weightKg: 0.5, price: 499, mrp: 599, isDefault: true },
       { label: '1.0 Kg', weightKg: 1.0, price: 949, mrp: 1199 },
@@ -48,6 +49,7 @@ export const CSV_CAKE_PRODUCTS: Product[] = [
     tags: ['Belgian Chocolate', 'Gourmet Cake', 'Callebaut', 'Anniversary Cake'],
     flavours: ['70% Dark Belgian Chocolate', 'Silky Ganache'],
     eggless: true,
+    sellingUnit: 'weight',
     weightOptions: [
       { label: '0.5 Kg', weightKg: 0.5, price: 549, mrp: 699, isDefault: true },
       { label: '1.0 Kg', weightKg: 1.0, price: 1049, mrp: 1299 },
@@ -80,6 +82,7 @@ export const CSV_CAKE_PRODUCTS: Product[] = [
     tags: ['Kunafa Cake', 'Dubai Chocolate', 'Pistachio Kunafa', 'Viral Cake', 'Trending'],
     flavours: ['Pistachio Cream', 'Kataifi Crunch', 'Belgian Chocolate'],
     eggless: true,
+    sellingUnit: 'weight',
     weightOptions: [
       { label: '0.5 Kg', weightKg: 0.5, price: 649, mrp: 799, isDefault: true },
       { label: '1.0 Kg', weightKg: 1.0, price: 1249, mrp: 1499 },
@@ -111,6 +114,7 @@ export const CSV_CAKE_PRODUCTS: Product[] = [
     tags: ['Mango Cake', 'Alphonso Mango', 'Fresh Fruit Cake', 'Summer Special'],
     flavours: ['Ratnagiri Alphonso Mango', 'Whipped Vanilla Cream'],
     eggless: true,
+    sellingUnit: 'weight',
     weightOptions: [
       { label: '0.5 Kg', weightKg: 0.5, price: 479, mrp: 599, isDefault: true },
       { label: '1.0 Kg', weightKg: 1.0, price: 899, mrp: 1149 },
@@ -142,6 +146,7 @@ export const CSV_CAKE_PRODUCTS: Product[] = [
     tags: ['Pineapple Cake', 'Fresh Fruit', 'Birthday Cake', 'Eggless'],
     flavours: ['Juicy Pineapple', 'Vanilla Whipped Cream'],
     eggless: true,
+    sellingUnit: 'weight',
     weightOptions: [
       { label: '0.5 Kg', weightKg: 0.5, price: 429, mrp: 529, isDefault: true },
       { label: '1.0 Kg', weightKg: 1.0, price: 799, mrp: 999 },
@@ -174,6 +179,7 @@ export const CSV_CAKE_PRODUCTS: Product[] = [
     tags: ['Heart Cake', 'Anniversary Cake', 'Romantic Cake', 'Love Cake', 'Chocolate Heart'],
     flavours: ['Dark Chocolate Ganache', 'Ruby Sugar Hearts'],
     eggless: true,
+    sellingUnit: 'weight',
     weightOptions: [
       { label: '0.5 Kg', weightKg: 0.5, price: 549, mrp: 699, isDefault: true },
       { label: '1.0 Kg', weightKg: 1.0, price: 1049, mrp: 1299 },
@@ -205,6 +211,7 @@ export const CSV_CAKE_PRODUCTS: Product[] = [
     tags: ['Black Forest Cake', 'Cherry Cake', 'Birthday Classic', 'Chocolate Shavings'],
     flavours: ['Dark Chocolate Shavings', 'Sour Cherry', 'Whipped Cream'],
     eggless: true,
+    sellingUnit: 'weight',
     weightOptions: [
       { label: '0.5 Kg', weightKg: 0.5, price: 449, mrp: 549, isDefault: true },
       { label: '1.0 Kg', weightKg: 1.0, price: 849, mrp: 1099 },
@@ -236,6 +243,7 @@ export const CSV_CAKE_PRODUCTS: Product[] = [
     tags: ['Butterscotch Cake', 'Praline Crunch', 'Caramel Cake', 'Birthday Special'],
     flavours: ['Butterscotch Caramel', 'Cashew Praline Crunch'],
     eggless: true,
+    sellingUnit: 'weight',
     weightOptions: [
       { label: '0.5 Kg', weightKg: 0.5, price: 449, mrp: 549, isDefault: true },
       { label: '1.0 Kg', weightKg: 1.0, price: 849, mrp: 1099 },
@@ -267,6 +275,7 @@ export const CSV_CAKE_PRODUCTS: Product[] = [
     tags: ['Red Velvet Cake', 'Cream Cheese', 'Anniversary Cake', 'Heart Cake'],
     flavours: ['Red Velvet Cocoa', 'Philadelphia Cream Cheese'],
     eggless: true,
+    sellingUnit: 'weight',
     weightOptions: [
       { label: '0.5 Kg', weightKg: 0.5, price: 549, mrp: 699, isDefault: true },
       { label: '1.0 Kg', weightKg: 1.0, price: 1049, mrp: 1299 },
@@ -298,6 +307,7 @@ export const CSV_CAKE_PRODUCTS: Product[] = [
     tags: ['Tiramisu Cake', 'Coffee Cake', 'Espresso Cake', 'Mascarpone', '100% Eggless'],
     flavours: ['Espresso Coffee', 'Mascarpone Cream'],
     eggless: true,
+    sellingUnit: 'weight',
     weightOptions: [
       { label: '0.5 Kg', weightKg: 0.5, price: 599, mrp: 749, isDefault: true },
       { label: '1.0 Kg', weightKg: 1.0, price: 1149, mrp: 1399 },
@@ -328,6 +338,7 @@ export const CSV_CAKE_PRODUCTS: Product[] = [
     tags: ['Mom Cake', 'Mother Birthday', 'Mothers Day Cake', 'Chocolate Cake'],
     flavours: ['Dark Chocolate Truffle', 'Sugar Floral'],
     eggless: true,
+    sellingUnit: 'weight',
     weightOptions: [
       { label: '0.5 Kg', weightKg: 0.5, price: 599, mrp: 749, isDefault: true },
       { label: '1.0 Kg', weightKg: 1.0, price: 1099, mrp: 1349 },

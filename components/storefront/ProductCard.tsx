@@ -184,7 +184,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onViewProduct
                       : 'bg-[var(--bg-subtle)] text-[var(--text-muted)] border-[var(--border)] hover:text-[var(--text-main)]'
                   }`}
                 >
-                  {w.weightKg} kg
+                  {product.sellingUnit === 'piece' ? w.label : `${w.weightKg} kg`}
                 </button>
               ))}
             </div>

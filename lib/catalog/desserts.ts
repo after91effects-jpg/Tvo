@@ -15,6 +15,7 @@ export const CSV_DESSERT_PRODUCTS: Product[] = [
     tags: ['Chocolate Pastry', 'Truffle Pastry', 'Pastries', 'Desserts'],
     flavours: ['Dark Chocolate Ganache', 'Cocoa Sponge'],
     eggless: true,
+    sellingUnit: 'piece',
     weightOptions: [
       { label: '1 piece', weightKg: 0.1, price: 99, mrp: 120, isDefault: true },
       { label: '2 pieces (Pack of 2)', weightKg: 0.2, price: 189, mrp: 240 },
@@ -49,6 +50,7 @@ export const CSV_DESSERT_PRODUCTS: Product[] = [
     tags: ['Pineapple Pastry', 'Fruit Pastry', 'Pastries', 'Desserts'],
     flavours: ['Juicy Pineapple', 'Whipped Cream'],
     eggless: true,
+    sellingUnit: 'piece',
     weightOptions: [
       { label: '1 piece', weightKg: 0.1, price: 99, mrp: 120, isDefault: true },
       { label: '2 pieces (Pack of 2)', weightKg: 0.2, price: 189, mrp: 240 },
@@ -82,6 +84,7 @@ export const CSV_DESSERT_PRODUCTS: Product[] = [
     tags: ['Butterscotch Pastry', 'Praline Pastry', 'Pastries', 'Desserts'],
     flavours: ['Butterscotch Cream', 'Caramel Praline'],
     eggless: true,
+    sellingUnit: 'piece',
     weightOptions: [
       { label: '1 piece', weightKg: 0.1, price: 99, mrp: 120, isDefault: true },
       { label: '2 pieces (Pack of 2)', weightKg: 0.2, price: 189, mrp: 240 },
@@ -115,6 +118,7 @@ export const CSV_DESSERT_PRODUCTS: Product[] = [
     tags: ['Red Velvet Pastry', 'Cream Cheese', 'Pastries', 'Desserts'],
     flavours: ['Red Velvet', 'Cream Cheese'],
     eggless: true,
+    sellingUnit: 'piece',
     weightOptions: [
       { label: '1 piece', weightKg: 0.1, price: 99, mrp: 120, isDefault: true },
       { label: '2 pieces (Pack of 2)', weightKg: 0.2, price: 189, mrp: 240 },
@@ -148,6 +152,7 @@ export const CSV_DESSERT_PRODUCTS: Product[] = [
     tags: ['Blueberry Cheesecake', 'Cheesecake Slice', 'New York Cheesecake', 'Desserts'],
     flavours: ['Cream Cheese', 'Wild Blueberry'],
     eggless: true,
+    sellingUnit: 'piece',
     weightOptions: [
       { label: '1 piece', weightKg: 0.15, price: 239, mrp: 280, isDefault: true },
       { label: '2 pieces (Pack of 2)', weightKg: 0.3, price: 449, mrp: 560 },
@@ -180,6 +185,7 @@ export const CSV_DESSERT_PRODUCTS: Product[] = [
     tags: ['Nutella Cheesecake', 'Cheesecake Slice', 'Nutella Hazelnut', 'Desserts'],
     flavours: ['Nutella Hazelnut', 'Cream Cheese'],
     eggless: true,
+    sellingUnit: 'piece',
     weightOptions: [
       { label: '1 piece', weightKg: 0.15, price: 219, mrp: 260, isDefault: true },
       { label: '2 pieces (Pack of 2)', weightKg: 0.3, price: 419, mrp: 520 },
@@ -211,6 +217,7 @@ export const CSV_DESSERT_PRODUCTS: Product[] = [
     tags: ['Coffee Chocolate Mousse', 'Dessert Cup', 'Mousse', 'Espresso'],
     flavours: ['Espresso Coffee', 'Dark Chocolate Mousse'],
     eggless: true,
+    sellingUnit: 'piece',
     weightOptions: [
       { label: '1 cup', weightKg: 0.12, price: 129, mrp: 160, isDefault: true },
       { label: '2 cups (Pack of 2)', weightKg: 0.24, price: 229, mrp: 320 },
@@ -242,6 +249,7 @@ export const CSV_DESSERT_PRODUCTS: Product[] = [
     tags: ['Besan Ladoo', 'Traditional Sweets', 'Mithai', 'Desi Ghee'],
     flavours: ['Pure Desi Ghee', 'Cardamom Pistachio'],
     eggless: true,
+    sellingUnit: 'piece',
     weightOptions: [
       { label: 'Box of 12 pcs (400g)', weightKg: 0.4, price: 599, mrp: 699, isDefault: true },
       { label: 'Pack of 200g', weightKg: 0.2, price: 299, mrp: 349 },
@@ -272,6 +280,7 @@ export const CSV_DESSERT_PRODUCTS: Product[] = [
     tags: ['Choco Cookies', 'Center Filled Cookies', 'Lava Cookies', 'Bakery'],
     flavours: ['Molten Chocolate', 'Crisp Butter Cookie'],
     eggless: true,
+    sellingUnit: 'piece',
     weightOptions: [
       { label: 'Pack of 75g', weightKg: 0.075, price: 299, mrp: 399, isDefault: true },
       { label: 'Pack of 2 (150g)', weightKg: 0.15, price: 499, mrp: 699 },

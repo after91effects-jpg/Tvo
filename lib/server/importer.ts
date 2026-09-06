@@ -282,6 +282,18 @@ export function importCatalog() {
       const featuredVal = String(p['Is featured?']) === '1' ? 1 : 0;
       const weightKg = parseFloat(p['Weight (kg)']) || null;
 
+      // Infer selling_unit from variation labels
+      let sellingUnit: string | null = 'weight';
+      if (variationsJson) {
+        try {
+          const parsed = JSON.parse(variationsJson);
+          const options: any[] = parsed?.options || parsed || [];
+          if (Array.isArray(options) && options.some((o: any) => /piece|pcs/i.test(o.label || ''))) {
+            sellingUnit = 'piece';
+          }
+        } catch { /* keep default */ }
+      }
+
       const obj = {
         sku,
         name,
@@ -294,6 +306,7 @@ export function importCatalog() {
         stock_status: stockStatus,
         category_id: categoryId,
         weight_kg: weightKg,
+        selling_unit: sellingUnit,
         published: publishedVal,
         featured: featuredVal,
         bestseller: badges.some((b) => /bestseller/i.test(b)) ? 1 : 0,
@@ -311,22 +324,22 @@ export function importCatalog() {
       if (existing) {
         db.prepare(`UPDATE products SET
           name=?, slug=?, short_description=?, description=?, regular_price=?, sale_price=?,
-          stock=?, stock_status=?, category_id=?, weight_kg=?, published=?, featured=?, bestseller=?,
+          stock=?, stock_status=?, category_id=?, weight_kg=?, selling_unit=?, published=?, featured=?, bestseller=?,
           eggless=?, flavours=?, badges=?, tags=?, variations_json=?, images_json=?, seo_title=?, seo_description=?, updated_at=?
           WHERE id=?`)
           .run(obj.name, obj.slug, obj.short_description, obj.description, obj.regular_price, obj.sale_price,
-            obj.stock, obj.stock_status, obj.category_id, obj.weight_kg, obj.published, obj.featured, obj.bestseller,
+            obj.stock, obj.stock_status, obj.category_id, obj.weight_kg, obj.selling_unit, obj.published, obj.featured, obj.bestseller,
             obj.eggless, obj.flavours, obj.badges, obj.tags, obj.variations_json, obj.images_json, obj.seo_title, obj.seo_description, obj.updated_at,
             existing.id);
         summary.products.updated++;
       } else {
         db.prepare(`INSERT INTO products
           (sku, name, slug, short_description, description, regular_price, sale_price, stock, stock_status,
-           category_id, weight_kg, published, featured, bestseller, eggless, flavours, badges, tags,
+           category_id, weight_kg, selling_unit, published, featured, bestseller, eggless, flavours, badges, tags,
            variations_json, images_json, seo_title, seo_description, created_at, updated_at)
-          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
           .run(obj.sku, obj.name, obj.slug, obj.short_description, obj.description, obj.regular_price, obj.sale_price,
-            obj.stock, obj.stock_status, obj.category_id, obj.weight_kg, obj.published, obj.featured, obj.bestseller,
+            obj.stock, obj.stock_status, obj.category_id, obj.weight_kg, obj.selling_unit, obj.published, obj.featured, obj.bestseller,
             obj.eggless, obj.flavours, obj.badges, obj.tags, obj.variations_json, obj.images_json, obj.seo_title, obj.seo_description,
             new Date().toISOString(), obj.updated_at);
         summary.products.created++;

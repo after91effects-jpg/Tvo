@@ -15,6 +15,7 @@ export const CSV_RAKHI_PRODUCTS: Product[] = [
     tags: ['Peacock Rakhi', 'Rakhi Hamper', 'Raksha Bandhan', 'Sweets & Rakhi'],
     flavours: ['Sweets & Roasted Dry Fruits'],
     eggless: true,
+    sellingUnit: 'weight',
     weightOptions: [
       { label: 'Complete Hamper Box', weightKg: 1.0, price: 1899, mrp: 2199, isDefault: true },
     ],
@@ -44,6 +45,7 @@ export const CSV_RAKHI_PRODUCTS: Product[] = [
     tags: ['Bhaiya Bhabhi Rakhi', 'Lumba Rakhi', 'Rakhi Sweets', 'Raksha Bandhan'],
     flavours: ['Kaju Katli & Besan Ladoo'],
     eggless: true,
+    sellingUnit: 'weight',
     weightOptions: [
       { label: 'Bhaiya Bhabhi Set Box', weightKg: 0.6, price: 899, mrp: 1099, isDefault: true },
     ],
@@ -73,6 +75,7 @@ export const CSV_RAKHI_PRODUCTS: Product[] = [
     tags: ['Kids Rakhi', 'Space Rakhi', 'Cartoon Rakhi', 'Astronaut'],
     flavours: ['Kids Fun Theme'],
     eggless: true,
+    sellingUnit: 'weight',
     weightOptions: [
       { label: 'Set of 2 Rakhis', weightKg: 0.05, price: 199, mrp: 249, isDefault: true },
     ],
@@ -102,6 +105,7 @@ export const CSV_RAKHI_PRODUCTS: Product[] = [
     tags: ['Mini Rakhi Box', 'Budget Rakhi', 'Chocolate Rakhi Box'],
     flavours: ['Mini Chocolates'],
     eggless: true,
+    sellingUnit: 'weight',
     weightOptions: [
       { label: 'Mini Festive Box', weightKg: 0.25, price: 399, mrp: 499, isDefault: true },
     ],
@@ -131,6 +135,7 @@ export const CSV_RAKHI_PRODUCTS: Product[] = [
     tags: ['Chocolate Heaven Hamper', 'Rakhi Chocolates', 'Brownie Hamper'],
     flavours: ['Artisan Chocolates & Brownies'],
     eggless: true,
+    sellingUnit: 'weight',
     weightOptions: [
       { label: 'Heaven Box (600g)', weightKg: 0.6, price: 999, mrp: 1299, isDefault: true },
     ],
@@ -160,6 +165,7 @@ export const CSV_RAKHI_PRODUCTS: Product[] = [
     tags: ['Luxury Rakhi Hamper', 'Silver Plated Rakhi', 'Grand Hamper', 'Raksha Bandhan'],
     flavours: ['Royal Dry Fruits & Jar Cakes'],
     eggless: true,
+    sellingUnit: 'weight',
     weightOptions: [
       { label: 'Grand Multi-Tier Box (1.5 kg)', weightKg: 1.5, price: 2499, mrp: 2999, isDefault: true },
     ],
@@ -189,6 +195,7 @@ export const CSV_RAKHI_PRODUCTS: Product[] = [
     tags: ['Sweet Bond Box', 'Budget Rakhi', 'Rakhi Sweets'],
     flavours: ['Milk Pedas & Rakhi'],
     eggless: true,
+    sellingUnit: 'weight',
     weightOptions: [
       { label: 'Sweet Bond Box', weightKg: 0.2, price: 199, mrp: 249, isDefault: true },
     ],
@@ -218,6 +225,7 @@ export const CSV_RAKHI_PRODUCTS: Product[] = [
     tags: ['Chocolate Love Box', 'Rakhi Chocolates', 'Beaded Rakhi'],
     flavours: ['Assorted Pralines'],
     eggless: true,
+    sellingUnit: 'weight',
     weightOptions: [
       { label: 'Love Box (250g)', weightKg: 0.25, price: 399, mrp: 499, isDefault: true },
     ],

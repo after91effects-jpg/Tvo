@@ -15,6 +15,7 @@ export const CSV_HAMPER_PRODUCTS: Product[] = [
     tags: ['Diwali Hamper', 'Gift Hamper', 'Dry Fruits', 'Festival Hamper', 'Diwali Gifts'],
     flavours: ['Dry Fruits & Sweets'],
     eggless: true,
+    sellingUnit: 'weight',
     weightOptions: [
       { label: 'Royal Hamper Box (1.0 kg)', weightKg: 1.0, price: 999, mrp: 1299, isDefault: true },
     ],
@@ -44,6 +45,7 @@ export const CSV_HAMPER_PRODUCTS: Product[] = [
     tags: ['Dry Fruit Box', 'Assorted Nuts', 'Diwali Hamper', 'Healthy Gifting'],
     flavours: ['Roasted Almonds, Cashews, Pistachios, Raisins'],
     eggless: true,
+    sellingUnit: 'weight',
     weightOptions: [
       { label: 'Gourmet Box (400g)', weightKg: 0.4, price: 999, mrp: 1299, isDefault: true },
     ],
@@ -73,6 +75,7 @@ export const CSV_HAMPER_PRODUCTS: Product[] = [
     tags: ['Potli Hamper', 'Diwali Treat Box', 'Cookies & Dry Fruits', 'Diwali Gifts'],
     flavours: ['Cookies & Roasted Nuts'],
     eggless: true,
+    sellingUnit: 'weight',
     weightOptions: [
       { label: 'Festive Treat Box', weightKg: 0.8, price: 999, mrp: 1299, isDefault: true },
     ],
@@ -102,6 +105,7 @@ export const CSV_HAMPER_PRODUCTS: Product[] = [
     tags: ['Corporate Gifting', 'Diwali Hampers', 'Executive Gift Box'],
     flavours: ['Gourmet Snacks & Sweets'],
     eggless: true,
+    sellingUnit: 'weight',
     weightOptions: [
       { label: 'Executive Gift Box', weightKg: 1.0, price: 1199, mrp: 1499, isDefault: true },
     ],
@@ -131,6 +135,7 @@ export const CSV_HAMPER_PRODUCTS: Product[] = [
     tags: ['Chocolate Barfi', 'Dry Fruit Tray', 'Diwali Mithai', 'Fusion Sweet'],
     flavours: ['Chocolate Kaju Barfi'],
     eggless: true,
+    sellingUnit: 'weight',
     weightOptions: [
       { label: 'Gift Tray (500g)', weightKg: 0.5, price: 899, mrp: 1099, isDefault: true },
     ],
@@ -160,6 +165,7 @@ export const CSV_HAMPER_PRODUCTS: Product[] = [
     tags: ['Velvet Box', 'Royal Dry Fruits', 'Diwali Luxe', 'Mamra Badam'],
     flavours: ['Royal Jumbo Dry Fruits'],
     eggless: true,
+    sellingUnit: 'weight',
     weightOptions: [
       { label: 'Velvet Edition Box (800g)', weightKg: 0.8, price: 1599, mrp: 1999, isDefault: true },
     ],
@@ -189,6 +195,7 @@ export const CSV_HAMPER_PRODUCTS: Product[] = [
     tags: ['Diwali Candle Hamper', 'Scented Candle', 'Diwali Decor', 'Aromatherapy'],
     flavours: ['Sandalwood & Jasmine Aroma'],
     eggless: true,
+    sellingUnit: 'weight',
     weightOptions: [
       { label: 'Blessing Hamper Set', weightKg: 1.2, price: 1899, mrp: 2299, isDefault: true },
     ],
@@ -218,6 +225,7 @@ export const CSV_HAMPER_PRODUCTS: Product[] = [
     tags: ['Scented Candles', 'Jar Candles', 'Soy Wax', 'Home Decor'],
     flavours: ['Vanilla, Lavender, Rose Aroma'],
     eggless: true,
+    sellingUnit: 'weight',
     weightOptions: [
       { label: 'Set of 3 Jars', weightKg: 0.6, price: 899, mrp: 1199, isDefault: true },
     ],
@@ -247,6 +255,7 @@ export const CSV_HAMPER_PRODUCTS: Product[] = [
     tags: ['Ganesh Laxmi Idols', 'Pooja Essentials', 'Diwali Pooja', 'Handcrafted Idols'],
     flavours: ['Sacred Pooja Essentials'],
     eggless: true,
+    sellingUnit: 'weight',
     weightOptions: [
       { label: 'Pair of Idols (Height 4 inch)', weightKg: 0.5, price: 599, mrp: 799, isDefault: true },
     ],
