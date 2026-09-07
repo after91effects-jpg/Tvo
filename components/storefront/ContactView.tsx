@@ -67,7 +67,7 @@ export const ContactView: React.FC = () => {
                 Direct Kitchen Hotline
               </div>
               <div className="text-sm font-bold text-[var(--text-main)] mt-0.5">
-                +91 7678259522
+                +91 76782 59522
               </div>
               <div className="text-[11px] text-[var(--text-muted)] mt-0.5">
                 Available 8:00 AM - 12:30 AM Daily
@@ -104,7 +104,7 @@ export const ContactView: React.FC = () => {
                 TVO Flavours
               </div>
               <div className="text-[11px] text-[var(--text-muted)] mt-0.5">
-                Vipul World, Sector 48, Gurugram, Haryana, 122001
+                Vipul World, Sector 48, Gurugram, Haryana 122001, India
               </div>
             </div>
           </div>
@@ -143,7 +143,7 @@ export const ContactView: React.FC = () => {
                   type="tel"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  placeholder="+91 98765 00000"
+                  placeholder="Enter 10-digit mobile number"
                   required
                   className="w-full px-3 py-2 text-xs rounded-xl border border-[var(--border)] bg-[var(--bg-subtle)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
                 />

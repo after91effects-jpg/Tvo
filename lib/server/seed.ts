@@ -6,10 +6,10 @@ import { importCatalog } from './importer';
 // ---------------------------------------------------------------------------
 export const BUSINESS = {
   name: 'TVO FLAVOURS',
-  tagline: 'The All-in-one Baking Shop.',
+  tagline: 'The All-in-one Bakery Shop.',
   website: 'www.tvoflavours.com',
-  address: 'Vipul World, Sector 48, Gurugram, Haryana, 122001, India',
-  phone: '+91 7678259522',
+  address: 'Vipul World, Sector 48, Gurugram, Haryana 122001, India',
+  phone: '+91 76782 59522',
   email: 'hello@tvoflavours.com',
   fssai: '20824005005006',
   language: 'English',
@@ -86,7 +86,7 @@ function seedSettings() {
     timezone: 'Asia/Kolkata',
     tax_rate: '0',
     tax_inclusive: '1',
-    store_email: 'orders@tvoflavours.com',
+    store_email: 'hello@tvoflavours.com',
     free_delivery_threshold: '499',
     standard_delivery_fee: '49',
     cod_enabled: '1',

@@ -1137,7 +1137,7 @@ let ordersUrl = '/api/orders';
                   Tax Invoice / Kitchen Dispatch Receipt
                 </div>
                 <div className="text-[11px] text-[var(--text-subtle)] mt-0.5">
-                  GSTIN: 29AAAFC1234F1Z5 • FSSAI Lic No: 11223344000123
+                  FSSAI Lic No: 20824005005006
                 </div>
               </div>
 

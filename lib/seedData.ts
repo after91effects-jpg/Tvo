@@ -41,10 +41,10 @@ export const DEFAULT_PROMO_CODES: PromoCode[] = [
 export const DEFAULT_STORE_SETTINGS: StoreSettings = {
   storeInfo: {
     name: 'TVO Flavours',
-    tagline: 'The All-in-one Baking Shop.',
+    tagline: 'The All-in-one Bakery Shop.',
     contactEmail: 'hello@tvoflavours.com',
-    phone: '+91 7678259522',
-    address: 'Vipul World, Sector 48, Gurugram, Haryana, 122001, India',
+    phone: '+91 76782 59522',
+    address: 'Vipul World, Sector 48, Gurugram, Haryana 122001, India',
     operatingHours: 'Kitchen active 7:00 AM – 1:00 AM (Midnight Deliveries Available)',
   },
   deliveryCities: [

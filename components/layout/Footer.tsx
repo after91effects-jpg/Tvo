@@ -12,6 +12,7 @@ import {
   Sparkles,
   MapPin,
   Clock,
+  Mail,
 } from 'lucide-react';
 import { DEFAULT_STORE_SETTINGS } from '../../lib/seedData';
 import { NewsletterSignup } from '../storefront/NewsletterSignup';
@@ -81,13 +82,36 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
                 <span className="w-2 h-2 rounded-full bg-[var(--primary)] inline-block" />
               </div>
               <span className="block text-[9px] uppercase tracking-widest font-semibold text-[var(--text-muted)]">
-                The All-in-one Baking Shop
+                The All-in-one Bakery Shop
               </span>
             </button>
 
             <p className="text-xs text-[var(--text-muted)] mt-4 leading-relaxed max-w-sm">
               Handcrafting moments of unadulterated sweetness. Every cake is baked fresh to order in our temperature-controlled artisan kitchens using pure single-origin cacao, real dairy cream, and seasonal fruits.
             </p>
+
+            <div className="mt-4 p-3.5 rounded-2xl bg-[var(--bg-subtle)] border border-[var(--border)] space-y-2.5 text-xs text-[var(--text-muted)] max-w-sm">
+              <div className="flex items-start gap-2">
+                <MapPin className="w-4 h-4 text-[var(--primary)] shrink-0 mt-0.5" />
+                <span>Vipul World, Sector 48, Gurugram, Haryana 122001, India</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Phone className="w-4 h-4 text-[var(--primary)] shrink-0" />
+                <a href="tel:+917678259522" className="hover:text-[var(--primary)] transition-colors">
+                  +91 76782 59522
+                </a>
+              </div>
+              <div className="flex items-center gap-2">
+                <Mail className="w-4 h-4 text-[var(--primary)] shrink-0" />
+                <a href="mailto:hello@tvoflavours.com" className="hover:text-[var(--primary)] transition-colors">
+                  hello@tvoflavours.com
+                </a>
+              </div>
+              <div className="flex items-center gap-2">
+                <Shield className="w-4 h-4 text-[var(--success)] shrink-0" />
+                <span>FSSAI Lic No: 20824005005006</span>
+              </div>
+            </div>
 
             <div className="mt-4 flex items-center gap-3 text-xs text-[var(--text-muted)]">
               <span className="inline-flex items-center gap-1 font-semibold text-[var(--success)]">

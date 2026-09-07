@@ -295,7 +295,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   <div className="text-[9px] text-[var(--text-muted)]">Call us for custom orders</div>
                 </div>
               </div>
-              <a href="tel:+919876543210" className="px-3 py-1.5 rounded-lg bg-[#FF2B6D] text-white text-[10px] font-bold hover:bg-[#FF1A5B] transition-colors">
+              <a href="tel:+917678259522" className="px-3 py-1.5 rounded-lg bg-[#FF2B6D] text-white text-[10px] font-bold hover:bg-[#FF1A5B] transition-colors">
                 📞 Call Now
               </a>
             </div>

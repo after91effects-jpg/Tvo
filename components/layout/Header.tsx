@@ -190,7 +190,7 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
               <div className="flex flex-col">
                 <span className="font-extrabold text-base sm:text-lg tracking-tight text-[var(--text-main)] group-hover:text-[#FF2B6D] transition-colors leading-none">
-                  Tvo flavours
+                  TVO Flavours
                 </span>
                 <span className="text-[10px] text-[var(--text-muted)] font-semibold tracking-wider uppercase">
                   Artisan Bakery
@@ -593,7 +593,7 @@ export const Header: React.FC<HeaderProps> = ({
                 </div>
                 <div>
                   <div className="text-xs font-bold leading-tight">
-                    {user ? user.name : 'Welcome to Tvo flavours!'}
+                    {user ? user.name : 'Welcome to TVO Flavours!'}
                   </div>
                   <div className="text-[10px] text-white/80">
                     5 Master Categories Catalog

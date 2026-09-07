@@ -653,9 +653,8 @@ export const PrintableOrderSlip: React.FC<{ order: Order; onPrint?: () => void }
             Bespoke Celebration Cakes & Fresh Cold-Chain Delivery
           </p>
           <div className="text-[11px] text-gray-500 mt-1 flex flex-wrap gap-x-4">
-            <span>FSSAI: 11223344556677</span>
-            <span>GST: 29AABCT1234F1Z8</span>
-            <span>Tel: +91 98765 43210</span>
+            <span>FSSAI: 20824005005006</span>
+            <span>Tel: +91 76782 59522</span>
           </div>
         </div>
 
@@ -861,7 +860,7 @@ export const PrintableOrderSlip: React.FC<{ order: Order; onPrint?: () => void }
 
       {/* Printable Footer */}
       <div className="border-t border-gray-200 pt-4 flex flex-col sm:flex-row items-center justify-between text-[10px] text-gray-500 gap-2">
-        <div>Thank you for celebrating with TVO Flavours! • celebrate@tvoflavours.com</div>
+        <div>Thank you for celebrating with TVO Flavours! • hello@tvoflavours.com</div>
         <div className="font-mono">REF: {order.orderNumber} / {order.id?.slice(0, 8)}</div>
       </div>
     </div>
