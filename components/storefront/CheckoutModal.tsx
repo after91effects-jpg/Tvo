@@ -33,6 +33,31 @@ import { logAuditEvent } from '../../lib/audit';
 import { Modal } from '../common/Modal';
 import { DEFAULT_STORE_SETTINGS } from '../../lib/seedData';
 
+// Loads Razorpay Checkout once and exposes it as window.Razorpay. The script is
+// intentionally loaded lazily (only when a live payment is attempted) so it never
+// blocks the rest of the storefront.
+let razorpayScriptPromise: Promise<void> | null = null;
+function loadRazorpayCheckout(): Promise<void> {
+  if (!razorpayScriptPromise) {
+    razorpayScriptPromise = new Promise((resolve, reject) => {
+      if ((window as any).Razorpay) {
+        resolve();
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.async = true;
+      script.onload = () => resolve();
+      script.onerror = () => {
+        razorpayScriptPromise = null;
+        reject(new Error('Unable to load the payment gateway. Please try again.'));
+      };
+      document.body.appendChild(script);
+    });
+  }
+  return razorpayScriptPromise;
+}
+
 interface CheckoutModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -207,6 +232,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  // Remember a successfully created order number so retrying a failed/finished
+  // payment never creates a duplicate order on the server.
+  const [createdOrderNumber, setCreatedOrderNumber] = useState<string | null>(null);
 
   // Selected date details
   const selectedDateObj = useMemo(() => {
@@ -395,8 +423,10 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         updatedAt: nowIso,
       };
 
-      // 1. Create the order on the server. Fail loudly instead of showing a fake success.
-      const res = await fetch('/api/orders', {
+      let serverOrderNumber: string = createdOrderNumber || '';
+      if (!serverOrderNumber) {
+        // 1. Create the order on the server. Fail loudly instead of showing a fake success.
+        const res = await fetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -434,44 +464,59 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         throw new Error(errBody?.error || `Order could not be placed (${res.status}). Please try again.`);
       }
       const created = await res.json().catch(() => ({}));
-      const serverOrderNumber = created?.orderNumber || newOrder.orderNumber;
+      serverOrderNumber = created?.orderNumber || newOrder.orderNumber;
       newOrder.orderNumber = serverOrderNumber;
       newOrder.total = created?.total ?? totalAmount;
       newOrder.subtotal = created?.subtotal ?? subtotal;
       newOrder.discount = created?.discount ?? appliedDiscount;
       newOrder.deliveryFee = created?.deliveryFee ?? deliveryFee;
+      setCreatedOrderNumber(serverOrderNumber);
+      }
+      newOrder.orderNumber = serverOrderNumber;
       newOrder.paymentStatus = 'Pending';
 
       // 2. Process payment through the server-side Razorpay bridge.
       let paymentConfirmed = paymentMethod === 'cod';
       if (paymentMethod === 'upi_card' && serverOrderNumber) {
+        let pay: any = null;
         try {
           const payRes = await fetch('/api/payments', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'create', orderNumber: serverOrderNumber }),
           });
-          const pay = await payRes.json();
-          if (pay?.order_id) {
-            if (pay.sandbox) {
-              // No live keys configured: simulate the payment so the flow is testable.
-              const verifyRes = await fetch('/api/payments', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  action: 'verify',
-                  orderNumber: serverOrderNumber,
-                  razorpay_order_id: pay.order_id,
-                  razorpay_payment_id: `pay_sandbox_${Date.now()}`,
-                  signature: '',
-                }),
-              });
-              paymentConfirmed = verifyRes.ok;
-            } else {
-              // Live keys present — attempt Razorpay checkout UI if loaded, else keep pending.
+          pay = await payRes.json();
+        } catch (payErr) {
+          console.warn('Payment order create failed:', payErr);
+        }
+        if (pay?.order_id) {
+          if (pay.sandbox) {
+            // No live keys configured: simulate the payment so the flow is testable.
+            const verifyRes = await fetch('/api/payments', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                action: 'verify',
+                orderNumber: serverOrderNumber,
+                razorpay_order_id: pay.order_id,
+                razorpay_payment_id: `pay_sandbox_${Date.now()}`,
+                signature: '',
+              }),
+            });
+            paymentConfirmed = verifyRes.ok;
+          } else {
+            // Live keys present — lazily load Razorpay Checkout, open the payment
+            // window and only confirm the order once payment is verified server-side.
+            try {
+              await loadRazorpayCheckout();
               const rp = (window as any).Razorpay;
-              if (typeof rp === 'function') {
-                newOrder.paymentStatus = 'Pending';
+              paymentConfirmed = await new Promise<boolean>((resolve) => {
+                let settled = false;
+                const settle = (paid: boolean) => {
+                  if (settled) return;
+                  settled = true;
+                  resolve(paid);
+                };
                 const rzp = new rp({
                   key: pay.key_id,
                   amount: pay.amount,
@@ -479,30 +524,36 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   name: 'TVO Flavours',
                   order_id: pay.order_id,
                   handler: async (r: any) => {
-                    await fetch('/api/payments', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        action: 'verify',
-                        orderNumber: serverOrderNumber,
-                        razorpay_order_id: pay.order_id,
-                        razorpay_payment_id: r.razorpay_payment_id,
-                        signature: r.razorpay_signature,
-                      }),
-                    }).catch(() => {});
+                    try {
+                      const verifyRes = await fetch('/api/payments', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          action: 'verify',
+                          orderNumber: serverOrderNumber,
+                          razorpay_order_id: pay.order_id,
+                          razorpay_payment_id: r.razorpay_payment_id,
+                          signature: r.razorpay_signature,
+                        }),
+                      });
+                      settle(verifyRes.ok);
+                    } catch {
+                      settle(false);
+                    }
                   },
-                  modal: { ondismiss: () => {} },
+                  modal: { ondismiss: () => settle(false) },
                 });
                 rzp.open();
-                paymentConfirmed = true;
-              } else {
-                // Checkout page not present — order stays Pending for manual confirmation.
-                paymentConfirmed = true;
-              }
+              });
+            } catch (payErr) {
+              console.error('Razorpay checkout could not be opened:', payErr);
             }
           }
-        } catch (payErr) {
-          console.warn('Payment processing skipped:', payErr);
+        }
+        if (!paymentConfirmed) {
+          const msg = 'Payment could not be completed. Your order is saved as Pending — our kitchen will contact you to arrange payment, or try again below.';
+          setErrorMessage(msg);
+          throw new Error(msg);
         }
       }
       newOrder.paymentStatus = paymentConfirmed ? (paymentMethod === 'cod' ? 'Pending' : 'Paid') : 'Pending';
@@ -518,6 +569,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       });
 
       clearCart();
+      setCreatedOrderNumber(null);
       onClose();
       onOrderSuccess(serverOrderNumber);
     } catch (e: any) {
