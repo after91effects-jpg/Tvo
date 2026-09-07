@@ -170,7 +170,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 
   return (
     <Modal isOpen={isOpen || isEmbedded} onClose={onClose} maxWidth="5xl" embedded={isEmbedded}>
-      <div className={`grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8 pr-1 ${isEmbedded ? '' : 'max-h-[85vh] overflow-y-auto'}`}>
+      <div className={`grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8 ${isEmbedded ? '' : 'max-h-[85vh] overflow-y-auto pr-1'}`}>
         {/* Left: Image Gallery & Trust Badges */}
         <div className="lg:col-span-5 space-y-4">
           {/* Main Image */}

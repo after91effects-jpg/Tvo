@@ -157,7 +157,7 @@ export default function ProductPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[var(--bg-app)]">
+      <div className="min-h-dvh bg-[var(--bg-app)]">
         <Header products={products} onNavigate={handleNavigate} />
         <div className="flex items-center justify-center py-40">
           <div className="flex flex-col items-center gap-3">
@@ -172,7 +172,7 @@ export default function ProductPage() {
 
   if (notFound || !product) {
     return (
-      <div className="min-h-screen bg-[var(--bg-app)]">
+      <div className="min-h-dvh bg-[var(--bg-app)]">
         <Header products={products} onNavigate={handleNavigate} />
         <div className="max-w-lg mx-auto px-4 py-24 text-center">
           <Package className="w-14 h-14 text-[var(--text-subtle)] mx-auto mb-4" />
@@ -194,10 +194,10 @@ export default function ProductPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[var(--bg-app)]">
+    <div className="min-h-dvh bg-[var(--bg-app)]">
       <Header products={products} onNavigate={handleNavigate} />
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 pb-24 sm:pb-6">
         <button
           onClick={() => router.back()}
           className="mb-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--bg-subtle)] text-[var(--text-main)] text-xs font-bold hover:bg-[var(--bg-accent)] transition-colors cursor-pointer"

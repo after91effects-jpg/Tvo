@@ -1,7 +1,26 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
+
+// Shared scroll-lock counter — prevents one component's cleanup from breaking another's lock.
+let _scrollLockCount = 0;
+
+function _applyScrollLock(locked: boolean) {
+  if (locked) {
+    _scrollLockCount++;
+    if (_scrollLockCount === 1) {
+      document.body.style.overflow = 'hidden';
+      document.body.style.position = 'relative'; // prevent iOS Safari body scroll jump
+    }
+  } else {
+    _scrollLockCount = Math.max(0, _scrollLockCount - 1);
+    if (_scrollLockCount === 0) {
+      document.body.style.overflow = '';
+      document.body.style.position = '';
+    }
+  }
+}
 
 interface ModalProps {
   isOpen: boolean;
@@ -24,20 +43,33 @@ export const Modal: React.FC<ModalProps> = ({
   showCloseButton = true,
   embedded = false,
 }) => {
+  // Track whether THIS instance applied a lock so cleanup only undoes its own work.
+  const didLockRef = useRef(false);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isOpen) {
         onClose();
       }
     };
-    if (isOpen) {
-      if (!embedded) {
-        document.body.style.overflow = 'hidden';
-      }
+
+    if (isOpen && !embedded) {
+      _applyScrollLock(true);
+      didLockRef.current = true;
       window.addEventListener('keydown', handleKeyDown);
+    } else {
+      // If we previously locked but are now closed/embedded, undo only our lock.
+      if (didLockRef.current) {
+        _applyScrollLock(false);
+        didLockRef.current = false;
+      }
     }
+
     return () => {
-      document.body.style.overflow = '';
+      if (didLockRef.current) {
+        _applyScrollLock(false);
+        didLockRef.current = false;
+      }
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [isOpen, onClose, embedded]);

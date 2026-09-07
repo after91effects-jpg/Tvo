@@ -536,7 +536,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     >
       <form
         onSubmit={handlePlaceOrder}
-        className="space-y-6 max-h-[80vh] overflow-y-auto pr-1"
+        className="space-y-6 pr-1"
       >
         {errorMessage && (
           <div className="p-3.5 rounded-xl bg-[var(--danger-light)] text-[var(--danger)] text-xs flex items-center gap-2">
@@ -575,7 +575,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 type="tel"
                 value={recipientPhone}
                 onChange={(e) => setRecipientPhone(e.target.value)}
-                placeholder="+91 98765 43210"
+                placeholder="Enter 10-digit mobile number"
                 required
                 className="w-full px-3 py-2 text-xs rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-main)] focus:outline-none focus:border-[var(--primary)] transition-colors"
               />
