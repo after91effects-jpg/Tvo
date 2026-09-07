@@ -61,6 +61,13 @@ const DELIVERY_SLOTS = [
   { label: 'Midnight Surprise', time: '11 PM - 12 AM', price: 199, icon: '🌙' },
 ];
 
+// For piece products the quantity selector counts PIECES (stock is also in pieces).
+// Always derive the count from the piece label as a PIECE count — never as a weight.
+function pieceCountFromLabel(label?: string): number | null {
+  const m = String(label ?? '').match(/(\d+)\s*(?:piece|pcs)/i);
+  return m ? parseInt(m[1], 10) : null;
+}
+
 export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   product,
   isOpen,
@@ -74,7 +81,9 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   const isWishlisted = product ? isInWishlist(product.id) : false;
 
   const [selectedWeight, setSelectedWeight] = useState<WeightOption>(
-    product?.weightOptions?.[0] || { label: '0.5 kg', weightKg: 0.5, price: 699, mrp: 849 }
+    product?.weightOptions?.[0] || (product?.sellingUnit === 'piece'
+      ? { label: '1 piece', weightKg: 0, price: product.price || 699, mrp: product.regularPrice || 0 }
+      : { label: '0.5 kg', weightKg: 0.5, price: product.price || 699, mrp: product.regularPrice || 849 })
   );
   const [selectedFlavour, setSelectedFlavour] = useState<string>(
     product?.flavours?.[0] || 'Original'
@@ -150,6 +159,11 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   const itemUnitPrice = selectedWeight.price + addOnsTotal + deliveryCharge + giftWrapCharge;
   const savings = selectedWeight.mrp ? (selectedWeight.mrp - selectedWeight.price) * quantity : 0;
   const savingsPercent = selectedWeight.mrp ? Math.round(((selectedWeight.mrp - selectedWeight.price) / selectedWeight.mrp) * 100) : 0;
+  // For piece products quantity is the number of pieces, so allow ordering up to the
+  // available piece stock (bounded to a sane maximum). Weight products keep 1-10.
+  const qtyMax = product.sellingUnit === 'piece'
+    ? Math.max(1, Math.min(Number(product.stock) || 10, 500))
+    : 10;
 
   const today = new Date();
   const minDeliveryDate = new Date(today.setDate(today.getDate() + 2)).toISOString().split('T')[0];
@@ -415,7 +429,10 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                             </div>
                             <div className="text-[10px] text-[var(--text-muted)] mt-0.5">
                               {product.sellingUnit === 'piece'
-                                ? `Serves ${Math.round(opt.weightKg * 10) * 2}-${Math.round(opt.weightKg * 10) * 3}`
+                                ? (() => {
+                                    const pc = pieceCountFromLabel(opt.label);
+                                    return pc != null ? `${pc} ${pc === 1 ? 'piece' : 'pieces'}` : 'Sold per piece';
+                                  })()
                                 : `Serves ${Math.ceil(opt.weightKg * 8)}-${Math.ceil(opt.weightKg * 12)}`}
                             </div>
                             <div className="flex items-baseline gap-1 mt-1">
@@ -540,7 +557,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                 {/* Quantity Stepper */}
                 <div className="flex items-center gap-4 p-3 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border)]">
                   <span className="text-xs font-bold text-[var(--text-main)] uppercase tracking-wider">
-                    Quantity:
+                    Quantity{product.sellingUnit === 'piece' ? ' (Pieces)' : ''}:
                   </span>
                   <div className="flex items-center border border-[var(--border)] rounded-xl overflow-hidden bg-[var(--bg-surface)]">
                     <button
@@ -555,7 +572,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                     </span>
                     <button
                       type="button"
-                      onClick={() => setQuantity((q) => Math.min(10, q + 1))}
+                      onClick={() => setQuantity((q) => Math.min(qtyMax, q + 1))}
                       className="p-2.5 hover:bg-[var(--bg-subtle)] text-[var(--text-main)] transition-colors"
                     >
                       <Plus className="w-4 h-4" />
@@ -803,7 +820,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   </div>
                 )}
                 <div className="flex justify-between text-xs font-bold text-[var(--text-main)] pt-1.5 border-t border-[var(--border)]">
-                  <span>Total ({quantity} {quantity === 1 ? 'item' : 'items'})</span>
+                  <span>Total ({quantity} {quantity === 1 ? (product.sellingUnit === 'piece' ? 'piece' : 'item') : (product.sellingUnit === 'piece' ? 'pieces' : 'items')})</span>
                   <span>₹{itemUnitPrice * quantity}</span>
                 </div>
               </div>

@@ -103,7 +103,9 @@ export function exportProductsToWooCommerceCSV(products: Product[], filename: st
     const salePrice = baseWeight.price;
     const regularPrice = baseWeight.mrp || Math.round(salePrice * 1.2);
     const imageUrls = prod.images?.map(img => img.url).join(', ') || '';
-
+    const isPiece = prod.sellingUnit === 'piece';
+    // For sellingUnit === "piece" the inventory is a piece count and the variation labels are
+    // piece quantities, not weights — the weight column must stay empty and never be fabricated.
     return {
       'ID': prod.id || `conf-${index + 1}`,
       'Type': 'simple',
@@ -121,7 +123,8 @@ export function exportProductsToWooCommerceCSV(products: Product[], filename: st
       'Categories': prod.category || 'Cakes',
       'Tags': prod.tags?.join(', ') || '',
       'Images': imageUrls,
-      'Weight (kg)': baseWeight.weightKg?.toString() || '0.5',
+      'Weight (kg)': isPiece ? '' : (baseWeight.weightKg?.toString() || '0.5'),
+      'Selling Unit': isPiece ? 'piece' : 'weight',
       'Dietary': prod.eggless ? 'Eggless' : 'Contains Egg',
       'Eggless': prod.eggless ? 'Yes' : 'No',
       'Flavours': prod.flavours?.join(', ') || '',

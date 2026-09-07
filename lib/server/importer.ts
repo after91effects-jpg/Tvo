@@ -282,9 +282,13 @@ export function importCatalog() {
       const featuredVal = String(p['Is featured?']) === '1' ? 1 : 0;
       const weightKg = parseFloat(p['Weight (kg)']) || null;
 
-      // Infer selling_unit from variation labels
+      // Infer selling_unit: honor an explicit 'Selling Unit' column first, otherwise
+      // infer from variation labels.
       let sellingUnit: string | null = 'weight';
-      if (variationsJson) {
+      const explicitUnit = String(p['Selling Unit'] || '').trim().toLowerCase();
+      if (explicitUnit === 'piece') sellingUnit = 'piece';
+      else if (explicitUnit === 'weight') sellingUnit = 'weight';
+      else if (variationsJson) {
         try {
           const parsed = JSON.parse(variationsJson);
           const options: any[] = parsed?.options || parsed || [];

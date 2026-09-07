@@ -76,6 +76,7 @@ export default function ProductPage() {
           const basePrice = Number(p.price ?? p.salePrice ?? p.regularPrice ?? 0);
           const baseMrp = Number(p.regularPrice ?? p.regular_price ?? (basePrice || 0));
           const badges = Array.isArray(p.badges) ? p.badges : [];
+          const isPiece = p.sellingUnit === 'piece';
           const normalized: Product = {
             id: p.id || p.slug,
             slug: p.slug,
@@ -93,10 +94,12 @@ export default function ProductPage() {
             sellingUnit: p.sellingUnit || 'weight',
             weightOptions: weightOptionsArr.length ? weightOptionsArr.map((w: any) => ({
               label: w.label || w.value || `${w.weightKg || 0.5} kg`,
-              weightKg: Number(w.weightKg ?? w.weight_kg ?? (parseFloat(w.label) || 0.5)),
+              weightKg: isPiece
+                ? Number(w.weightKg ?? w.weight_kg ?? 0)
+                : Number(w.weightKg ?? w.weight_kg ?? (parseFloat(w.label) || 0.5)),
               price: Number(w.price ?? basePrice),
               mrp: Number(w.mrp ?? baseMrp),
-            })) : [{ label: '0.5 kg', weightKg: 0.5, price: basePrice, mrp: Math.max(basePrice, baseMrp) }],
+            })) : [{ label: isPiece ? '1 piece' : '0.5 kg', weightKg: isPiece ? 0 : 0.5, price: basePrice, mrp: Math.max(basePrice, baseMrp) }],
             images: images.map((im: any) => (typeof im === 'string' ? { url: im } : { url: im.url, thumbUrl: im.thumbUrl, alt: im.alt })).filter((i: any) => i.url),
             rating: p.rating || 4.9,
             reviewCount: p.reviewCount || 0,

@@ -19,7 +19,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onViewProduct
   const [justToggled, setJustToggled] = useState(false);
 
   const [selectedWeight, setSelectedWeight] = useState<WeightOption>(
-    product.weightOptions?.[0] || { label: '0.5 kg', weightKg: 0.5, price: 699, mrp: 849 }
+    product.weightOptions?.[0] || (product.sellingUnit === 'piece'
+      ? { label: '1 piece', weightKg: 0, price: product.price || 699, mrp: product.regularPrice || 0 }
+      : { label: '0.5 kg', weightKg: 0.5, price: product.price || 699, mrp: product.regularPrice || 849 })
   );
   const [isAdding, setIsAdding] = useState(false);
   const [isBuying, setIsBuying] = useState(false);

@@ -180,12 +180,15 @@ export default function Home() {
               }
             } catch { weightOptions = []; }
             const basePrice = Number(p.price ?? p.salePrice ?? p.regularPrice ?? 0);
+            const isPiece = p.sellingUnit === 'piece';
             const normalizedOptions = weightOptions.length ? weightOptions.map((w: any) => ({
               label: w.label || w.value || `${w.weightKg || 0.5} kg`,
-              weightKg: Number(w.weightKg ?? w.weight_kg ?? (parseFloat(w.label) || 0.5)),
+              weightKg: isPiece
+                ? Number(w.weightKg ?? w.weight_kg ?? 0)
+                : Number(w.weightKg ?? w.weight_kg ?? (parseFloat(w.label) || 0.5)),
               price: Number(w.price ?? basePrice),
               mrp: Number(w.mrp ?? p.regularPrice ?? basePrice),
-            })) : [{ label: '1 kg', weightKg: 1, price: basePrice, mrp: Number(p.regularPrice ?? basePrice) }];
+            })) : [{ label: isPiece ? '1 piece' : '1 kg', weightKg: isPiece ? 0 : 1, price: basePrice, mrp: Number(p.regularPrice ?? basePrice) }];
 
             return {
               id: p.id || p.slug,
