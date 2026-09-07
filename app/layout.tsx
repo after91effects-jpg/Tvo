@@ -7,17 +7,35 @@ import { NotificationProvider } from '../context/NotificationContext';
 import { WishlistProvider } from '../context/WishlistContext';
 
 export const metadata: Metadata = {
-  title: 'Tvo flavours | Artisan Cakes, Celebrations & Express Bakery Delivery',
-  description: 'Full-stack artisan cake delivery platform and Chef Administrator dashboard with live orders, WooCommerce-compatible catalog management, CSV import/export, and real-time operations.',
+  metadataBase: new URL('https://tvoflavours.com'),
+  title: {
+    default: 'TVO Flavours | The All-in-one Bakery Shop',
+    template: '%s | TVO Flavours',
+  },
+  description:
+    'TVO Flavours is the all-in-one bakery shop in Gurugram, Haryana, offering artisan cakes, pastries, chocolates and celebration hampers. Call +91 76782 59522 or write to hello@tvoflavours.com.',
+  applicationName: 'TVO Flavours',
+  authors: [{ name: 'TVO Flavours' }],
+  alternates: { canonical: '/' },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: { index: true, follow: true },
+  },
   openGraph: {
-    title: 'Tvo flavours | Artisan Cakes, Celebrations & Express Bakery Delivery',
-    description: 'Full-stack artisan cake delivery platform and Chef Administrator dashboard with live orders, WooCommerce-compatible catalog management, CSV import/export, and real-time operations.',
     type: 'website',
+    locale: 'en_IN',
+    siteName: 'TVO Flavours',
+    title: 'TVO Flavours | The All-in-one Bakery Shop',
+    description:
+      'The all-in-one bakery shop in Gurugram, Haryana — artisan cakes, pastries, chocolates and celebration hampers for every occasion.',
+    url: 'https://tvoflavours.com',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Tvo flavours | Artisan Cakes, Celebrations & Express Bakery Delivery',
-    description: 'Full-stack artisan cake delivery platform and Chef Administrator dashboard with live orders, WooCommerce-compatible catalog management, CSV import/export, and real-time operations.',
+    title: 'TVO Flavours | The All-in-one Bakery Shop',
+    description:
+      'The all-in-one bakery shop in Gurugram, Haryana — artisan cakes, pastries, chocolates and celebration hampers for every occasion.',
   },
 };
 
@@ -34,6 +52,30 @@ export default function RootLayout({
         <link
           href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500;1,600;1,700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
           rel="stylesheet"
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'Bakery',
+              '@id': 'https://tvoflavours.com/#bakery',
+              name: 'TVO Flavours',
+              description: 'The All-in-one Bakery Shop.',
+              url: 'https://tvoflavours.com',
+              telephone: '+91 76782 59522',
+              email: 'hello@tvoflavours.com',
+              address: {
+                '@type': 'PostalAddress',
+                streetAddress: 'Vipul World, Sector 48',
+                addressLocality: 'Gurugram',
+                addressRegion: 'Haryana',
+                postalCode: '122001',
+                addressCountry: 'IN',
+              },
+              fssai: '20824005005006',
+            }),
+          }}
         />
         <script
           dangerouslySetInnerHTML={{

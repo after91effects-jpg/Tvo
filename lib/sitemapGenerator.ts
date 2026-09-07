@@ -49,8 +49,9 @@ export function generateSitemapUrls(baseUrl: string = 'https://tvoflavours.com')
     });
   });
 
-  // Products
+  // Products (only published, public products)
   RESTRUCTURED_MASTER_PRODUCTS.forEach((prod) => {
+    if (prod.published === false) return;
     urls.push({
       loc: `${baseUrl}/product/${prod.slug}`,
       lastmod: (prod.updatedAt || new Date().toISOString()).split('T')[0],
@@ -89,17 +90,16 @@ export function generateProductJsonLd(product: Product, baseUrl: string = 'https
     image: primaryImg,
     description: product.shortDescription || product.name,
     sku: product.sku,
+    brand: {
+      '@type': 'Brand',
+      name: 'TVO Flavours',
+    },
     offers: {
       '@type': 'Offer',
       priceCurrency: 'INR',
       price: primaryWeight?.price || 0,
       availability: product.stockStatus === 'in_stock' ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
       url: `${baseUrl}/product/${product.slug}`,
-    },
-    aggregateRating: {
-      '@type': 'AggregateRating',
-      ratingValue: product.rating || 4.9,
-      reviewCount: product.reviewCount || 30,
     },
   };
 }
