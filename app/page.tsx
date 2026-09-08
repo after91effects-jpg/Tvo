@@ -572,6 +572,7 @@ export default function Home() {
             onSelectCategory={(slug) => handleNavigate('category', slug)}
             onNavigate={handleNavigate}
             activeView={storeSubView}
+            onOpenAuthModal={() => setIsAdminLoginOpen(true)}
           />
 
           {/* Sub-view Content */}

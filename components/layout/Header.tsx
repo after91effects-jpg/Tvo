@@ -33,6 +33,7 @@ import { ThemeToggle } from '../common/ThemeToggle';
 import { NotificationBellDrawer } from '../common/NotificationBellDrawer';
 import { StorefrontSearchBar } from '../common/StorefrontSearchBar';
 import { DEFAULT_STORE_SETTINGS } from '../../lib/seedData';
+import { lockBodyScroll, unlockBodyScroll } from '../../lib/scrollLock';
 import { Product, Category } from '../../lib/types';
 import { MASTER_5_MAIN_CATEGORIES, MainCategoryHierarchy } from '../../lib/masterCatalogHierarchy';
 
@@ -87,6 +88,25 @@ export const Header: React.FC<HeaderProps> = ({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  const didLockMobileNavRef = useRef(false);
+  useEffect(() => {
+    if (isMobileNavOpen) {
+      lockBodyScroll();
+      didLockMobileNavRef.current = true;
+    } else {
+      if (didLockMobileNavRef.current) {
+        unlockBodyScroll();
+        didLockMobileNavRef.current = false;
+      }
+    }
+    return () => {
+      if (didLockMobileNavRef.current) {
+        unlockBodyScroll();
+        didLockMobileNavRef.current = false;
+      }
+    };
+  }, [isMobileNavOpen]);
 
   const handleCategoryClick = (slug: string) => {
     setActiveMegaCategory(null);

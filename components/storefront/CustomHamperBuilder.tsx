@@ -32,6 +32,7 @@ import {
 import { Product, HamperSettings, HamperBoxOption, HamperCategoryOption } from '../../lib/types';
 import { DEFAULT_HAMPER_SETTINGS } from '../../lib/seedData';
 import { useCart } from '../../context/CartContext';
+import { lockBodyScroll, unlockBodyScroll } from '../../lib/scrollLock';
 
 interface CustomHamperBuilderProps {
   products: Product[];
@@ -245,10 +246,48 @@ export const CustomHamperBuilder: React.FC<CustomHamperBuilderProps> = ({
     }, 600);
   };
 
+  const didLockRef = React.useRef(false);
+  useEffect(() => {
+    if (isOpen) {
+      lockBodyScroll();
+      didLockRef.current = true;
+    } else {
+      if (didLockRef.current) {
+        unlockBodyScroll();
+        didLockRef.current = false;
+      }
+    }
+    return () => {
+      if (didLockRef.current) {
+        unlockBodyScroll();
+        didLockRef.current = false;
+      }
+    };
+  }, [isOpen]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+    if (isOpen) {
+      window.addEventListener('keydown', handleKeyDown);
+    }
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
       <div className="relative w-full max-w-5xl bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col animate-in zoom-in-95 duration-150">
         {/* Header */}
         <div className="px-6 py-4 border-b border-[var(--border)] bg-gradient-to-r from-[#FF2B6D]/10 to-[#FF6B9D]/10 flex items-center justify-between">

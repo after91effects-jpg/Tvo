@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { X, ShoppingBag, Plus, Minus, Trash2, Tag, ArrowRight, Sparkles, Check } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { DEFAULT_STORE_SETTINGS } from '../../lib/seedData';
+import { lockBodyScroll, unlockBodyScroll } from '../../lib/scrollLock';
 
 interface CartDrawerProps {
   onNavigateToCheckout?: () => void;
@@ -59,14 +60,23 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     }
   };
 
+  const didLockRef = React.useRef(false);
+
   React.useEffect(() => {
     if (isCartOpen) {
-      document.body.style.overflow = 'hidden';
+      lockBodyScroll();
+      didLockRef.current = true;
     } else {
-      document.body.style.overflow = '';
+      if (didLockRef.current) {
+        unlockBodyScroll();
+        didLockRef.current = false;
+      }
     }
     return () => {
-      document.body.style.overflow = '';
+      if (didLockRef.current) {
+        unlockBodyScroll();
+        didLockRef.current = false;
+      }
     };
   }, [isCartOpen]);
 
