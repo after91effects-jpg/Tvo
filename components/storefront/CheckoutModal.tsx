@@ -360,6 +360,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       return;
     }
 
+    const cleanPhone = recipientPhone.replace(/[\s+-]/g, '');
+    if (!cleanPhone || cleanPhone.length < 10) {
+      setErrorMessage('Please enter a valid 10-digit mobile number for delivery coordination.');
+      return;
+    }
+
     try {
       setIsPlacingOrder(true);
       setErrorMessage('');
@@ -391,13 +397,13 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           name: item.product.name,
           sku: item.product.sku,
           qty: item.quantity,
-          price: item.selectedWeight?.price || 999,
-          weight: item.selectedWeight?.label || '1.0 kg',
-          flavour: item.selectedFlavour || 'Classic Belgian Dark Chocolate',
+          price: item.selectedWeight?.price || item.unitPrice || 699,
+          weight: item.selectedWeight?.label || (item.product?.sellingUnit === 'piece' ? '1 piece' : '0.5 kg'),
+          flavour: item.selectedFlavour || 'Original',
           messageOnCake: item.messageOnCake,
-          addons: item.selectedAddOns || [],
-          unitPrice: item.selectedWeight?.price || 999,
-          totalPrice: (item.selectedWeight?.price || 999) * item.quantity,
+          addons: item.addons || item.selectedAddOns || [],
+          unitPrice: item.selectedWeight?.price || item.unitPrice || 699,
+          totalPrice: (item.selectedWeight?.price || item.unitPrice || 699) * item.quantity,
           imageUrl: item.product.images?.[0]?.mediumUrl || item.product.images?.[0]?.url || '',
         })),
         subtotal,
@@ -436,7 +442,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
              sku: item.sku || '',
              qty: item.qty,
              price: item.unitPrice,
-             weight: item.weight || '1.0 kg',
+             weight: item.weight || (item.product?.sellingUnit === 'piece' ? '1 piece' : '0.5 kg'),
              flavour: item.flavour || '',
              messageOnCake: item.messageOnCake || '',
              addons: item.addons || [],

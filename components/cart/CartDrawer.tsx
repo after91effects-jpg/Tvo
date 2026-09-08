@@ -5,7 +5,7 @@ import { X, ShoppingBag, Plus, Minus, Trash2, Tag, ArrowRight, Sparkles, Check }
 import { useCart } from '../../context/CartContext';
 import { DEFAULT_STORE_SETTINGS } from '../../lib/seedData';
 import { lockBodyScroll, unlockBodyScroll } from '../../lib/scrollLock';
-import { handleImageFallback, DEFAULT_FALLBACK_IMAGE } from '../../lib/imageUrl';
+import { handleImageFallback, resolveProductImage, DEFAULT_FALLBACK_IMAGE } from '../../lib/imageUrl';
 
 interface CartDrawerProps {
   onNavigateToCheckout?: () => void;
@@ -178,7 +178,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                   {/* Thumbnail */}
                   <div className="w-20 h-20 rounded-lg overflow-hidden bg-[var(--bg-subtle)] shrink-0 border border-[var(--border)]">
                     <img
-                      src={item.product.images?.[0]?.thumbUrl || item.product.images?.[0]?.url || DEFAULT_FALLBACK_IMAGE}
+                      src={resolveProductImage(item.product, true)}
                       alt={item.product.name}
                       onError={(e) => handleImageFallback(e, item.product.images?.[0]?.url)}
                       className="w-full h-full object-cover"
@@ -288,7 +288,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                         type="text"
                         value={promoInput}
                         onChange={(e) => setPromoInput(e.target.value.toUpperCase())}
-                        placeholder="Coupon Code (e.g. CONFETTO10)"
+                        placeholder="Coupon Code (e.g. FIRST15)"
                         className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-main)] placeholder:text-[var(--text-subtle)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
                       />
                     </div>

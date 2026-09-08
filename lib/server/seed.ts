@@ -187,6 +187,7 @@ function seedDelivery() {
 
 function seedCoupons() {
   const coupons: [string, string, number, number, number | null, string | null, string | null][] = [
+    ['FIRST15', 'percent', 15, 499, 300, null, null],
     ['TVO10', 'percent', 10, 499, 200, null, null],
     ['FIRSTCAKE', 'flat', 150, 699, null, null, null],
     ['SWEET20', 'percent', 20, 1499, 400, null, null],

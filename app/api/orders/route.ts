@@ -12,7 +12,7 @@ const PRODUCTION_STATUSES = [
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
-  const orderNumber = url.searchParams.get('order') || url.searchParams.get('number') || '';
+  const orderNumber = url.searchParams.get('order') || url.searchParams.get('orderNumber') || url.searchParams.get('number') || '';
   const user = getCurrentUser(req);
 
   if (orderNumber) {

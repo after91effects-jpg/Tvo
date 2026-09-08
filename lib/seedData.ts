@@ -8,7 +8,17 @@ export const INITIAL_PRODUCTS: Product[] = RESTRUCTURED_MASTER_PRODUCTS;
 
 export const DEFAULT_PROMO_CODES: PromoCode[] = [
   {
-    code: 'CONFETTO10',
+    code: 'FIRST15',
+    discountType: 'percent',
+    discountValue: 15,
+    minOrderValue: 499,
+    maxDiscount: 300,
+    active: true,
+    expiresAt: '2027-12-31',
+    description: 'Flat 15% off on your first celebration order.',
+  },
+  {
+    code: 'TVO10',
     discountType: 'percent',
     discountValue: 10,
     minOrderValue: 499,

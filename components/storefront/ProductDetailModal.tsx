@@ -102,6 +102,23 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   const [showFullDescription, setShowFullDescription] = useState<boolean>(false);
   const [showAllAddOns, setShowAllAddOns] = useState<boolean>(false);
 
+  // Sync state whenever the active product changes
+  React.useEffect(() => {
+    if (!product) return;
+    const initialWeight =
+      product.weightOptions?.[0] ||
+      (product.sellingUnit === 'piece'
+        ? { label: '1 piece', weightKg: 0, price: product.price || 699, mrp: product.regularPrice || 0 }
+        : { label: '0.5 kg', weightKg: 0.5, price: product.price || 699, mrp: product.regularPrice || 849 });
+    setSelectedWeight(initialWeight);
+    setSelectedFlavour(product.flavours?.[0] || 'Original');
+    setMessageOnCake('');
+    setSelectedAddOns([]);
+    setQuantity(1);
+    setActiveImageIndex(0);
+    setActiveTab('details');
+  }, [product?.id]);
+
   const isEmbedded = variant === 'embedded';
 
   if (!product) return null;
@@ -164,8 +181,10 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
     }
   };
 
-  const savings = selectedWeight.mrp ? (selectedWeight.mrp - selectedWeight.price) * quantity : 0;
-  const savingsPercent = selectedWeight.mrp
+  const savings = selectedWeight.mrp && selectedWeight.mrp > selectedWeight.price
+    ? (selectedWeight.mrp - selectedWeight.price) * quantity
+    : 0;
+  const savingsPercent = selectedWeight.mrp && selectedWeight.mrp > selectedWeight.price
     ? Math.round(((selectedWeight.mrp - selectedWeight.price) / selectedWeight.mrp) * 100)
     : 0;
 
@@ -346,7 +365,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                 <span className="text-2xl sm:text-3xl font-bold font-display text-[var(--text-main)]">
                   ₹{selectedWeight.price * quantity}
                 </span>
-                {selectedWeight.mrp && (
+                {selectedWeight.mrp && selectedWeight.mrp > selectedWeight.price && savings > 0 && (
                   <>
                     <span className="text-sm text-[var(--text-subtle)] line-through">
                       ₹{selectedWeight.mrp * quantity}

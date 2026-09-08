@@ -22,6 +22,7 @@ import {
   clearUserSearchHistory,
   POPULAR_STORE_SEARCHES,
 } from '../../lib/searchHistory';
+import { resolveProductImage, handleImageFallback, DEFAULT_FALLBACK_IMAGE } from '../../lib/imageUrl';
 
 interface StorefrontSearchBarProps {
   products: Product[];
@@ -92,18 +93,31 @@ export const StorefrontSearchBar: React.FC<StorefrontSearchBarProps> = ({
 
   // Filter products matching live query
   const queryTrimmed = searchQuery.trim().toLowerCase();
+  const queryTokens = queryTrimmed.split(/\s+/).filter(Boolean);
   const matchingProducts = queryTrimmed
     ? products
         .filter((p) => {
+          if (!p.published) return false;
+          const haystack = [
+            p.name,
+            p.category,
+            p.subCategory,
+            ...(p.categories || []),
+            ...(p.subcategories || []),
+            ...(p.tags || []),
+            ...(p.flavours || []),
+            p.shortDescription,
+          ]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase();
+
           return (
-            p.name.toLowerCase().includes(queryTrimmed) ||
-            p.category.toLowerCase().includes(queryTrimmed) ||
-            p.shortDescription?.toLowerCase().includes(queryTrimmed) ||
-            p.tags?.some((t) => t.toLowerCase().includes(queryTrimmed)) ||
-            p.flavours?.some((f) => f.toLowerCase().includes(queryTrimmed))
+            haystack.includes(queryTrimmed) ||
+            (queryTokens.length > 1 && queryTokens.every((token) => haystack.includes(token)))
           );
         })
-        .slice(0, 5)
+        .slice(0, 6)
     : [];
 
   // Filter matching past searches if query is typed
@@ -390,10 +404,10 @@ export const StorefrontSearchBar: React.FC<StorefrontSearchBarProps> = ({
                         className="w-full text-left p-2 hover:bg-[var(--bg-subtle)] rounded-xl transition-colors flex items-center gap-3 group cursor-pointer"
                       >
                         <div className="w-10 h-10 rounded-lg overflow-hidden bg-[var(--bg-subtle)] shrink-0 border border-[var(--border)]">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
-                            src={prod.images?.[0]?.thumbUrl || prod.images?.[0]?.url}
+                            src={resolveProductImage(prod, true)}
                             alt={prod.name}
+                            onError={(e) => handleImageFallback(e, prod.images?.[0]?.url)}
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                           />
                         </div>
@@ -402,7 +416,10 @@ export const StorefrontSearchBar: React.FC<StorefrontSearchBarProps> = ({
                             {prod.name}
                           </h5>
                           <div className="flex items-center gap-2 text-[11px] text-[var(--text-muted)]">
-                            <span>₹{prod.weightOptions?.[0]?.price || 999}</span>
+                            <span className="font-bold text-[var(--text-main)]">₹{prod.weightOptions?.[0]?.price || prod.price || 699}</span>
+                            {prod.sellingUnit === 'piece' && (
+                              <span className="text-[10px] text-[var(--text-subtle)]">({prod.weightOptions?.[0]?.label || 'per piece'})</span>
+                            )}
                             {prod.eggless && (
                               <span className="text-[var(--success)] font-medium">• Eggless</span>
                             )}

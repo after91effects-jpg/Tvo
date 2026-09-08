@@ -149,14 +149,20 @@ export default function ProductPage() {
   }, []);
 
   const handleNavigate = (view: string, param?: string) => {
-    if (view === 'home' || view === 'category' || view === 'search') {
-      router.push('/');
+    if (view === 'category') {
+      router.push(param ? `/?category=${encodeURIComponent(param)}` : '/');
+    } else if (view === 'search') {
+      router.push(param ? `/?q=${encodeURIComponent(param)}` : '/');
     } else if (view === 'track') {
-      router.push('/');
-    } else if (view === 'admin') {
-      router.push('/');
+      router.push(param ? `/?view=track&order=${encodeURIComponent(param)}` : '/?view=track');
     } else if (view === 'wishlist') {
-      router.push('/');
+      router.push('/?view=wishlist');
+    } else if (view === 'orders' || view === 'history') {
+      router.push('/?view=orders');
+    } else if (view === 'admin') {
+      router.push('/?view=admin');
+    } else if (view === 'about' || view === 'contact' || view === 'faq') {
+      router.push(`/?view=${view}`);
     } else {
       router.push('/');
     }

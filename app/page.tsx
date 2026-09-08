@@ -298,6 +298,46 @@ export default function Home() {
     };
   }, [fetchData]);
 
+  // Support direct deep links or returns from /product/[slug]
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const sp = new URLSearchParams(window.location.search);
+      const view = sp.get('view');
+      const cat = sp.get('category');
+      const q = sp.get('q') || sp.get('search');
+      const order = sp.get('order');
+
+      if (view === 'track') {
+        if (order) setTrackingOrderNumber(order);
+        setStoreSubView('track');
+      } else if (view === 'wishlist') {
+        setStoreSubView('wishlist');
+      } else if (view === 'orders' || view === 'history') {
+        setStoreSubView('orders');
+      } else if (view === 'about' || view === 'contact' || view === 'faq') {
+        setStoreSubView(view as any);
+      } else if (view === 'admin') {
+        if (isAuthenticated) setActiveView('admin');
+        else setIsAdminLoginOpen(true);
+      }
+
+      if (cat) {
+        setSelectedCategorySlug(cat);
+        setSelectedSubcategorySlug('all');
+        setStoreSubView('home');
+      }
+
+      if (q) {
+        setSearchQuery(q);
+        setSelectedCategorySlug('all');
+        setStoreSubView('home');
+      }
+    } catch {
+      // ignore
+    }
+  }, [isAuthenticated]);
+
   // Navigation Handler
   const handleNavigate = (view: string, param?: string) => {
     if (view === 'admin') {
