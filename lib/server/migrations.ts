@@ -165,6 +165,16 @@ export function runMigrations() {
       created_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE
     )`);
+  addTable(`CREATE TABLE IF NOT EXISTS revoked_tokens (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      token_hash TEXT UNIQUE NOT NULL,
+      revoked_at TEXT DEFAULT (datetime('now')),
+      expires_at INTEGER NOT NULL
+    )`);
+  // Clean up any stale/orphaned status history that points to deleted orders
+  try {
+    db.exec("DELETE FROM order_status_history WHERE order_id NOT IN (SELECT id FROM orders)");
+  } catch {}
 }
 
 // allow-testing helper

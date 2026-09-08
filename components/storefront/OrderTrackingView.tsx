@@ -970,8 +970,20 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
     // Not in the prefetched list — ask the server directly by order number.
     try {
       const res = await fetch(`/api/orders?order=${encodeURIComponent(q)}`);
+      if (!res.ok) {
+        setCurrentOrder(null);
+        return;
+      }
       const data = await res.json();
-      const o = data?.order || (data && !data.order ? data : null);
+      if (data?.error) {
+        setCurrentOrder(null);
+        return;
+      }
+      const o = data?.order || data;
+      if (!o || (!o.id && !o.order_number)) {
+        setCurrentOrder(null);
+        return;
+      }
       const loaded = o
         ? [{
             id: o.id || o.order_number,

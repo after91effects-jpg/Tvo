@@ -17,54 +17,72 @@ const ROOT = '/Users/amit/Downloads/202;0Tvo';
 const WC_CSV = path.join(ROOT, 'wc-product-export-2-9-2026-1788331015035.csv');
 const CATEGORY_CSV = path.join(ROOT, 'uploads', 'wc-imports', 'product-categories-gjra7dgqut.csv');
 
-function loadCsv(p) {
+function loadCsv(p: string): any[] {
   if (!fs.existsSync(p)) return [];
-  return Papa.parse(fs.readFileSync(p, 'utf8'), { header: true, skipEmptyLines: 'greedy' }).data;
+  return Papa.parse(fs.readFileSync(p, 'utf8'), { header: true, skipEmptyLines: 'greedy' }).data as any[];
 }
-function slugify(s) {
+function slugify(s: any): string {
   return (s || '').toString().toLowerCase().normalize('NFKD').replace(/[^\w\s-]/g, '').trim().replace(/[\s]+/g, '-').replace(/-+/g, '-');
 }
 
 // ---- image helpers ---------------------------------------------------------
-function normKey(s) {
+function normKey(s: any): string {
   return (s || '').toString().toLowerCase().replace(/[^a-z0-9]+/g, '');
 }
-function fileNameToKey(file) {
+function fileNameToKey(file: string): string {
   const n = path.basename(file).replace(/\.[a-z0-9]+$/i, '');
   return normKey(n.replace(/[-_]([0-9]{2,4})x([0-9]{2,3})$/i, '').replace(/[-_](scaled|rotated)$/i, ''));
 }
-function walkDir(dir, out = []) {
-  if (!fs.existsSync(dir)) return out;
-  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (e.name === '.DS_Store') continue;
-    const full = path.join(dir, e.name);
-    if (e.isDirectory()) walkDir(full, out);
-    else if (/\.(png|jpe?g|webp|gif|avif|svg)$/i.test(e.name)) out.push(full);
+function walkDir(dir: string, out: string[] = []): string[] {
+  try {
+    if (!fs.existsSync(dir)) return out;
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (e.name === '.DS_Store') continue;
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) walkDir(full, out);
+      else if (/\.(png|jpe?g|webp|gif|avif|svg)$/i.test(e.name)) out.push(full);
+    }
+  } catch {
+    return out;
   }
   return out;
 }
 const CAT_FOLDERS = ['Anniversary', 'Birthday cake', 'Brownie', 'Butterscotch Cake', 'Chocolate cake', 'Kids  Cake', 'Mango cake', 'iloveimg-compressed'];
 
-// Build index of local uploads images (all sizes)
-const uploadsAll = walkDir(path.join(ROOT, 'uploads'));
-const uploadsByKey = {};
-for (const f of uploadsAll) {
-  const k = fileNameToKey(f);
-  if (!uploadsByKey[k]) uploadsByKey[k] = [];
-  uploadsByKey[k].push(f);
+let _uploadsByKey: Record<string, string[]> | null = null;
+function getUploadsByKey(): Record<string, string[]> {
+  if (_uploadsByKey) return _uploadsByKey;
+  const map: Record<string, string[]> = {};
+  try {
+    const uploadsAll = walkDir(path.join(ROOT, 'uploads'));
+    for (const f of uploadsAll) {
+      const k = fileNameToKey(f);
+      if (!map[k]) map[k] = [];
+      map[k].push(f);
+    }
+  } catch {}
+  _uploadsByKey = map;
+  return _uploadsByKey;
 }
 
-// Standalone category-folder images
-const localCat = [];
-for (const f of CAT_FOLDERS) localCat.push(...walkDir(path.join(ROOT, f)));
-const localCatByKey = {};
-for (const f of localCat) {
-  const k = fileNameToKey(f);
-  if (!localCatByKey[k]) localCatByKey[k] = [];
-  localCatByKey[k].push(f);
+let _localCatByKey: Record<string, string[]> | null = null;
+function getLocalCatByKey(): Record<string, string[]> {
+  if (_localCatByKey) return _localCatByKey;
+  const map: Record<string, string[]> = {};
+  try {
+    const localCat: string[] = [];
+    for (const f of CAT_FOLDERS) localCat.push(...walkDir(path.join(ROOT, f)));
+    for (const f of localCat) {
+      const k = fileNameToKey(f);
+      if (!map[k]) map[k] = [];
+      map[k].push(f);
+    }
+  } catch {}
+  _localCatByKey = map;
+  return _localCatByKey;
 }
 
-function classifyImageSize(file) {
+function classifyImageSize(file: string) {
   const m = path.basename(file).match(/[-_]([0-9]{2,4})x([0-9]{2,3})$/i);
   if (m) {
     const w = parseInt(m[1]);
@@ -78,38 +96,42 @@ function classifyImageSize(file) {
 }
 
 // Returns array of {url, type} for a product image key, preferring originals
-function collectImageVariants(fileKeyBase) {
-  const variants = [];
-  const add = (type, files) => { for (const f of files) variants.push({ type, url: toWebPath(f) }); };
+function collectImageVariants(fileKeyBase: string) {
+  const variants: Array<{ type: string; url: string }> = [];
+  const add = (type: string, files: string[]) => { for (const f of files) variants.push({ type, url: toWebPath(f) }); };
+  const up = getUploadsByKey();
+  const lc = getLocalCatByKey();
   // exact-key base images
-  if (uploadsByKey[fileKeyBase]) add('full', uploadsByKey[fileKeyBase]);
-  if (localCatByKey[fileKeyBase]) add('full', localCatByKey[fileKeyBase]);
+  if (up[fileKeyBase]) add('full', up[fileKeyBase]);
+  if (lc[fileKeyBase]) add('full', lc[fileKeyBase]);
   // build a clean lookup for variant sizes
   return variants;
 }
 
-function toWebPath(file) {
+function toWebPath(file: string) {
   const rel = path.relative(path.join(ROOT, 'tvo-flavours', 'public'), file);
   return '/' + rel.split(path.sep).join('/');
 }
 
 // Map a CSV product to a primary local image
-function findPrimaryImage(productName, csvImages) {
+function findPrimaryImage(productName: string, csvImages: string[]) {
+  const up = getUploadsByKey();
+  const lc = getLocalCatByKey();
   // 1) local copy of the CSV-referenced URL
   if (csvImages.length) {
     const file = csvImages[0].split('/').pop() || '';
     const k = fileNameToKey(file);
-    if (uploadsByKey[k] && uploadsByKey[k].length) return toWebPath(uploadsByKey[k][0]);
+    if (up[k] && up[k].length) return toWebPath(up[k][0]);
     // fuzzy
-    const fuzzy = Object.keys(uploadsByKey).find((kk) => normKey(kk).includes(normKey(file.replace(/\.[a-z0-9]+$/i, ''))) || normKey(file.replace(/\.[a-z0-9]+$/i, '')).includes(normKey(kk)));
-    if (fuzzy) return toWebPath(uploadsByKey[fuzzy][0]);
+    const fuzzy = Object.keys(up).find((kk) => normKey(kk).includes(normKey(file.replace(/\.[a-z0-9]+$/i, ''))) || normKey(file.replace(/\.[a-z0-9]+$/i, '')).includes(normKey(kk)));
+    if (fuzzy) return toWebPath(up[fuzzy][0]);
   }
   // 2) standalone category folder by normalized name
   const pkey = normKey(productName);
-  if (localCatByKey[pkey]) return toWebPath(localCatByKey[pkey][0]);
+  if (lc[pkey]) return toWebPath(lc[pkey][0]);
   const frag = pkey.replace(/(cake|pastry|brownie|slice|dessert|hamper|box|tray|ladoo|cookies|rakhi|candle|idols|sandesh|sweet)$/i, '');
-  const cand = Object.keys(localCatByKey).find((k) => (normKey(k).includes(frag) && frag.length > 3) || (frag.includes(normKey(k)) && normKey(k).length > 3));
-  if (cand) return toWebPath(localCatByKey[cand][0]);
+  const cand = Object.keys(lc).find((k) => (normKey(k).includes(frag) && frag.length > 3) || (frag.includes(normKey(k)) && normKey(k).length > 3));
+  if (cand) return toWebPath(lc[cand][0]);
   // 3) keep remote original URL
   if (csvImages.length) return csvImages[0];
   return null;
@@ -121,10 +143,11 @@ function buildImages(productName, csvImages, primary) {
     // primary public path -> find local variants
     const baseName = path.basename(primary.replace(/^\/images\/products\/uploads\//, ''));
     const isLocal = primary.startsWith('/images/');
-    if (isLocal && uploadsByKey[fileNameToKey(baseName)]) {
-      const files = uploadsByKey[fileNameToKey(baseName)];
-      const grouped = { full: [], large: [], medium: [], thumbnail: [] };
-      for (const f of files) grouped[classifyImageSize(f)].push(toWebPath(f));
+    const upByKey = getUploadsByKey();
+    if (isLocal && upByKey[fileNameToKey(baseName)]) {
+      const files = upByKey[fileNameToKey(baseName)];
+      const grouped: Record<string, string[]> = { full: [], large: [], medium: [], thumbnail: [] };
+      for (const f of files) (grouped[classifyImageSize(f)] ||= []).push(toWebPath(f));
       if (grouped.full.length) (grouped.full[0] === primary ? grouped.full : [primary, ...grouped.full]).forEach((u, i) => out.push({ url: u, type: i === 0 ? 'primary' : 'full' }));
       if (grouped.large.length) grouped.large.forEach((u) => out.push({ url: u, type: 'large' }));
       if (grouped.medium.length) grouped.medium.forEach((u) => out.push({ url: u, type: 'medium' }));
@@ -154,20 +177,20 @@ export function importCatalog() {
     startedAt: new Date().toISOString(),
   };
 
-  const categoryRows = loadCsv(CATEGORY_CSV);
-  const productRows = loadCsv(WC_CSV);
+  const categoryRows: any[] = loadCsv(CATEGORY_CSV);
+  const productRows: any[] = loadCsv(WC_CSV);
 
   const tx = db.transaction(() => {
     // ---- categories ----
-    const catBySlug = {};
-    for (const c of db.prepare('SELECT id, slug FROM categories').all()) catBySlug[c.slug] = c.id;
+    const catBySlug: Record<string, number> = {};
+    for (const c of db.prepare('SELECT id, slug FROM categories').all() as any[]) catBySlug[c.slug] = c.id;
     for (const row of categoryRows) {
       const name = (row.name || '').trim();
       const slug = (row.slug || slugify(name)).trim();
       if (!name || !slug) { summary.categories.skipped++; continue; }
       const parentSlug = row.parent ? slugify(row.parent) : null;
       const parentId = parentSlug ? catBySlug[parentSlug] : null;
-      const existing = db.prepare('SELECT id FROM categories WHERE slug=?').get(slug);
+      const existing = db.prepare('SELECT id FROM categories WHERE slug=?').get(slug) as any;
       const obj = {
         name, slug, parent_id: parentId ?? null,
         description: (row.description || '').slice(0, 500) || null,
@@ -187,8 +210,8 @@ export function importCatalog() {
     // ---- products ----
     // AUTHORITATIVE SOURCE ONLY: process the validated WooCommerce Product CSV.
     // The confetto CSV is reference/legacy only and is NEVER auto-imported here.
-    const parents = productRows.filter((p) => p.Type === 'simple' || p.Type === 'variable');
-    const variations = productRows.filter((p) => p.Type === 'variation');
+    const parents = productRows.filter((p: any) => p.Type === 'simple' || p.Type === 'variable');
+    const variations = productRows.filter((p: any) => p.Type === 'variation');
 
     const allParents = parents;
 
@@ -204,7 +227,7 @@ export function importCatalog() {
       summary.products.total++;
 
       const isVariable = p.Type === 'variable';
-      const existing = db.prepare('SELECT id, slug FROM products WHERE sku=?').get(sku);
+      const existing = db.prepare('SELECT id, slug FROM products WHERE sku=?').get(sku) as any;
       // Preserve the canonical slug for existing SKUs (never reroll on re-import).
       // Only assign a fresh unique slug to genuinely new products.
       let slug: string;
@@ -222,11 +245,11 @@ export function importCatalog() {
       seenSlugs.add(slug);
 
       // category resolution (use first meaningful category slug)
-      const catNames = (p.Categories || '').split(',').map((s) => s.trim()).filter(Boolean);
+      const catNames = (p.Categories || '').split(',').map((s: string) => s.trim()).filter(Boolean);
       let categoryId = null;
       for (const cn of catNames) {
-        const leafSlug = slugify(cn.split('>').pop().trim());
-        const row = db.prepare('SELECT id FROM categories WHERE slug=?').get(leafSlug);
+        const leafSlug = slugify(cn.split('>').pop()?.trim());
+        const row = db.prepare('SELECT id FROM categories WHERE slug=?').get(leafSlug) as any;
         if (row) { categoryId = row.id; break; }
       }
 
@@ -313,7 +336,7 @@ export function importCatalog() {
         selling_unit: sellingUnit,
         published: publishedVal,
         featured: featuredVal,
-        bestseller: badges.some((b) => /bestseller/i.test(b)) ? 1 : 0,
+        bestseller: badges.some((b: string) => /bestseller/i.test(b)) ? 1 : 0,
         eggless: eggless ? 1 : 0,
         flavours: JSON.stringify(flavours),
         badges: JSON.stringify(badges),

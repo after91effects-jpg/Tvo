@@ -199,7 +199,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
   // Form Fields
   const [recipientName, setRecipientName] = useState(user?.name || '');
-  const [recipientPhone, setRecipientPhone] = useState('+91 7678259522');
+  const [recipientPhone, setRecipientPhone] = useState(user?.phone || '');
   const [recipientEmail, setRecipientEmail] = useState(
     user?.email || ''
   );
@@ -226,7 +226,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const [paymentMethod, setPaymentMethod] = useState<'upi_card' | 'cod'>('upi_card');
 
   // Coupon Code
-  const [couponCode, setCouponCode] = useState('SWEET10');
+  const [couponCode, setCouponCode] = useState('');
   const [appliedDiscount, setAppliedDiscount] = useState(0);
   const [couponMessage, setCouponMessage] = useState('');
 
@@ -308,10 +308,10 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
   // Delivery Fee Calculation
   const slotSurcharge = currentSlot?.surcharge || 0;
-  const standardFee = subtotal >= 999 ? 0 : 49;
-  const deliveryFee = slotSurcharge > 0 ? slotSurcharge : standardFee;
+  const standardFee = subtotal >= 499 ? 0 : 49;
+  const deliveryFee = standardFee;
 
-  const totalAmount = Math.max(0, subtotal + deliveryFee - appliedDiscount);
+  const totalAmount = Math.max(0, Math.round(subtotal + deliveryFee + slotSurcharge - appliedDiscount));
 
   const handleApplyCoupon = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -404,7 +404,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         deliveryFee,
         slotSurcharge,
         discount: appliedDiscount,
-        tax: Math.round(Math.max(0, subtotal - appliedDiscount) * 0.05),
+        tax: 0,
         total: totalAmount,
         deliveryDate,
         deliverySlot: resolvedDeliverySlot,
@@ -874,7 +874,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                         <span className="text-[11px] font-bold text-purple-400">
                           +₹{slot.surcharge}
                         </span>
-                      ) : subtotal >= 999 ? (
+                      ) : subtotal >= 499 ? (
                         <span className="text-[10px] font-bold text-[var(--success)]">
                           FREE
                         </span>

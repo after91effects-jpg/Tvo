@@ -223,13 +223,13 @@ function seedAddons() {
 }
 
 function seedHomepage() {
-  const sections: [string, string, string, string, string][] = [
+  const sections: [string, string, string, string | null, string | null, string | null][] = [
     ['hero', 'Hero', 'Fresh Baked Today', 'Handcrafted Celebrations & Express Delivery', 'Show all cakes', '/shop'],
     ['trending-categories', 'Trending Categories', 'Explore Our Ranges', null, null, null],
     ['most-selling', 'Most Selling Products', 'Bestsellers', null, null, null],
     ['handpicked', 'Handpicked Products', "Chef's Picks", null, null, null],
     ['new-arrivals', 'New Arrivals', 'Just Baked', null, null, null],
-    ['custom-orders', 'Custom Orders', 'Design Your Dream Cake', 'Start a Custom Order', '/custom-order'],
+    ['custom-orders', 'Custom Orders', 'Design Your Dream Cake', null, 'Start a Custom Order', '/custom-order'],
     ['service-benefits', 'Service Benefits', 'Why TVO Flavours?', null, null, null],
     ['testimonials', 'Testimonials', 'What Our Customers Say', null, null, null],
     ['blog', 'Blog', 'From the Oven', null, null, null],
@@ -245,7 +245,7 @@ function seedHomepage() {
 }
 
 function seedNavigation() {
-  const items: [string, string, string, number][] = [
+  const items: [string, string, number][] = [
     ['Home', '/', 0],
     ['Shop', '/shop', 1],
     ['Cakes', '/cakes', 2],

@@ -59,6 +59,22 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     }
   };
 
+  React.useEffect(() => {
+    if (isCartOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isCartOpen]);
+
+  const handleRemovePromo = () => {
+    removePromoCode();
+    setPromoMessage(null);
+  };
+
   if (!isCartOpen) return null;
 
   return (
@@ -245,7 +261,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                     <span>Coupon <strong>{appliedPromo.code}</strong> applied (-₹{discount})</span>
                   </div>
                   <button
-                    onClick={removePromoCode}
+                    onClick={handleRemovePromo}
                     className="text-[11px] text-[var(--danger)] hover:underline font-medium"
                   >
                     Remove
@@ -303,8 +319,8 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                   </div>
                 )}
                 <div className="flex justify-between">
-                  <span>Taxes (5% GST)</span>
-                  <span>₹{tax}</span>
+                  <span>Taxes</span>
+                  <span className="text-[var(--text-muted)]">GST Included</span>
                 </div>
                 <div className="flex justify-between text-sm font-bold text-[var(--text-main)] pt-2 border-t border-[var(--border)]">
                   <span>To Pay</span>

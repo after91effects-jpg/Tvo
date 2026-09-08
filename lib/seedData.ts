@@ -68,8 +68,8 @@ export const DEFAULT_STORE_SETTINGS: StoreSettings = {
     { id: 'slot-mid', name: 'Midnight Surprise (11 PM - 12 AM)', timeRange: '11:00 PM – 12:00 AM', surcharge: 199 },
   ],
   thresholds: {
-    freeDeliveryAbove: 799,
-    standardDeliveryFee: 99,
+    freeDeliveryAbove: 499,
+    standardDeliveryFee: 49,
   },
 };
 

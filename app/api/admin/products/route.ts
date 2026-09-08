@@ -33,9 +33,9 @@ export async function GET(req: Request) {
 }
 
 // Legacy action aliases used by the older single-page admin
-function asLegacyAction(body: any): boolean {
-  if (body.action === 'toggle_publish') { setStatus({ id: body.id, status: body.published ? 'publish' : 'draft' }, null); return true; }
-  if (body.action === 'delete') { setStatus({ id: body.id, status: 'trash' }, null); return true; }
+function asLegacyAction(body: any, user: any): boolean {
+  if (body.action === 'toggle_publish') { setStatus({ id: body.id, status: body.published ? 'publish' : 'draft' }, user); return true; }
+  if (body.action === 'delete') { setStatus({ id: body.id, status: 'trash' }, user); return true; }
   if (body.action === 'create' || body.action === 'update') {
     // map legacy name-based body into the structured editor shape
     const structured = {
@@ -52,7 +52,7 @@ function asLegacyAction(body: any): boolean {
       const ex = getProduct(Number(body.id));
       if (ex) structured.sku = ex.sku;
     }
-    const r = upsertProduct(structured, null);
+    const r = upsertProduct(structured, user);
     return true;
   }
   return false;
@@ -64,7 +64,7 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
 
   try {
-    if (asLegacyAction(body)) return ok({ ok: true });
+    if (asLegacyAction(body, user)) return ok({ ok: true });
 
     const action = body.action || (body.id ? 'update' : 'create');
     switch (action) {

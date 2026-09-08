@@ -52,10 +52,10 @@ function ensureCatalogSourceColumn() {
   }
 }
 
-function loadCsv(p) {
+function loadCsv(p: string): any[] {
   if (!fs.existsSync(p)) return [];
   const text = fs.readFileSync(p, 'utf8');
-  return Papa.parse(text, { header: true, skipEmptyLines: 'greedy' }).data;
+  return Papa.parse(text, { header: true, skipEmptyLines: 'greedy' }).data as any[];
 }
 
 function firstKeyOf(row: any) { return Object.keys(row)[0]; }
@@ -63,7 +63,7 @@ function idOf(row: any) {
   const k = firstKeyOf(row);
   return (row[k] || row['ID'] || '').toString();
 }
-function slugify(s) {
+function slugify(s: any): string {
   return (s || '').toString().toLowerCase().normalize('NFKD').replace(/[^\w\s-]/g, '').trim().replace(/[\s]+/g, '-').replace(/-+/g, '-');
 }
 
@@ -108,7 +108,7 @@ export function analyzeCatalog() {
     existingDbProductCount: dbRows.length,
     categoryCsvRows: categoryRows.length,
     categoryCsvUniqueSlugs: 0,
-    existingDbCategoryCount: db.prepare('SELECT COUNT(*) c FROM categories').get().c,
+    existingDbCategoryCount: (db.prepare('SELECT COUNT(*) c FROM categories').get() as any)?.c || 0,
     duplicateCsvSkus: [...csvDupSkus.keys()].map((k) => ({ sku: k, count: csvDupSkus.get(k) })),
     productsMissingSku: csvRowsNoSku.map((r) => ({ id: idOf(r), name: (r.Name || '').trim() })),
     toCreate: [],
@@ -123,6 +123,17 @@ export function analyzeCatalog() {
   };
 
   // 1) Products in CSV (with SKU) vs DB
+  const dbSkuToRow = new Map<string, any>();
+  const dbDupSkus = new Map<string, any[]>();
+  for (const r of dbRows) {
+    const sku = (r.sku || '').trim();
+    if (!sku) continue;
+    const key = sku.toLowerCase();
+    if (!dbDupSkus.has(key)) dbDupSkus.set(key, []);
+    dbDupSkus.get(key)?.push(r);
+    dbSkuToRow.set(key, r);
+  }
+
   for (const [key, csvRow] of csvSkuToRow) {
     const dbRow = dbBySkuLower.get(key);
     if (!dbRow) {
@@ -132,7 +143,20 @@ export function analyzeCatalog() {
     }
   }
 
-  // 2) DB products whose SKU is not in the WC CSV (incl. confetto extras)
+  // 2) Products with duplicate names in DB
+  const byName = new Map<string, any[]>();
+  for (const r of dbRows) {
+    const k = (r.name || '').trim().toLowerCase();
+    if (!byName.has(k)) byName.set(k, []);
+    byName.get(k)?.push(r);
+  }
+  for (const [name, rows] of byName) {
+    if (rows.length > 1) {
+      report.duplicateProducts.push({ name: rows[0].name, rows: rows.map((r) => ({ id: r.id, sku: r.sku })) });
+    }
+  }
+
+  // 3) DB products whose SKU is not in the WC CSV (incl. confetto extras)
   const legacySkus = getLegacyDbOnlySkus();
   for (const r of dbRows) {
     if (!r.sku) { report.conflicts.push({ type: 'db-row-without-sku', id: r.id, name: r.name }); continue; }
@@ -146,18 +170,6 @@ export function analyzeCatalog() {
     }
   }
 
-  // 3) Duplicate product names within DB
-  const byName = new Map<string, any[]>();
-  for (const r of dbRows) {
-    const k = (r.name || '').trim().toLowerCase();
-    if (!byName.has(k)) byName.set(k, []);
-    byName.get(k).push(r);
-  }
-  for (const [name, rows] of byName) {
-    if (rows.length > 1) {
-      report.duplicateProducts.push({ name: rows[0].name, rows: rows.map((r) => ({ id: r.id, sku: r.sku })) });
-    }
-  }
 
   // 4) Category reconciliation (CSV unique slugs vs DB slugs)
   const csvCategorySlugs = new Set<string>();
@@ -220,18 +232,20 @@ function getImageIndex() {
   const index = new Map<string, string[]>();
   const normKey = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '');
   const walk = (dir: string) => {
-    if (!fs.existsSync(dir)) return;
-    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-      if (e.name === '.DS_Store') continue;
-      const full = path.join(dir, e.name);
-      if (e.isDirectory()) walk(full);
-      else if (/\.(png|jpe?g|webp|gif|avif|svg)$/i.test(e.name)) {
-        const base = e.name.replace(/-[\d]{2,4}x[\d]{2,3}(\.[a-z0-9]+)$/i, '$1').replace(/\.[a-z0-9]+$/i, '');
-        const k = normKey(base);
-        if (!index.has(k)) index.set(k, []);
-        index.get(k).push(full);
+    try {
+      if (!fs.existsSync(dir)) return;
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (e.name === '.DS_Store') continue;
+        const full = path.join(dir, e.name);
+        if (e.isDirectory()) walk(full);
+        else if (/\.(png|jpe?g|webp|gif|avif|svg)$/i.test(e.name)) {
+          const base = e.name.replace(/-[\d]{2,4}x[\d]{2,3}(\.[a-z0-9]+)$/i, '$1').replace(/\.[a-z0-9]+$/i, '');
+          const k = normKey(base);
+          if (!index.has(k)) index.set(k, []);
+          index.get(k)!.push(full);
+        }
       }
-    }
+    } catch {}
   };
   for (const r of roots) walk(r);
   _imgIndex = index;

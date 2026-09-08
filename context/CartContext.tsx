@@ -218,8 +218,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const freeThreshold = DEFAULT_STORE_SETTINGS.thresholds.freeDeliveryAbove;
   const deliveryFee = subtotal >= freeThreshold || items.length === 0 ? 0 : DEFAULT_STORE_SETTINGS.thresholds.standardDeliveryFee;
   const taxableAmount = Math.max(0, subtotal - discount);
-  const tax = Math.round(taxableAmount * 0.05); // 5% GST on bakery
-  const total = taxableAmount + deliveryFee + slotSurcharge + tax;
+  const tax = 0; // Bakery prices are GST-inclusive
+  const total = Math.max(0, Math.round(taxableAmount + deliveryFee + slotSurcharge + tax));
 
   return (
     <CartContext.Provider
