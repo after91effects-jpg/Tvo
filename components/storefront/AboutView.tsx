@@ -51,10 +51,10 @@ export const AboutView: React.FC = () => {
             <Clock className="w-6 h-6" />
           </div>
           <h3 className="text-base font-bold font-display text-[var(--text-main)]">
-            Cold-Chain 2-Hour Delivery
+            Cold-Chain Express Delivery
           </h3>
           <p className="text-xs text-[var(--text-muted)] leading-relaxed">
-            Cakes are baked to order 2 hours before scheduled dispatch and transported inside custom insulated sub-zero refrigerated pods.
+            Cakes are baked fresh before scheduled dispatch and transported inside custom insulated sub-zero refrigerated pods.
           </p>
         </div>
       </div>

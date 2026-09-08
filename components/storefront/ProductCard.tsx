@@ -7,7 +7,7 @@ import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 import { StarRating } from '../common/StarRating';
 import { stripHtmlAndMetadata } from '../../lib/sanitizeDescription';
-import { handleImageFallback, DEFAULT_FALLBACK_IMAGE } from '../../lib/imageUrl';
+import { handleImageFallback, resolveProductImage, DEFAULT_FALLBACK_IMAGE } from '../../lib/imageUrl';
 
 interface ProductCardProps {
   product: Product;
@@ -61,18 +61,15 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onViewProduct
     ? Math.round(((selectedWeight.mrp - selectedWeight.price) / selectedWeight.mrp) * 100)
     : 0;
 
-  const mainImage =
-    product.images?.[0]?.mediumUrl ||
-    product.images?.[0]?.url ||
-    DEFAULT_FALLBACK_IMAGE;
+  const mainImage = resolveProductImage(product, true);
 
   return (
     <div
       onClick={() => onViewProduct(product.id)}
-      className="group bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl overflow-hidden shadow-xs hover:shadow-lg transition-all duration-300 flex flex-col justify-between cursor-pointer relative"
+      className="group bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl sm:rounded-2xl overflow-hidden shadow-xs hover:shadow-lg transition-all duration-300 flex flex-col justify-between cursor-pointer relative"
     >
-      {/* Top Image & Badges - 1:1 Aspect Ratio (Square) on All Devices */}
-      <div className="relative aspect-square w-full bg-[var(--bg-subtle)] overflow-hidden">
+      {/* Top Image & Badges - Compact aspect-[4/3] on Mobile, 1:1 on Desktop */}
+      <div className="relative aspect-[4/3] sm:aspect-square w-full bg-[var(--bg-subtle)] overflow-hidden">
         <img
           src={mainImage}
           alt={product.name}
@@ -87,14 +84,14 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onViewProduct
           type="button"
           onClick={handleToggleWishlist}
           aria-label={isWishlisted ? `Remove ${product.name} from wishlist` : `Add ${product.name} to wishlist`}
-          className={`absolute top-2.5 right-2.5 z-20 p-2 rounded-full backdrop-blur-md transition-all duration-200 cursor-pointer shadow-md ${
+          className={`absolute top-2 right-2 sm:top-2.5 sm:right-2.5 z-20 p-1.5 sm:p-2 rounded-full backdrop-blur-md transition-all duration-200 cursor-pointer shadow-md ${
             isWishlisted
               ? 'bg-white/95 dark:bg-stone-900/95 text-rose-500 border border-rose-200 dark:border-rose-900/50 scale-105'
               : 'bg-white/80 dark:bg-stone-900/80 text-stone-600 dark:text-stone-300 hover:text-rose-500 hover:bg-white dark:hover:bg-stone-900 hover:scale-110'
           } ${justToggled ? 'scale-125' : ''}`}
         >
           <Heart
-            className={`w-4 h-4 transition-transform duration-200 ${
+            className={`w-3.5 h-3.5 sm:w-4 sm:h-4 transition-transform duration-200 ${
               isWishlisted
                 ? 'fill-rose-500 text-rose-500 stroke-rose-500'
                 : 'stroke-current'
@@ -103,11 +100,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onViewProduct
         </button>
 
         {/* Dietary / Bestseller Badges */}
-        <div className="absolute top-2.5 left-2.5 flex flex-col gap-1 z-10">
-          {product.badges?.map((badge) => (
+        <div className="absolute top-2 left-2 sm:top-2.5 sm:left-2.5 flex flex-col gap-1 z-10">
+          {product.badges?.slice(0, 1).map((badge) => (
             <span
               key={badge}
-              className={`px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide shadow-xs ${
+              className={`px-1.5 sm:px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] font-bold tracking-wide shadow-xs ${
                 badge.toLowerCase().includes('bestseller')
                   ? 'bg-[var(--primary)] text-white'
                   : badge.toLowerCase().includes('chef')
@@ -119,15 +116,15 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onViewProduct
             </span>
           ))}
           {product.eggless && (
-            <span className="px-2 py-0.5 rounded-md bg-[var(--success-light)] text-[var(--success)] border border-[var(--success)]/20 text-[10px] font-bold flex items-center gap-1">
+            <span className="px-1.5 sm:px-2 py-0.5 rounded-md bg-[var(--success-light)] text-[var(--success)] border border-[var(--success)]/20 text-[9px] sm:text-[10px] font-bold flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-[var(--success)]" />
               <span>100% Eggless</span>
             </span>
           )}
         </div>
 
-        {/* Quick View & Quick Buy Buttons Overlay on Hover */}
-        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center gap-2 p-3">
+        {/* Quick View & Quick Buy Buttons Overlay on Hover (Desktop Only) */}
+        <div className="hidden sm:flex absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 items-center justify-center gap-2 p-3">
           <button
             id={`product-image-quick-view-${product.id}`}
             type="button"
@@ -159,29 +156,29 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onViewProduct
       </div>
 
       {/* Product Content Details */}
-      <div className="p-3 sm:p-5 flex-1 flex flex-col justify-between">
+      <div className="p-2.5 sm:p-4 md:p-5 flex-1 flex flex-col justify-between">
         <div>
-          {/* Rating */}
-          <div className="flex items-center justify-between gap-2 mb-1.5">
+          {/* Rating & Category */}
+          <div className="flex items-center justify-between gap-1 sm:gap-2 mb-1">
             <StarRating rating={product.rating || 4.8} showValue count={product.reviewCount || 0} />
-            <span className="text-[10px] text-[var(--text-subtle)] uppercase tracking-wider font-semibold">
+            <span className="text-[9px] sm:text-[10px] text-[var(--text-subtle)] uppercase tracking-wider font-semibold truncate max-w-[70px] sm:max-w-none">
               {product.category}
             </span>
           </div>
 
           {/* Title */}
-          <h3 className="text-sm sm:text-base font-bold text-[var(--text-main)] group-hover:text-[var(--primary)] transition-colors line-clamp-1 font-display">
+          <h3 className="text-xs sm:text-base font-bold text-[var(--text-main)] group-hover:text-[var(--primary)] transition-colors line-clamp-2 leading-tight sm:leading-normal font-display">
             {product.name}
           </h3>
 
-          {/* Short Description */}
-          <p className="text-xs text-[var(--text-muted)] mt-1 line-clamp-2 leading-relaxed">
+          {/* Short Description (Desktop only) */}
+          <p className="hidden sm:block text-xs text-[var(--text-muted)] mt-1 line-clamp-2 leading-relaxed">
             {stripHtmlAndMetadata(product.shortDescription || '')}
           </p>
 
-          {/* Weight Option Selector Pills */}
+          {/* Weight Option Selector Pills (Desktop only) */}
           {(product.weightOptions || []).length > 1 && (
-            <div className="mt-3 flex flex-wrap gap-1" onClick={(e) => e.stopPropagation()}>
+            <div className="hidden sm:flex mt-3 flex-wrap gap-1" onClick={(e) => e.stopPropagation()}>
               {(product.weightOptions || []).slice(0, 3).map((w) => (
                 <button
                   key={w.label}
@@ -201,26 +198,26 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onViewProduct
         </div>
 
         {/* Price & Actions footer */}
-        <div className="mt-4 pt-3 border-t border-[var(--border)] flex items-center justify-between gap-2">
+        <div className="mt-2.5 sm:mt-4 pt-2 sm:pt-3 border-t border-[var(--border)] flex items-center justify-between gap-1 sm:gap-2">
           <div className="min-w-0 flex-1">
-            <div className="flex items-baseline gap-1.5 flex-wrap">
+            <div className="flex items-baseline gap-1 sm:gap-1.5 flex-wrap">
               <span className="text-sm sm:text-lg font-bold text-[var(--text-main)] font-display">
                 ₹{selectedWeight.price}
               </span>
               {selectedWeight.mrp && selectedWeight.mrp > selectedWeight.price && (
-                <span className="text-[10px] sm:text-xs text-[var(--text-subtle)] line-through">
+                <span className="text-[9px] sm:text-xs text-[var(--text-subtle)] line-through">
                   ₹{selectedWeight.mrp}
                 </span>
               )}
             </div>
             {discountPercent > 0 && (
-              <span className="text-[9px] sm:text-[10px] text-[var(--success)] font-semibold block sm:inline">
+              <span className="text-[8px] sm:text-[10px] text-[var(--success)] font-semibold block sm:inline">
                 {discountPercent}% OFF
               </span>
             )}
           </div>
 
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
             {/* Direct Quick View Button in Footer (Desktop only) */}
             <button
               id={`quick-view-btn-${product.id}`}
@@ -236,7 +233,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onViewProduct
               <Eye className="w-4 h-4" />
             </button>
 
-            {/* Quick Add Button: Prominent compact ADD on mobile, standard on desktop */}
+            {/* Quick Add Button */}
             <button
               id={`quick-add-${product.id}`}
               type="button"
@@ -244,7 +241,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onViewProduct
               onClick={handleQuickAdd}
               aria-label={`Add ${product.name} to cart`}
               title="Add to Cart"
-              className={`px-3 py-1.5 sm:px-3 sm:py-2 rounded-lg sm:rounded-xl text-xs font-bold sm:font-semibold flex items-center justify-center gap-1.5 shadow-xs active:scale-95 transition-all cursor-pointer ${
+              className={`px-2.5 py-1 sm:px-3 sm:py-2 rounded-lg sm:rounded-xl text-xs font-bold sm:font-semibold flex items-center justify-center gap-1 shadow-xs active:scale-95 transition-all cursor-pointer ${
                 isOutOfStock
                   ? 'bg-stone-200 dark:bg-stone-800 text-stone-400 cursor-not-allowed border border-transparent'
                   : isAdding
@@ -256,7 +253,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onViewProduct
                 <span>Sold Out</span>
               ) : isAdding ? (
                 <>
-                  <Check className="w-3.5 h-3.5 text-white sm:text-emerald-500 animate-in zoom-in" />
+                  <Check className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white sm:text-emerald-500 animate-in zoom-in" />
                   <span>Added</span>
                 </>
               ) : (

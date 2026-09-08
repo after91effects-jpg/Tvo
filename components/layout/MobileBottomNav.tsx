@@ -54,7 +54,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
                 </div>
                 <div className="text-[10px] text-white/90 flex items-center gap-1 font-medium">
                   <Zap className="w-2.5 h-2.5 fill-amber-300 text-amber-300" />
-                  <span>2-Hour Express Checkout</span>
+                  <span>Express Checkout</span>
                 </div>
               </div>
             </div>

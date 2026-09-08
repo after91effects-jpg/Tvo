@@ -54,12 +54,26 @@ export interface Product {
   sellingUnit?: 'piece' | 'weight';
   weightOptions: WeightOption[];
   images: ProductImage[];
+  imageUrl?: string;
+  price?: number;
+  regularPrice?: number;
+  salePrice?: number;
+  regular_price?: number;
+  sale_price?: number;
+  variations?: any[];
   rating: number;
   reviewCount: number;
   stock: number;
   stockStatus: 'in_stock' | 'out_of_stock' | 'low_stock';
   badges: string[]; // e.g. ["Bestseller", "Eggless", "Chef's Special", "New"]
   published: boolean;
+  bestseller?: boolean;
+  newArrival?: boolean;
+  deal?: boolean;
+  featured?: boolean;
+  addons?: any[];
+  flavourOptions?: string[];
+  weight?: string;
   seoTitle?: string;
   seoDescription?: string;
   createdAt: string;
@@ -190,6 +204,7 @@ export interface MediaAsset {
   id: string;
   fileName: string;
   originalUrl: string;
+  url?: string;
   optimizedVariants: {
     thumb: string;
     medium: string;

@@ -13,7 +13,7 @@ const FAQS: FaqItem[] = [
   {
     category: 'delivery',
     question: 'How fast can I get my celebration cake delivered?',
-    answer: 'We provide 2-Hour Express Delivery in major metro cities for orders placed before 9:00 PM. You can also select designated morning, afternoon, evening, or surprise Midnight Delivery (11:00 PM - 12:00 AM) slots at checkout.',
+    answer: 'We provide Express Delivery in major metro cities for orders placed before 9:00 PM. You can also select designated morning, afternoon, evening, or surprise Midnight Delivery (11:00 PM - 12:00 AM) slots at checkout.',
   },
   {
     category: 'eggless',

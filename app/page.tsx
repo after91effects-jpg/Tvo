@@ -25,6 +25,7 @@ import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
 import { useLocalStorageJSON } from '../lib/useLocalStorage';
+import { normalizeImageUrl } from '../lib/imageUrl';
 
 // Layout & Storefront Components
 import { Header } from '../components/layout/Header';
@@ -62,6 +63,97 @@ import { WooCommerceHubView } from '../components/admin/WooCommerceHubView';
 import { SecurityAuditLogsView } from '../components/admin/SecurityAuditLogsView';
 import { HamperSettingsView } from '../components/admin/HamperSettingsView';
 
+function normalizeProductRecord(p: any): Product {
+  const categorySlug = p.category || p.category_slug || '';
+  const subCatSlug = p.subcategory || p.subcategory_slug || '';
+  const tags = Array.isArray(p.tags) ? p.tags : (p.tags_json ? (typeof p.tags_json === 'string' ? JSON.parse(p.tags_json) : p.tags_json) : []);
+  const flavours = Array.isArray(p.flavours) ? p.flavours : (p.flavours_json ? (typeof p.flavours_json === 'string' ? JSON.parse(p.flavours_json) : p.flavours_json) : []);
+  const categories = Array.isArray(p.categories) ? p.categories : (p.categories_json ? (typeof p.categories_json === 'string' ? JSON.parse(p.categories_json) : p.categories_json) : (categorySlug ? [categorySlug] : []));
+  const subcategories = Array.isArray(p.subcategories) ? p.subcategories : (p.subcategories_json ? (typeof p.subcategories_json === 'string' ? JSON.parse(p.subcategories_json) : p.subcategories_json) : (subCatSlug ? [subCatSlug] : []));
+  
+  let rawImages: any[] = [];
+  try {
+    if (p.images) {
+      rawImages = typeof p.images === 'string' ? JSON.parse(p.images) : p.images;
+    } else if (p.images_json) {
+      rawImages = typeof p.images_json === 'string' ? JSON.parse(p.images_json) : p.images_json;
+    }
+  } catch { rawImages = []; }
+  if (!rawImages.length && p.image_url) rawImages = [{ url: p.image_url }];
+
+  const normalizedImages = (rawImages || []).map((im: any) => {
+    const rawUrl = typeof im === 'string' ? im : (im.url || '');
+    const url = normalizeImageUrl(rawUrl);
+    const mediumUrl = normalizeImageUrl(typeof im === 'object' && im.mediumUrl ? im.mediumUrl : url);
+    const thumbUrl = normalizeImageUrl(typeof im === 'object' && im.thumbUrl ? im.thumbUrl : mediumUrl);
+    return {
+      url,
+      mediumUrl,
+      thumbUrl,
+      alt: (typeof im === 'object' && im.alt) ? im.alt : p.name,
+      isPrimary: typeof im === 'object' ? !!im.isPrimary : true,
+    };
+  }).filter((i: any) => i.url);
+
+  let weightOptions: any[] = [];
+  try {
+    if (Array.isArray(p.weightOptions)) weightOptions = p.weightOptions;
+    else if (p.weightOptions && Array.isArray(p.weightOptions.options)) weightOptions = p.weightOptions.options;
+    else if (p.weight_options_json) {
+      const parsed = typeof p.weight_options_json === 'string' ? JSON.parse(p.weight_options_json) : p.weight_options_json;
+      weightOptions = Array.isArray(parsed) ? parsed : (parsed?.options && Array.isArray(parsed.options) ? parsed.options : []);
+    }
+  } catch { weightOptions = []; }
+  
+  const basePrice = Number(p.price ?? p.salePrice ?? p.regularPrice ?? 0);
+  const isPiece = p.sellingUnit === 'piece';
+  const normalizedOptions = weightOptions.length ? weightOptions.map((w: any) => ({
+    label: w.label || w.value || `${w.weightKg || 0.5} kg`,
+    weightKg: isPiece
+      ? Number(w.weightKg ?? w.weight_kg ?? 0)
+      : Number(w.weightKg ?? w.weight_kg ?? (parseFloat(w.label) || 0.5)),
+    price: Number(w.price ?? basePrice),
+    mrp: Number(w.mrp ?? p.regularPrice ?? basePrice),
+  })) : [{ label: isPiece ? '1 piece' : '1 kg', weightKg: isPiece ? 0 : 1, price: basePrice, mrp: Number(p.regularPrice ?? basePrice) }];
+
+  return {
+    id: String(p.id || p.slug),
+    slug: p.slug,
+    name: p.name,
+    sku: p.sku || '',
+    price: p.salePrice ?? p.price ?? 0,
+    regularPrice: p.regularPrice ?? p.price ?? 0,
+    salePrice: p.salePrice ?? 0,
+    shortDescription: p.shortDescription || p.short_description || '',
+    description: p.description || '',
+    category: categorySlug,
+    subCategory: subCatSlug || categories[0] || '',
+    categories,
+    subcategories,
+    tags,
+    flavours,
+    images: normalizedImages,
+    weight: p.weight || '1.0 kg',
+    weightOptions: normalizedOptions,
+    flavourOptions: p.flavourOptions || undefined,
+    rating: p.rating || 4.9,
+    reviewCount: p.reviewCount || 0,
+    published: p.published !== 0 && p.published !== false,
+    eggless: Boolean(p.eggless),
+    sellingUnit: p.sellingUnit || 'weight',
+    bestseller: Boolean(p.bestseller),
+    newArrival: Boolean(p.newArrival),
+    deal: Boolean(p.deal),
+    featured: Boolean(p.featured),
+    addons: p.addons || undefined,
+    stock: p.stock ?? 999,
+    stockStatus: p.stockStatus || (p.stock <= 0 ? 'out_of_stock' : 'in_stock'),
+    badges: Array.isArray(p.badges) ? p.badges : [],
+    createdAt: p.createdAt || new Date().toISOString(),
+    updatedAt: p.updatedAt || new Date().toISOString(),
+  } as Product;
+}
+
 export default function Home() {
   const router = useRouter();
   const { user, isAuthenticated, isAdmin } = useAuth();
@@ -93,7 +185,7 @@ export default function Home() {
   const [adminTab, setAdminTab] = useState<AdminTab>('dashboard');
 
   // Live Firestore Data State
-  const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
+  const [products, setProducts] = useState<Product[]>(() => INITIAL_PRODUCTS.map(normalizeProductRecord));
   const [categories, setCategories] = useState<Category[]>(INITIAL_CATEGORIES);
   const [orders, setOrders] = useState<Order[]>(INITIAL_SAMPLE_ORDERS);
   const [isLoading, setIsLoading] = useState(false);
@@ -153,81 +245,12 @@ export default function Home() {
         const prodRes = await fetch('/api/products?limit=1000');
         const prodData = await prodRes.json();
         if (prodData.products && prodData.products.length > 0) {
-          setProducts(prodData.products.map((p: any) => {
-            const categorySlug = p.category || p.category_slug || '';
-            const subCatSlug = p.subcategory || p.subcategory_slug || '';
-            const tags = Array.isArray(p.tags) ? p.tags : (p.tags_json ? (typeof p.tags_json === 'string' ? JSON.parse(p.tags_json) : p.tags_json) : []);
-            const flavours = Array.isArray(p.flavours) ? p.flavours : (p.flavours_json ? (typeof p.flavours_json === 'string' ? JSON.parse(p.flavours_json) : p.flavours_json) : []);
-            const categories = Array.isArray(p.categories) ? p.categories : (p.categories_json ? (typeof p.categories_json === 'string' ? JSON.parse(p.categories_json) : p.categories_json) : (categorySlug ? [categorySlug] : []));
-            const subcategories = Array.isArray(p.subcategories) ? p.subcategories : (p.subcategories_json ? (typeof p.subcategories_json === 'string' ? JSON.parse(p.subcategories_json) : p.subcategories_json) : (subCatSlug ? [subCatSlug] : []));
-            let images: any[] = [];
-            try {
-              if (p.images) {
-                images = typeof p.images === 'string' ? JSON.parse(p.images) : p.images;
-              } else if (p.images_json) {
-                images = typeof p.images_json === 'string' ? JSON.parse(p.images_json) : p.images_json;
-              }
-            } catch { images = []; }
-            if (!images.length && p.image_url) images = [{ url: p.image_url }];
-
-            let weightOptions: any[] = [];
-            try {
-              if (Array.isArray(p.weightOptions)) weightOptions = p.weightOptions;
-              else if (p.weightOptions && Array.isArray(p.weightOptions.options)) weightOptions = p.weightOptions.options;
-              else if (p.weight_options_json) {
-                const parsed = typeof p.weight_options_json === 'string' ? JSON.parse(p.weight_options_json) : p.weight_options_json;
-                weightOptions = Array.isArray(parsed) ? parsed : (parsed?.options && Array.isArray(parsed.options) ? parsed.options : []);
-              }
-            } catch { weightOptions = []; }
-            const basePrice = Number(p.price ?? p.salePrice ?? p.regularPrice ?? 0);
-            const isPiece = p.sellingUnit === 'piece';
-            const normalizedOptions = weightOptions.length ? weightOptions.map((w: any) => ({
-              label: w.label || w.value || `${w.weightKg || 0.5} kg`,
-              weightKg: isPiece
-                ? Number(w.weightKg ?? w.weight_kg ?? 0)
-                : Number(w.weightKg ?? w.weight_kg ?? (parseFloat(w.label) || 0.5)),
-              price: Number(w.price ?? basePrice),
-              mrp: Number(w.mrp ?? p.regularPrice ?? basePrice),
-            })) : [{ label: isPiece ? '1 piece' : '1 kg', weightKg: isPiece ? 0 : 1, price: basePrice, mrp: Number(p.regularPrice ?? basePrice) }];
-
-            return {
-              id: p.id || p.slug,
-              slug: p.slug,
-              name: p.name,
-              sku: p.sku || '',
-              price: p.salePrice ?? p.price ?? 0,
-              regularPrice: p.regularPrice ?? p.price ?? 0,
-              salePrice: p.salePrice ?? 0,
-              shortDescription: p.shortDescription || p.short_description || '',
-              description: p.description || '',
-              category: categorySlug,
-              subCategory: subCatSlug || categories[0] || '',
-              categories,
-              subcategories,
-              tags,
-              flavours,
-              images: images.map((im: any) => (typeof im === 'string' ? { url: im } : { url: im.url, mediumUrl: im.mediumUrl || im.url, thumbUrl: im.thumbUrl || im.mediumUrl || im.url, alt: im.alt })).filter((i: any) => i.url),
-              weight: p.weight || '1.0 kg',
-              weightOptions: normalizedOptions,
-              flavourOptions: p.flavourOptions || undefined,
-              rating: p.rating || 4.9,
-              reviewCount: p.reviewCount || 0,
-              published: p.published !== 0 && p.published !== false,
-              eggless: Boolean(p.eggless),
-              sellingUnit: p.sellingUnit || 'weight',
-              bestseller: Boolean(p.bestseller),
-              newArrival: Boolean(p.newArrival),
-              deal: Boolean(p.deal),
-              featured: Boolean(p.featured),
-              addons: p.addons || undefined,
-              stock: p.stock ?? 999,
-            } as Product;
-          }));
+          setProducts(prodData.products.map(normalizeProductRecord));
         } else {
-          setProducts(INITIAL_PRODUCTS);
+          setProducts(INITIAL_PRODUCTS.map(normalizeProductRecord));
         }
       } catch {
-        setProducts(INITIAL_PRODUCTS);
+        setProducts(INITIAL_PRODUCTS.map(normalizeProductRecord));
       }
 
       // Fetch Orders
@@ -244,7 +267,7 @@ export default function Home() {
       }
     } catch (err) {
       console.warn('Fetch fallback:', err);
-      setProducts(INITIAL_PRODUCTS);
+      setProducts(INITIAL_PRODUCTS.map(normalizeProductRecord));
       setCategories(INITIAL_CATEGORIES);
       setOrders(INITIAL_SAMPLE_ORDERS);
     } finally {
@@ -673,7 +696,7 @@ export default function Home() {
                 {/* Products Catalog Section */}
                 <section
                   id="artisan-products-grid"
-                  className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 space-y-6"
+                  className="w-full px-3 sm:px-6 lg:px-8 xl:px-12 space-y-6"
                 >
                   <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
                     <div>
@@ -724,7 +747,7 @@ export default function Home() {
 
                   {/* Product Cards Grid */}
                   {isLoading ? (
-                    <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4 md:gap-6 py-12">
+                    <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-2.5 sm:gap-4 md:gap-6 py-12">
                       {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
                         <div
                           key={i}
@@ -757,7 +780,7 @@ export default function Home() {
                       </button>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4 md:gap-6">
+                    <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-2.5 sm:gap-4 md:gap-6">
                       {filteredStoreProducts.map((product) => (
                         <ProductCard
                           key={product.id}

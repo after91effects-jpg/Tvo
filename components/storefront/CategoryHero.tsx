@@ -51,6 +51,7 @@ export const CategoryHero: React.FC<CategoryHeroProps> = ({
   const h1 = childMatch?.h1 || subMatch?.h1 || mainMatch?.h1 || `${title} Collection`;
   const rawHeroImage = childMatch?.image || subMatch?.image || mainMatch?.image || DEFAULT_CAKE_FALLBACK;
   const heroImage = normalizeImageUrl(rawHeroImage);
+  const desc = childMatch?.seoDescription || subMatch?.seoDescription || mainMatch?.seoDescription || `Discover our handcrafted ${title.toLowerCase()} baked fresh to order using 100% pure ingredients.`;
 
   const breadcrumbs: { label: string; slug?: string }[] = [{ label: 'Home' }];
   if (mainMatch) {
@@ -108,7 +109,7 @@ export const CategoryHero: React.FC<CategoryHeroProps> = ({
               </span>
               <span className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-bold">
                 <Truck className="w-3 h-3" />
-                <span>2-Hr Express Delivery</span>
+                <span>Same-Day Express Delivery</span>
               </span>
             </div>
 

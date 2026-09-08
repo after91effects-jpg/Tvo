@@ -380,7 +380,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
         <div className="pt-6 pb-6 border-t border-[var(--border)]">
           <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-subtle)] mb-2.5 flex items-center gap-1.5">
             <MapPin className="w-3.5 h-3.5 text-[var(--primary)]" />
-            <span>2-Hour Express Delivery Available In:</span>
+            <span>Fresh Delivery Available In:</span>
           </div>
           <div className="flex flex-wrap gap-1.5 sm:gap-2">
             {DEFAULT_STORE_SETTINGS.deliveryCities.map((city) => (

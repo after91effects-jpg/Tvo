@@ -212,7 +212,7 @@ export const WishlistView: React.FC<WishlistViewProps> = ({
             <div className="flex items-center gap-3 p-3 rounded-2xl bg-[var(--bg-subtle)]/50">
               <Zap className="w-4 h-4 text-[#FF2B6D] shrink-0" />
               <div className="text-[11px]">
-                <strong className="block text-[var(--text-main)] font-semibold">2-Hour Express</strong>
+                <strong className="block text-[var(--text-main)] font-semibold">Express Delivery</strong>
                 <span className="text-[var(--text-muted)]">Same-day delivery</span>
               </div>
             </div>

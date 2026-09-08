@@ -35,7 +35,8 @@ export function mediumImageUrl(url: string): string {
   return url.replace(/\.[a-z0-9]+$/i, '-w700.webp');
 }
 
-export const DEFAULT_FALLBACK_IMAGE = '/images/products/uploads/Banner_3270x320.webp';
+export const DEFAULT_FALLBACK_IMAGE = '/uploads/2026/05/Belgian-Chocolate-Cake-w700.webp';
+export const DEFAULT_BANNER_FALLBACK = '/images/products/uploads/Banner_3270x320.webp';
 export const DEFAULT_CAKE_FALLBACK = 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=800&q=80';
 
 /**
@@ -73,8 +74,8 @@ export function resolveProductImage(productOrImages: any, preferMedium: boolean 
 
 /**
  * Reusable image error handler with safe two-tier fallback:
- * Tier 1: Falls back from medium/thumb URL to original full URL if different
- * Tier 2: Falls back to verified local default banner asset
+ * Tier 1: Falls back from medium/thumb URL to original normalized URL if different
+ * Tier 2: Falls back to verified local default cake asset
  * Protects against infinite loops via dataset.fallback tracking.
  */
 export function handleImageFallback(
@@ -87,9 +88,10 @@ export function handleImageFallback(
     return; // Already reached final fallback
   }
 
-  if (!target.dataset.fallback && originalUrl && originalUrl !== target.src) {
+  const normalizedOriginal = originalUrl ? normalizeImageUrl(originalUrl) : '';
+  if (!target.dataset.fallback && normalizedOriginal && target.src && !target.src.endsWith(normalizedOriginal)) {
     target.dataset.fallback = '1';
-    target.src = originalUrl;
+    target.src = normalizedOriginal;
   } else {
     target.dataset.fallback = '2';
     target.src = finalFallback;

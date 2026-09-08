@@ -33,7 +33,7 @@ const HERO_SLIDES: HeroSlide[] = [
         </span>
       </>
     ),
-    subtitle: 'Slow-baked with 70% Belgian Callebaut chocolate, pure dairy butter, and farm-fresh ingredients. Delivered to your doorstep in 2 hours.',
+    subtitle: 'Slow-baked with 70% Belgian Callebaut chocolate, pure dairy butter, and farm-fresh ingredients. Fresh artisanal delivery to your doorstep.',
     tag: "CHEF'S SIGNATURE CREATION",
     ctaText: 'Order Birthday Cakes',
     ctaAction: 'category',
@@ -126,6 +126,8 @@ export const HeroCarousel: React.FC<{ onNavigate: (view: string, param?: string)
   const [isHovered, setIsHovered] = useState(false);
   const [isVisible, setIsVisible] = useState(true);
 
+  const isHoveredRef = useRef(false);
+  const isVisibleRef = useRef(true);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const touchStartXRef = useRef<number>(0);
   const touchStartYRef = useRef<number>(0);
@@ -139,11 +141,11 @@ export const HeroCarousel: React.FC<{ onNavigate: (view: string, param?: string)
 
   const startTimer = useCallback(() => {
     clearTimer();
-    if (isHovered || !isVisible) return;
+    if (isHoveredRef.current || !isVisibleRef.current) return;
     timerRef.current = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % HERO_SLIDES.length);
     }, 5500);
-  }, [clearTimer, isHovered, isVisible]);
+  }, [clearTimer]);
 
   // Clean interval lifecycle
   useEffect(() => {
@@ -154,13 +156,20 @@ export const HeroCarousel: React.FC<{ onNavigate: (view: string, param?: string)
   // Tab visibility listener (pause autoplay when tab is hidden)
   useEffect(() => {
     const handleVisibilityChange = () => {
-      setIsVisible(document.visibilityState !== 'hidden');
+      const visible = document.visibilityState !== 'hidden';
+      setIsVisible(visible);
+      isVisibleRef.current = visible;
+      if (visible) {
+        startTimer();
+      } else {
+        clearTimer();
+      }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, []);
+  }, [startTimer, clearTimer]);
 
   const nextSlide = useCallback(() => {
     setCurrentSlide((prev) => (prev + 1) % HERO_SLIDES.length);
@@ -186,11 +195,15 @@ export const HeroCarousel: React.FC<{ onNavigate: (view: string, param?: string)
   const handleMouseEnter = () => {
     if (!isTouchInteractionRef.current) {
       setIsHovered(true);
+      isHoveredRef.current = true;
+      clearTimer();
     }
   };
 
   const handleMouseLeave = () => {
     setIsHovered(false);
+    isHoveredRef.current = false;
+    startTimer();
   };
 
   // Keyboard navigation

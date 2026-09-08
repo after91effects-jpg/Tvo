@@ -79,8 +79,8 @@ interface DeliverySlotOption {
 const BASE_SLOTS: DeliverySlotOption[] = [
   {
     id: 'express_2h',
-    name: '2-Hour Express Delivery',
-    timeRange: 'Within next 120 minutes',
+    name: 'Express Delivery',
+    timeRange: 'Fastest same-day delivery',
     startHour: -1, // dynamic
     endHour: -1,
     icon: Zap,
@@ -268,7 +268,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         // Within 48-hour boundary from current timestamp
         if (slot.id === 'express_2h') {
           isAvailable = false;
-          reason = 'Select today for live express 2-hour dispatch';
+          reason = 'Select today for live express dispatch';
         }
         // Limit day 2 slots if they exceed exactly 48 hours
         if (slot.endHour > currentHour + 48 - 48) {

@@ -36,7 +36,7 @@ import { StarRating } from '../common/StarRating';
 import { ReviewSection } from './ReviewSection';
 import { Modal } from '../common/Modal';
 import { stripHtmlAndMetadata, normalizeDescriptionParagraphs } from '../../lib/sanitizeDescription';
-import { handleImageFallback, DEFAULT_FALLBACK_IMAGE } from '../../lib/imageUrl';
+import { handleImageFallback, normalizeImageUrl, DEFAULT_FALLBACK_IMAGE } from '../../lib/imageUrl';
 
 interface ProductDetailModalProps {
   product: Product | null;
@@ -84,8 +84,8 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 
   const [selectedWeight, setSelectedWeight] = useState<WeightOption>(
     product?.weightOptions?.[0] || (product?.sellingUnit === 'piece'
-      ? { label: '1 piece', weightKg: 0, price: product.price || 699, mrp: product.regularPrice || 0 }
-      : { label: '0.5 kg', weightKg: 0.5, price: product.price || 699, mrp: product.regularPrice || 849 })
+      ? { label: '1 piece', weightKg: 0, price: product?.price || 699, mrp: product?.regularPrice || 0 }
+      : { label: '0.5 kg', weightKg: 0.5, price: product?.price || 699, mrp: product?.regularPrice || 849 })
   );
   const [selectedFlavour, setSelectedFlavour] = useState<string>(
     product?.flavours?.[0] || 'Original'
@@ -107,15 +107,30 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   if (!product) return null;
   if (!isEmbedded && !isOpen) return null;
 
-  const images = product.images?.length
+  const rawImages = product.images?.length
     ? product.images
+    : product.imageUrl
+    ? [{ url: product.imageUrl, thumbUrl: product.imageUrl, alt: product.name }]
     : [
-      {
-        url: DEFAULT_FALLBACK_IMAGE,
-        thumbUrl: DEFAULT_FALLBACK_IMAGE,
-        alt: product.name,
-      },
-    ];
+        {
+          url: DEFAULT_FALLBACK_IMAGE,
+          thumbUrl: DEFAULT_FALLBACK_IMAGE,
+          alt: product.name,
+        },
+      ];
+
+  const images = rawImages.map((img: any) => {
+    const rawUrl = typeof img === 'string' ? img : (img.url || '');
+    const u = normalizeImageUrl(rawUrl);
+    const m = normalizeImageUrl(typeof img === 'object' && img.mediumUrl ? img.mediumUrl : u);
+    const t = normalizeImageUrl(typeof img === 'object' && img.thumbUrl ? img.thumbUrl : m);
+    return {
+      url: u || DEFAULT_FALLBACK_IMAGE,
+      mediumUrl: m || u || DEFAULT_FALLBACK_IMAGE,
+      thumbUrl: t || m || u || DEFAULT_FALLBACK_IMAGE,
+      alt: (typeof img === 'object' && img.alt) || product.name,
+    };
+  });
 
   const handleToggleAddOn = (addon: AddOn) => {
     if (selectedAddOns.some((a) => a.id === addon.id)) {
@@ -170,7 +185,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
               onError={(e) => handleImageFallback(e, images[activeImageIndex]?.url || images[0]?.url)}
               className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
             />
-
+            
             {/* Badges Overlay */}
             <div className="absolute top-3 left-3 flex flex-col gap-2">
               {product.eggless && (
@@ -205,14 +220,16 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                 type="button"
                 onClick={() => toggleWishlist(product.id, product.name)}
                 aria-label={isWishlisted ? `Remove ${product.name} from favorites` : `Save ${product.name} to favorites`}
-                className={`p-2.5 rounded-full backdrop-blur-md transition-all duration-200 cursor-pointer shadow-md ${isWishlisted
+                className={`p-2.5 rounded-full backdrop-blur-md transition-all duration-200 cursor-pointer shadow-md ${
+                  isWishlisted
                     ? 'bg-white/95 dark:bg-stone-900/95 text-rose-500 border border-rose-200 dark:border-rose-900/50 scale-105'
                     : 'bg-white/80 dark:bg-stone-900/80 text-stone-600 dark:text-stone-300 hover:text-rose-500 hover:bg-white dark:hover:bg-stone-900 hover:scale-110'
-                  }`}
+                }`}
               >
                 <Heart
-                  className={`w-4 h-4 ${isWishlisted ? 'fill-rose-500 text-rose-500 stroke-rose-500' : 'stroke-current'
-                    }`}
+                  className={`w-4 h-4 ${
+                    isWishlisted ? 'fill-rose-500 text-rose-500 stroke-rose-500' : 'stroke-current'
+                  }`}
                 />
               </button>
               <button
@@ -237,10 +254,11 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                 <button
                   key={idx}
                   onClick={() => setActiveImageIndex(idx)}
-                  className={`w-16 h-16 rounded-xl overflow-hidden border-2 transition-all shrink-0 cursor-pointer ${activeImageIndex === idx
+                  className={`w-16 h-16 rounded-xl overflow-hidden border-2 transition-all shrink-0 cursor-pointer ${
+                    activeImageIndex === idx
                       ? 'border-[var(--primary)] shadow-sm scale-105'
                       : 'border-transparent opacity-60 hover:opacity-100'
-                    }`}
+                  }`}
                 >
                   <img
                     src={img.thumbUrl || img.url}
@@ -258,12 +276,12 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
             <div className="p-3 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border)] text-center">
               <Clock className="w-5 h-5 text-[var(--primary)] mx-auto mb-1" />
               <div className="text-[10px] font-bold text-[var(--text-main)]">Baked Fresh</div>
-              <div className="text-[9px] text-[var(--text-muted)]">2 Hours Before Dispatch</div>
+              <div className="text-[9px] text-[var(--text-muted)]">Baked to Order</div>
             </div>
             <div className="p-3 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border)] text-center">
               <Truck className="w-5 h-5 text-emerald-600 mx-auto mb-1" />
               <div className="text-[10px] font-bold text-[var(--text-main)]">Express Delivery</div>
-              <div className="text-[9px] text-[var(--text-muted)]">Same-Day 2-Hour</div>
+              <div className="text-[9px] text-[var(--text-muted)]">Same-Day Slots</div>
             </div>
             <div className="p-3 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border)] text-center">
               <ShieldCheck className="w-5 h-5 text-blue-600 mx-auto mb-1" />
@@ -377,10 +395,11 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   key={tab.id}
                   id={`product-tab-${tab.id}`}
                   onClick={() => setActiveTab(tab.id as any)}
-                  className={`pb-2 px-3 text-[11px] font-bold uppercase tracking-wider transition-colors cursor-pointer whitespace-nowrap ${activeTab === tab.id
+                  className={`pb-2 px-3 text-[11px] font-bold uppercase tracking-wider transition-colors cursor-pointer whitespace-nowrap ${
+                    activeTab === tab.id
                       ? 'text-[var(--primary)] border-b-2 border-[var(--primary)]'
                       : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
-                    }`}
+                  }`}
                 >
                   {tab.label}
                 </button>
@@ -405,10 +424,11 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                             key={opt.label}
                             type="button"
                             onClick={() => setSelectedWeight(opt)}
-                            className={`relative p-3 rounded-xl border text-left transition-all cursor-pointer ${selectedWeight.label === opt.label
+                            className={`relative p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                              selectedWeight.label === opt.label
                                 ? 'border-[var(--primary)] bg-[var(--primary-light)] shadow-md ring-2 ring-[var(--primary)]/20'
                                 : 'border-[var(--border)] bg-[var(--bg-surface)] hover:border-[var(--border-strong)] hover:shadow-sm'
-                              }`}
+                            }`}
                           >
                             {discount > 0 && (
                               <div className="absolute -top-1.5 -right-1.5 bg-rose-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full">
@@ -421,9 +441,9 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                             <div className="text-[10px] text-[var(--text-muted)] mt-0.5">
                               {product.sellingUnit === 'piece'
                                 ? (() => {
-                                  const pc = pieceCountFromLabel(opt.label);
-                                  return pc != null ? `${pc} ${pc === 1 ? 'piece' : 'pieces'}` : 'Sold per piece';
-                                })()
+                                    const pc = pieceCountFromLabel(opt.label);
+                                    return pc != null ? `${pc} ${pc === 1 ? 'piece' : 'pieces'}` : 'Sold per piece';
+                                  })()
                                 : `Serves ${Math.ceil(opt.weightKg * 8)}-${Math.ceil(opt.weightKg * 12)}`}
                             </div>
                             <div className="flex items-baseline gap-1 mt-1">
@@ -452,10 +472,11 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                           key={f}
                           type="button"
                           onClick={() => setSelectedFlavour(f)}
-                          className={`px-4 py-2 rounded-xl text-xs font-semibold border-2 transition-all cursor-pointer ${selectedFlavour === f
+                          className={`px-4 py-2 rounded-xl text-xs font-semibold border-2 transition-all cursor-pointer ${
+                            selectedFlavour === f
                               ? 'bg-[var(--primary)] text-white border-[var(--primary)] shadow-md'
                               : 'bg-[var(--bg-surface)] text-[var(--text-main)] border-[var(--border)] hover:border-[var(--primary)]/50'
-                            }`}
+                          }`}
                         >
                           {f}
                         </button>
@@ -503,16 +524,18 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                         <label
                           key={addon.id}
                           onClick={() => handleToggleAddOn(addon)}
-                          className={`flex items-center justify-between p-3 rounded-xl border-2 text-xs cursor-pointer transition-all ${isSelected
+                          className={`flex items-center justify-between p-3 rounded-xl border-2 text-xs cursor-pointer transition-all ${
+                            isSelected
                               ? 'bg-[var(--primary-light)] border-[var(--primary)] shadow-sm'
                               : 'bg-[var(--bg-surface)] border-[var(--border)] hover:bg-[var(--bg-subtle)] hover:border-[var(--border-strong)]'
-                            }`}
+                          }`}
                         >
                           <div className="flex items-center gap-3">
-                            <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${isSelected
+                            <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
+                              isSelected
                                 ? 'bg-[var(--primary)] border-[var(--primary)]'
                                 : 'border-[var(--border)]'
-                              }`}>
+                            }`}>
                               {isSelected && <Check className="w-3 h-3 text-white" />}
                             </div>
                             <div>
@@ -604,10 +627,11 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                       <label
                         key={idx}
                         onClick={() => setSelectedDeliverySlot(idx)}
-                        className={`flex items-center justify-between p-3 rounded-xl border-2 cursor-pointer transition-all ${selectedDeliverySlot === idx
+                        className={`flex items-center justify-between p-3 rounded-xl border-2 cursor-pointer transition-all ${
+                          selectedDeliverySlot === idx
                             ? 'bg-[var(--primary-light)] border-[var(--primary)] shadow-sm'
                             : 'bg-[var(--bg-surface)] border-[var(--border)] hover:bg-[var(--bg-subtle)]'
-                          }`}
+                        }`}
                       >
                         <div className="flex items-center gap-3">
                           <span className="text-lg">{slot.icon}</span>
@@ -640,10 +664,12 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                     </div>
                     <div className="flex items-center gap-3">
                       <span className="text-xs font-bold text-[var(--primary)]">+₹149</span>
-                      <div className={`w-10 h-6 rounded-full transition-all cursor-pointer ${giftWrap ? 'bg-[var(--primary)]' : 'bg-[var(--border)]'
-                        }`} onClick={() => setGiftWrap(!giftWrap)}>
-                        <div className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${giftWrap ? 'translate-x-5' : 'translate-x-0.5'
-                          }`} />
+                      <div className={`w-10 h-6 rounded-full transition-all cursor-pointer ${
+                        giftWrap ? 'bg-[var(--primary)]' : 'bg-[var(--border)]'
+                      }`} onClick={() => setGiftWrap(!giftWrap)}>
+                        <div className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                          giftWrap ? 'translate-x-5' : 'translate-x-0.5'
+                        }`} />
                       </div>
                     </div>
                   </label>

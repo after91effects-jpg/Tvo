@@ -164,7 +164,7 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="flex items-center gap-3 font-medium">
             <span className="hidden sm:inline-flex items-center gap-1">
               <Truck className="w-3 h-3" />
-              <span>Same-Day Express 2-Hour Delivery</span>
+              <span>Same-Day Express Delivery</span>
             </span>
             <button
               onClick={() => onNavigate('track')}
@@ -207,13 +207,13 @@ export const Header: React.FC<HeaderProps> = ({
               className="flex items-center gap-2 group cursor-pointer text-left shrink-0"
             >
               <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-tr from-[#FF2B6D] to-[#FF6B9D] flex items-center justify-center text-white font-black text-sm shadow-md group-hover:scale-105 transition-transform shrink-0">
-                <Cake className="w-5 h-5" />
+                <Cake className="w-4 h-4 sm:w-5 sm:h-5" />
               </div>
               <div className="flex flex-col min-w-0">
-                <span className="font-extrabold text-base sm:text-lg tracking-tight text-[var(--text-main)] group-hover:text-[#FF2B6D] transition-colors leading-none whitespace-nowrap">
+                <span className="font-extrabold text-sm sm:text-lg tracking-tight text-[var(--text-main)] group-hover:text-[#FF2B6D] transition-colors leading-none whitespace-nowrap">
                   TVO Flavours
                 </span>
-                <span className="text-[10px] text-[var(--text-muted)] font-semibold tracking-wider uppercase whitespace-nowrap">
+                <span className="hidden sm:block text-[9px] sm:text-[10px] text-[var(--text-muted)] font-semibold tracking-wider uppercase whitespace-nowrap">
                   Artisan Bakery
                 </span>
               </div>
@@ -617,7 +617,7 @@ export const Header: React.FC<HeaderProps> = ({
                     {user ? user.name : 'Welcome to TVO Flavours!'}
                   </div>
                   <div className="text-[10px] text-white/80">
-                    5 Master Categories Catalog
+                    Artisan Bakery Menu
                   </div>
                 </div>
               </div>
@@ -640,7 +640,7 @@ export const Header: React.FC<HeaderProps> = ({
                     <MapPin className="w-3 h-3 text-[#FF2B6D]" />
                     <span>Delivering To</span>
                   </span>
-                  <span className="text-[9px] text-[#FF2B6D] font-extrabold uppercase">⚡ 2-Hr Express</span>
+                  <span className="text-[9px] text-[#FF2B6D] font-extrabold uppercase">⚡ Express Delivery</span>
                 </div>
                 <div className="grid grid-cols-2 gap-1.5">
                   {DEFAULT_STORE_SETTINGS.deliveryCities.slice(0, 4).map((city) => (
@@ -666,7 +666,7 @@ export const Header: React.FC<HeaderProps> = ({
               {/* 5 Master Categories Accordion Hierarchy */}
               <div className="space-y-2">
                 <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-subtle)] px-1">
-                  Browse by 5 Categories
+                  Browse Categories
                 </div>
 
                 {MASTER_5_MAIN_CATEGORIES.map((mainCat) => {

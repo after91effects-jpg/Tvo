@@ -12,7 +12,7 @@ export const TrustStrip: React.FC = () => {
     },
     {
       icon: <Clock className="w-6 h-6 text-[var(--primary)]" />,
-      title: '2-Hour Express Delivery',
+      title: 'Same-Day Express Delivery',
       description: 'Chilled cold-chain delivery vans to guarantee pristine cake arrival.',
     },
     {
