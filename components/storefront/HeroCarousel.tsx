@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { ChevronLeft, ChevronRight, Sparkles, Clock, Gift, Award, ArrowRight, Truck, Search } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { ChevronLeft, ChevronRight, Sparkles, ArrowRight } from 'lucide-react';
 
 interface HeroSlide {
   id: string;
@@ -16,6 +16,9 @@ interface HeroSlide {
   secondaryParam?: string;
   bgGradient: string;
   imageUrl: string;
+  badgeEmoji: string;
+  badgeTitle: string;
+  badgeSubtitle: string;
 }
 
 const HERO_SLIDES: HeroSlide[] = [
@@ -40,6 +43,9 @@ const HERO_SLIDES: HeroSlide[] = [
     secondaryParam: 'chocolate',
     bgGradient: 'from-[#2D1625]/95 via-[#23121D]/90 to-[#1A0C16]/95',
     imageUrl: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=1200&q=80',
+    badgeEmoji: '🎂',
+    badgeTitle: 'Freshly Baked Today',
+    badgeSubtitle: '100% Preservative-Free',
   },
   {
     id: 'slide-2',
@@ -61,6 +67,9 @@ const HERO_SLIDES: HeroSlide[] = [
     secondaryParam: 'all',
     bgGradient: 'from-[#331422]/95 via-[#25101B]/90 to-[#190B13]/95',
     imageUrl: 'https://images.unsplash.com/photo-1586788680434-30d324b2d46f?auto=format&fit=crop&w=1200&q=80',
+    badgeEmoji: '💖',
+    badgeTitle: 'Handcrafted Romance',
+    badgeSubtitle: 'Silky Cream Cheese Frosting',
   },
   {
     id: 'slide-3',
@@ -81,6 +90,9 @@ const HERO_SLIDES: HeroSlide[] = [
     secondaryCtaAction: 'about',
     bgGradient: 'from-[#19241C]/95 via-[#131B15]/90 to-[#0F1411]/95',
     imageUrl: 'https://images.unsplash.com/photo-1565958011703-44f9829ba187?auto=format&fit=crop&w=1200&q=80',
+    badgeEmoji: '🌿',
+    badgeTitle: '100% Eggless Kitchen',
+    badgeSubtitle: 'Handcrafted Vegetarian Sponges',
   },
   {
     id: 'slide-4',
@@ -101,6 +113,9 @@ const HERO_SLIDES: HeroSlide[] = [
     secondaryCtaAction: 'track',
     bgGradient: 'from-[#2B1F14]/95 via-[#1E160E]/90 to-[#140E0A]/95',
     imageUrl: 'https://images.unsplash.com/photo-1549465220-1a8b9238cd48?auto=format&fit=crop&w=1200&q=80',
+    badgeEmoji: '🎁',
+    badgeTitle: 'Luxe Keepsake Boxes',
+    badgeSubtitle: 'Same-Day Express Dispatch',
   },
 ];
 
@@ -108,115 +123,255 @@ export const HeroCarousel: React.FC<{ onNavigate: (view: string, param?: string)
   onNavigate,
 }) => {
   const [currentSlide, setCurrentSlide] = useState(0);
-  const [isPaused, setIsPaused] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
+  const [isVisible, setIsVisible] = useState(true);
+
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const touchStartXRef = useRef<number>(0);
+  const touchStartYRef = useRef<number>(0);
+
+  const clearTimer = useCallback(() => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  }, []);
+
+  const startTimer = useCallback(() => {
+    clearTimer();
+    if (isHovered || !isVisible) return;
+    timerRef.current = setInterval(() => {
+      setCurrentSlide((prev) => (prev + 1) % HERO_SLIDES.length);
+    }, 5500);
+  }, [clearTimer, isHovered, isVisible]);
+
+  // Clean interval lifecycle
+  useEffect(() => {
+    startTimer();
+    return () => clearTimer();
+  }, [startTimer, clearTimer]);
+
+  // Tab visibility listener (pause autoplay when tab is hidden)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      setIsVisible(document.visibilityState !== 'hidden');
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
 
   const nextSlide = useCallback(() => {
     setCurrentSlide((prev) => (prev + 1) % HERO_SLIDES.length);
-  }, []);
+    startTimer();
+  }, [startTimer]);
 
-  const prevSlide = () => {
+  const prevSlide = useCallback(() => {
     setCurrentSlide((prev) => (prev - 1 + HERO_SLIDES.length) % HERO_SLIDES.length);
+    startTimer();
+  }, [startTimer]);
+
+  const goToSlide = useCallback(
+    (index: number) => {
+      setCurrentSlide(index);
+      startTimer();
+    },
+    [startTimer]
+  );
+
+  const isTouchInteractionRef = useRef<boolean>(false);
+
+  // Desktop hover pause: only pause if interaction is not touch
+  const handleMouseEnter = () => {
+    if (!isTouchInteractionRef.current) {
+      setIsHovered(true);
+    }
   };
 
-  useEffect(() => {
-    if (isPaused) return;
-    const timer = setInterval(() => {
-      nextSlide();
-    }, 6000);
-    return () => clearInterval(timer);
-  }, [isPaused, nextSlide]);
+  const handleMouseLeave = () => {
+    setIsHovered(false);
+  };
 
-  const slide = HERO_SLIDES[currentSlide];
+  // Keyboard navigation
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      prevSlide();
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      nextSlide();
+    }
+  };
+
+  // Mobile horizontal swipe without locking vertical page scrolling
+  const handleTouchStart = (e: React.TouchEvent) => {
+    isTouchInteractionRef.current = true;
+    if (e.touches.length === 1) {
+      touchStartXRef.current = e.touches[0].clientX;
+      touchStartYRef.current = e.touches[0].clientY;
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    setIsHovered(false);
+    setTimeout(() => {
+      isTouchInteractionRef.current = false;
+    }, 500);
+
+    if (e.changedTouches.length === 1) {
+      const deltaX = e.changedTouches[0].clientX - touchStartXRef.current;
+      const deltaY = e.changedTouches[0].clientY - touchStartYRef.current;
+
+      // Only trigger slide transition if horizontal motion exceeds 40px
+      // and is significantly larger than vertical motion (preserving native page scrolling)
+      if (Math.abs(deltaX) > 40 && Math.abs(deltaX) > Math.abs(deltaY) * 1.3) {
+        if (deltaX < 0) {
+          nextSlide();
+        } else {
+          prevSlide();
+        }
+      }
+    }
+  };
 
   return (
     <div
       id="hero-carousel-container"
-      onMouseEnter={() => setIsPaused(true)}
-      onMouseLeave={() => setIsPaused(false)}
-      className="relative w-full min-h-[440px] sm:min-h-[500px] lg:h-[520px] rounded-3xl overflow-hidden shadow-2xl border border-[#3E2135] group flex flex-col justify-center bg-[#1E111B]"
+      tabIndex={0}
+      role="region"
+      aria-roledescription="carousel"
+      aria-label="Artisanal Bakery Highlights"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      onPointerEnter={(e) => {
+        if (e.pointerType !== 'touch') handleMouseEnter();
+      }}
+      onPointerLeave={(e) => {
+        if (e.pointerType !== 'touch') handleMouseLeave();
+      }}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      onKeyDown={handleKeyDown}
+      className="relative w-full min-h-[440px] sm:min-h-[500px] lg:h-[520px] rounded-3xl overflow-hidden shadow-2xl border border-[#3E2135] group flex flex-col justify-center bg-[#1E111B] select-none outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
     >
-      {/* Background Image & Gradient overlay */}
-      <div className="absolute inset-0 bg-[#140C13]">
-        <img
-          src={slide.imageUrl}
-          alt="Artisanal Bakery Creation"
-          className="w-full h-full object-cover opacity-35 scale-105 transition-all duration-1000 ease-out"
-        />
-        <div className={`absolute inset-0 bg-gradient-to-r ${slide.bgGradient} transition-opacity duration-700`} />
-      </div>
-
-      {/* Content Container */}
-      <div className="relative z-10 h-full w-full px-6 sm:px-12 lg:px-16 py-10 sm:py-12 flex items-center justify-between">
-        <div className="max-w-2xl text-white space-y-4">
-          {/* Chef Creation Pill */}
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#3A1E32] backdrop-blur-md border border-[#522A47] text-[11px] font-bold tracking-wider uppercase text-[#FF85A7] shadow-xs">
-            <Sparkles className="w-3.5 h-3.5 text-[#FF85A7]" />
-            <span>{slide.tag}</span>
-          </div>
-
-          {/* Display Headline */}
-          <h1 className="text-3xl sm:text-5xl lg:text-6xl font-bold font-display leading-[1.12] text-white tracking-tight">
-            {slide.title}
-          </h1>
-
-          {/* Subtitle */}
-          <p className="text-xs sm:text-sm lg:text-base text-[#D4C3CF] max-w-xl leading-relaxed">
-            {slide.subtitle}
-          </p>
-
-          {/* Action Button Row */}
-          <div className="pt-3 flex flex-wrap items-center gap-3.5">
-            <button
-              id="hero-explore-category-btn"
-              onClick={() => onNavigate(slide.ctaAction, slide.param)}
-              className="px-7 py-3.5 rounded-full bg-gradient-to-r from-[#FF2B6D] via-[#FF3B77] to-[#E61D52] hover:brightness-110 text-white font-bold text-xs sm:text-sm shadow-[0_6px_25px_rgba(255,43,109,0.45)] hover:shadow-[0_8px_30px_rgba(255,43,109,0.6)] active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer shrink-0"
-            >
-              <span>{slide.ctaText}</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
-
-            {slide.secondaryCtaText && (
-              <button
-                id="hero-secondary-cta-btn"
-                onClick={() => onNavigate(slide.secondaryCtaAction || 'category', slide.secondaryParam)}
-                className="px-6 py-3.5 rounded-full bg-[#291725]/90 hover:bg-[#381F33] text-white font-semibold text-xs sm:text-sm border border-[#482840] hover:border-[#FF2B6D]/40 transition-all flex items-center justify-center gap-2 cursor-pointer backdrop-blur-md active:scale-95"
-              >
-                <span>{slide.secondaryCtaText}</span>
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Right Floating Badge (as seen in screenshot) */}
-        <div className="hidden lg:flex flex-col gap-4 shrink-0">
-          <div className="flex items-center gap-3.5 px-5 py-4 rounded-2xl bg-[#1C1019]/90 backdrop-blur-md border border-[#3E2135] text-white shadow-2xl">
-            <div className="text-2xl p-2 rounded-xl bg-[#2C1726] border border-[#4D2843]">
-              🎂
+      {/* Sliding Track containing all slides side-by-side */}
+      <div
+        className="flex h-full min-h-[440px] sm:min-h-[500px] lg:h-[520px] transition-transform duration-700 ease-out will-change-transform motion-reduce:transition-none"
+        style={{
+          width: `${HERO_SLIDES.length * 100}%`,
+          transform: `translateX(-${(currentSlide * 100) / HERO_SLIDES.length}%)`,
+        }}
+        aria-live="polite"
+      >
+        {HERO_SLIDES.map((slide, idx) => (
+          <div
+            key={slide.id}
+            role="group"
+            aria-roledescription="slide"
+            aria-label={`Slide ${idx + 1} of ${HERO_SLIDES.length}`}
+            aria-hidden={currentSlide !== idx}
+            style={{ width: `${100 / HERO_SLIDES.length}%` }}
+            className="relative shrink-0 h-full min-h-[440px] sm:min-h-[500px] lg:h-[520px] flex flex-col justify-center overflow-hidden"
+          >
+            {/* Background Image & Gradient overlay */}
+            <div className="absolute inset-0 bg-[#140C13] pointer-events-none">
+              <img
+                src={slide.imageUrl}
+                alt="Artisanal Bakery Creation"
+                onError={(e) => {
+                  const target = e.currentTarget;
+                  if (!target.dataset.fallback) {
+                    target.dataset.fallback = 'true';
+                    target.src = '/images/products/uploads/Banner_3270x320.webp';
+                  }
+                }}
+                className={`w-full h-full object-cover opacity-35 transition-transform duration-1000 ease-out ${
+                  currentSlide === idx ? 'scale-105' : 'scale-100'
+                }`}
+              />
+              <div className={`absolute inset-0 bg-gradient-to-r ${slide.bgGradient}`} />
             </div>
-            <div>
-              <div className="text-xs font-bold text-white tracking-wide">
-                Freshly Baked Today
+
+            {/* Content Container */}
+            <div className="relative z-10 h-full w-full px-6 sm:px-12 lg:px-16 py-10 sm:py-12 flex items-center justify-between">
+              <div className="max-w-2xl text-white space-y-4">
+                {/* Chef Creation Pill */}
+                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#3A1E32] backdrop-blur-md border border-[#522A47] text-[11px] font-bold tracking-wider uppercase text-[#FF85A7] shadow-xs">
+                  <Sparkles className="w-3.5 h-3.5 text-[#FF85A7]" />
+                  <span>{slide.tag}</span>
+                </div>
+
+                {/* Display Headline */}
+                <h1 className="text-3xl sm:text-5xl lg:text-6xl font-bold font-display leading-[1.12] text-white tracking-tight">
+                  {slide.title}
+                </h1>
+
+                {/* Subtitle */}
+                <p className="text-xs sm:text-sm lg:text-base text-[#D4C3CF] max-w-xl leading-relaxed">
+                  {slide.subtitle}
+                </p>
+
+                {/* Action Button Row */}
+                <div className="pt-3 flex flex-wrap items-center gap-3.5">
+                  <button
+                    id={idx === currentSlide ? 'hero-explore-category-btn' : undefined}
+                    onClick={() => onNavigate(slide.ctaAction, slide.param)}
+                    tabIndex={currentSlide === idx ? 0 : -1}
+                    className="px-7 py-3.5 rounded-full bg-gradient-to-r from-[#FF2B6D] via-[#FF3B77] to-[#E61D52] hover:brightness-110 text-white font-bold text-xs sm:text-sm shadow-[0_6px_25px_rgba(255,43,109,0.45)] hover:shadow-[0_8px_30px_rgba(255,43,109,0.6)] active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer shrink-0"
+                  >
+                    <span>{slide.ctaText}</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+
+                  {slide.secondaryCtaText && (
+                    <button
+                      id={idx === currentSlide ? 'hero-secondary-cta-btn' : undefined}
+                      onClick={() => onNavigate(slide.secondaryCtaAction || 'category', slide.secondaryParam)}
+                      tabIndex={currentSlide === idx ? 0 : -1}
+                      className="px-6 py-3.5 rounded-full bg-[#291725]/90 hover:bg-[#381F33] text-white font-semibold text-xs sm:text-sm border border-[#482840] hover:border-[#FF2B6D]/40 transition-all flex items-center justify-center gap-2 cursor-pointer backdrop-blur-md active:scale-95"
+                    >
+                      <span>{slide.secondaryCtaText}</span>
+                    </button>
+                  )}
+                </div>
               </div>
-              <div className="text-[11px] text-[#CBB3C2] font-medium">
-                100% Preservative-Free
+
+              {/* Right Floating Badge */}
+              <div className="hidden lg:flex flex-col gap-4 shrink-0">
+                <div className="flex items-center gap-3.5 px-5 py-4 rounded-2xl bg-[#1C1019]/90 backdrop-blur-md border border-[#3E2135] text-white shadow-2xl">
+                  <div className="text-2xl p-2 rounded-xl bg-[#2C1726] border border-[#4D2843]">
+                    {slide.badgeEmoji}
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-white tracking-wide">
+                      {slide.badgeTitle}
+                    </div>
+                    <div className="text-[11px] text-[#CBB3C2] font-medium">
+                      {slide.badgeSubtitle}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        ))}
       </div>
 
       {/* Arrow navigation */}
       <button
+        id="hero-carousel-prev-btn"
         onClick={prevSlide}
-        className="absolute left-3 sm:left-5 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-[#20121C]/80 hover:bg-[#341C2E] text-white backdrop-blur-md border border-[#422339] flex items-center justify-center transition-all opacity-80 hover:opacity-100 cursor-pointer shadow-lg"
+        className="absolute left-3 sm:left-5 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-[#20121C]/80 hover:bg-[#341C2E] text-white backdrop-blur-md border border-[#422339] flex items-center justify-center transition-all opacity-80 hover:opacity-100 cursor-pointer shadow-lg z-20 focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
         aria-label="Previous slide"
       >
         <ChevronLeft className="w-5 h-5" />
       </button>
 
       <button
+        id="hero-carousel-next-btn"
         onClick={nextSlide}
-        className="absolute right-3 sm:right-5 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-[#20121C]/80 hover:bg-[#341C2E] text-white backdrop-blur-md border border-[#422339] flex items-center justify-center transition-all opacity-80 hover:opacity-100 cursor-pointer shadow-lg"
+        className="absolute right-3 sm:right-5 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-[#20121C]/80 hover:bg-[#341C2E] text-white backdrop-blur-md border border-[#422339] flex items-center justify-center transition-all opacity-80 hover:opacity-100 cursor-pointer shadow-lg z-20 focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
         aria-label="Next slide"
       >
         <ChevronRight className="w-5 h-5" />
@@ -227,13 +382,15 @@ export const HeroCarousel: React.FC<{ onNavigate: (view: string, param?: string)
         {HERO_SLIDES.map((_, i) => (
           <button
             key={i}
-            onClick={() => setCurrentSlide(i)}
-            className={`h-2 rounded-full transition-all duration-300 ${
+            id={`hero-dot-${i}`}
+            onClick={() => goToSlide(i)}
+            className={`h-2 rounded-full transition-all duration-300 cursor-pointer focus-visible:ring-2 focus-visible:ring-[var(--primary)] ${
               currentSlide === i
-                ? 'w-7 bg-[var(--primary)] shadow-[0_0_8px_rgba(255,45,96,0.6)]'
+                ? 'w-7 sm:w-8 bg-[var(--primary)] shadow-[0_0_8px_rgba(255,45,96,0.6)]'
                 : 'w-2 bg-[#4D2F44] hover:bg-[#6D4260]'
             }`}
             aria-label={`Go to slide ${i + 1}`}
+            aria-current={currentSlide === i ? 'true' : undefined}
           />
         ))}
       </div>
