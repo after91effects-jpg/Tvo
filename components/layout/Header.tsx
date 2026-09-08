@@ -32,6 +32,7 @@ import { useWishlist } from '../../context/WishlistContext';
 import { ThemeToggle } from '../common/ThemeToggle';
 import { NotificationBellDrawer } from '../common/NotificationBellDrawer';
 import { StorefrontSearchBar } from '../common/StorefrontSearchBar';
+import { LocationPinServiceBar } from '../storefront/LocationPinServiceBar';
 import { DEFAULT_STORE_SETTINGS } from '../../lib/seedData';
 import { lockBodyScroll, unlockBodyScroll } from '../../lib/scrollLock';
 import { Product, Category } from '../../lib/types';
@@ -62,14 +63,12 @@ export const Header: React.FC<HeaderProps> = ({
   const { user, isAdmin, isStaff, logout } = useAuth();
   const { wishlistCount } = useWishlist();
 
-  const [isCityDropdownOpen, setIsCityDropdownOpen] = useState(false);
   const [activeMegaCategory, setActiveMegaCategory] = useState<string | null>(null);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [mobileExpandedCat, setMobileExpandedCat] = useState<string | null>('cat-main-cakes');
 
   const userMenuRef = useRef<HTMLDivElement>(null);
-  const cityRef = useRef<HTMLDivElement>(null);
   const navBarRef = useRef<HTMLDivElement>(null);
 
   // Close menus on outside click
@@ -77,9 +76,6 @@ export const Header: React.FC<HeaderProps> = ({
     const handleClickOutside = (e: MouseEvent) => {
       if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
         setIsUserMenuOpen(false);
-      }
-      if (cityRef.current && !cityRef.current.contains(e.target as Node)) {
-        setIsCityDropdownOpen(false);
       }
       if (navBarRef.current && !navBarRef.current.contains(e.target as Node)) {
         setActiveMegaCategory(null);
@@ -139,18 +135,6 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="bg-gradient-to-r from-[#FF2B6D] via-[#FF457D] to-[#FF2B6D] text-white text-[11px] py-1.5 px-3 sm:px-6 lg:px-8 xl:px-12 shadow-xs">
         <div className="w-full flex items-center justify-between">
           <div className="flex items-center gap-2 sm:gap-3">
-            {/* Mobile Location Quick Switcher */}
-            <div className="flex sm:hidden items-center gap-1">
-              <button
-                type="button"
-                onClick={() => setIsCityDropdownOpen(!isCityDropdownOpen)}
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-xs font-bold text-[10px] text-white transition-colors cursor-pointer"
-              >
-                <MapPin className="w-3 h-3 text-amber-300" />
-                <span className="truncate max-w-[110px]">{deliveryCity}</span>
-                <ChevronDown className="w-2.5 h-2.5 opacity-80" />
-              </button>
-            </div>
 
             <span className="inline-flex items-center gap-1 font-bold tracking-wide">
               <Sparkles className="w-3 h-3 text-amber-300 animate-pulse" />
@@ -218,46 +202,6 @@ export const Header: React.FC<HeaderProps> = ({
                 </span>
               </div>
             </button>
-
-            {/* Desktop Location Selector */}
-            <div className="relative hidden sm:block ml-2" ref={cityRef}>
-              <button
-                type="button"
-                onClick={() => setIsCityDropdownOpen(!isCityDropdownOpen)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[var(--bg-subtle)] hover:bg-[var(--bg-accent)] text-xs text-[var(--text-main)] font-semibold border border-[var(--border)] transition-colors cursor-pointer"
-              >
-                <MapPin className="w-3.5 h-3.5 text-[#FF2B6D]" />
-                <span className="truncate max-w-[120px]">{deliveryCity}</span>
-                <ChevronDown className="w-3 h-3 text-[var(--text-subtle)]" />
-              </button>
-
-              {isCityDropdownOpen && (
-                <div className="absolute left-0 mt-2 w-48 bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl shadow-xl p-2 z-50 animate-in fade-in zoom-in-95">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-subtle)] px-2.5 py-1">
-                    Select Delivery City
-                  </div>
-                  <div className="max-h-48 overflow-y-auto space-y-0.5">
-                    {DEFAULT_STORE_SETTINGS.deliveryCities.map((city) => (
-                      <button
-                        key={city}
-                        type="button"
-                        onClick={() => {
-                          setDeliveryCity(city);
-                          setIsCityDropdownOpen(false);
-                        }}
-                        className={`w-full text-left px-2.5 py-1.5 text-xs rounded-lg transition-colors ${
-                          deliveryCity === city
-                            ? 'bg-[#FF2B6D]/10 text-[#FF2B6D] font-bold'
-                            : 'text-[var(--text-main)] hover:bg-[var(--bg-subtle)]'
-                        }`}
-                      >
-                        {city}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
           </div>
 
           {/* Desktop Search Bar */}
@@ -418,7 +362,12 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      {/* Mobile Integrated Search Bar Strip */}
+      {/* Desktop Location + PIN Service Bar directly below search bar */}
+      <div className="hidden sm:block border-t border-[var(--border)]/40 bg-[var(--bg-surface)] py-1.5 px-4 sm:px-6 lg:px-8 xl:px-12">
+        <LocationPinServiceBar isDesktop />
+      </div>
+
+      {/* Mobile Integrated Search Bar & Location + PIN Service Bar Strip */}
       <div className="block sm:hidden px-3 pb-2.5 pt-1 bg-[var(--bg-surface)] border-t border-[var(--border)]/40 shadow-xs">
         <StorefrontSearchBar
           products={products}
@@ -438,6 +387,10 @@ export const Header: React.FC<HeaderProps> = ({
           isMobile={true}
           placeholder="Search truffle, red velvet, eggless..."
         />
+        {/* Mobile Location + PIN Service Bar directly below search bar */}
+        <div className="mt-2">
+          <LocationPinServiceBar />
+        </div>
       </div>
 
       {/* ========================================================================= */}

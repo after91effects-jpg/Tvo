@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { ChevronLeft, ChevronRight, Sparkles, ArrowRight } from 'lucide-react';
+import { Sparkles, ArrowRight } from 'lucide-react';
 
 interface HeroSlide {
   id: string;
@@ -372,24 +372,6 @@ export const HeroCarousel: React.FC<{ onNavigate: (view: string, param?: string)
         ))}
       </div>
 
-      {/* Arrow navigation */}
-      <button
-        id="hero-carousel-prev-btn"
-        onClick={prevSlide}
-        className="absolute left-3 sm:left-5 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-[#20121C]/80 hover:bg-[#341C2E] text-white backdrop-blur-md border border-[#422339] flex items-center justify-center transition-all opacity-80 hover:opacity-100 cursor-pointer shadow-lg z-20 focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
-        aria-label="Previous slide"
-      >
-        <ChevronLeft className="w-5 h-5" />
-      </button>
-
-      <button
-        id="hero-carousel-next-btn"
-        onClick={nextSlide}
-        className="absolute right-3 sm:right-5 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-[#20121C]/80 hover:bg-[#341C2E] text-white backdrop-blur-md border border-[#422339] flex items-center justify-center transition-all opacity-80 hover:opacity-100 cursor-pointer shadow-lg z-20 focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
-        aria-label="Next slide"
-      >
-        <ChevronRight className="w-5 h-5" />
-      </button>
 
       {/* Slide Indicators */}
       <div className="absolute bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 z-20">
