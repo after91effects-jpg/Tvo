@@ -133,7 +133,7 @@ function normalizeProductRecord(p: any): Product {
     tags,
     flavours,
     images: normalizedImages,
-    weight: p.weight || '1.0 kg',
+    weight: p.weight || (isPiece ? '1 piece' : '1.0 kg'),
     weightOptions: normalizedOptions,
     flavourOptions: p.flavourOptions || undefined,
     rating: p.rating || 4.9,

@@ -1,5 +1,5 @@
 import { ok, err, db, generateOrderNumber, jsonParseSafe, getCurrentUser, logAudit } from '../../../lib/server/api';
-import { createOrder, OrderInputError } from '../../../lib/server/order-engine';
+import { createOrder, OrderInputError, extractPieceCount } from '../../../lib/server/order-engine';
 
 export const runtime = 'nodejs';
 
@@ -128,12 +128,16 @@ export async function PUT(req: Request) {
       for (const it of lineItems) {
         if (!it || !it.productId) continue;
         const qty = Number(it.qty) || 1;
+        const prod = db.prepare('SELECT selling_unit FROM products WHERE id=?').get(it.productId) as any;
+        const isPiece = (it.sellingUnit || prod?.selling_unit) === 'piece';
+        const pieceMultiplier = isPiece ? extractPieceCount(it.weight) : 1;
+        const restockQty = qty * pieceMultiplier;
         db.prepare(
           "UPDATE products SET stock = stock + ?, stock_status = CASE " +
           "WHEN stock + ? <= 0 THEN 'out_of_stock' " +
           "WHEN stock + ? <= low_stock_threshold THEN 'low_stock' ELSE 'in_stock' END WHERE id=?"
-        ).run(qty, qty, qty, it.productId);
-        db.prepare('INSERT INTO inventory_transactions (product_id, type, quantity, note) VALUES (?,?,?,?)').run(it.productId, 'restock', qty, `Cancelled order ${order.order_number}`);
+        ).run(restockQty, restockQty, restockQty, it.productId);
+        db.prepare('INSERT INTO inventory_transactions (product_id, type, quantity, note) VALUES (?,?,?,?)').run(it.productId, 'restock', restockQty, `Cancelled order ${order.order_number}`);
       }
       if (order.delivery_date && order.delivery_slot_id) {
         const dayCap = db.prepare('SELECT * FROM slot_capacity WHERE slot_id=? AND date=?').get(order.delivery_slot_id, order.delivery_date) as any;

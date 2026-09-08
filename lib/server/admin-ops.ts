@@ -1,6 +1,7 @@
 import { logAudit, slugify, jsonParseSafe } from './api';
 import { db } from './db';
 import { hashPassword } from './auth';
+import { extractPieceCount } from './order-engine';
 
 // ============================================================================
 // Phase 2 Admin Operations
@@ -170,7 +171,16 @@ export function cancelOrder(user: User, id: number, reason?: string) {
     run('INSERT INTO order_status_history (order_id, status, note, user_id) VALUES (?,?,?,?)', id, 'Cancelled', reason || null, user?.id ?? null);
     run('INSERT INTO order_notes (order_id, author_id, author_name, body, is_internal) VALUES (?,?,?,?,?)', id, user?.id ?? null, user?.name ?? 'admin', `Order cancelled. ${reason || ''}`.trim(), 1);
     for (const it of jsonParseSafe(order.items, [])) {
-      run('UPDATE products SET stock = stock + ? WHERE id = ?', Number(it.qty) || 0, it.productId);
+      const prod = one<Row>('SELECT selling_unit, low_stock_threshold FROM products WHERE id=?', it.productId);
+      const isPiece = (it.sellingUnit || prod?.selling_unit) === 'piece';
+      const pieceMultiplier = isPiece ? extractPieceCount(it.weight) : 1;
+      const restockQty = (Number(it.qty) || 0) * pieceMultiplier;
+      run(
+        "UPDATE products SET stock = stock + ?, stock_status = CASE " +
+        "WHEN stock + ? <= 0 THEN 'out_of_stock' " +
+        "WHEN stock + ? <= low_stock_threshold THEN 'low_stock' ELSE 'in_stock' END WHERE id = ?",
+        restockQty, restockQty, restockQty, it.productId
+      );
     }
   });
   audit(user, 'ORDER_CANCEL', 'Order', String(id), reason || undefined);

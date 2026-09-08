@@ -151,6 +151,7 @@ export interface Order {
     unitPrice: number;
     totalPrice: number;
     imageUrl?: string;
+    sellingUnit?: 'piece' | 'weight';
   }[];
   subtotal: number;
   deliveryFee: number;

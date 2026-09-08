@@ -121,6 +121,30 @@ function validateSlot(date: string | null | undefined, slotName: string | null |
   return { ok: true, slot };
 }
 
+/**
+ * Extracts physical piece count from variation labels (e.g. "12 pieces", "Pack of 6", "2 pcs").
+ * Always returns a positive integer (minimum 1).
+ */
+export function extractPieceCount(labelOrWeight?: string | null): number {
+  if (!labelOrWeight) return 1;
+  const str = String(labelOrWeight).trim();
+  const matchPcs = str.match(/(\d+)\s*(?:pieces?|pcs?|pc\b)/i);
+  if (matchPcs) {
+    const n = parseInt(matchPcs[1], 10);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  const matchPack = str.match(/(?:pack|box|set)\s*of\s*(\d+)/i);
+  if (matchPack) {
+    const n = parseInt(matchPack[1], 10);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  const leading = parseInt(str, 10);
+  if (Number.isFinite(leading) && leading > 0 && /piece|pcs|pc|pack/i.test(str)) {
+    return leading;
+  }
+  return 1;
+}
+
 // Resolve + validate every line item against fresh DB reads.
 function buildLineItems(items: any[]): Array<{ it: any; prod: any; unit: number; option: any; addedAddonTotal: number; validatedAddons: any[] }> {
   return items.map((it) => {
@@ -139,8 +163,11 @@ function buildLineItems(items: any[]): Array<{ it: any; prod: any; unit: number;
     if (unit < 0) {
       throw new OrderInputError(`Invalid or unavailable size/option selected for ${prod.name}`);
     }
-    if (prod.stock < qty) {
-      throw new OrderInputError(`Only ${prod.stock} left in stock for ${prod.name}`);
+    const isPiece = prod.selling_unit === 'piece';
+    const pieceMultiplier = isPiece ? extractPieceCount(it.weight || option?.label || option?.value) : 1;
+    const unitsNeeded = qty * pieceMultiplier;
+    if (prod.stock < unitsNeeded) {
+      throw new OrderInputError(`Only ${prod.stock} ${isPiece ? 'pieces' : 'left'} in stock for ${prod.name}`);
     }
     const addons = Array.isArray(it.addons) ? it.addons : [];
     let addedAddonTotal = 0;
@@ -351,18 +378,20 @@ export function createOrder({ items, body, customerId, generateOrderNumber }: Cr
 
     // 9. Reserve stock atomically (oversell protection with SQL AND stock >= ?)
     for (const line of lines) {
-      const qty = line.it.qty;
+      const isPiece = line.prod.selling_unit === 'piece';
+      const pieceMultiplier = isPiece ? extractPieceCount(line.it.weight || line.option?.label || line.option?.value) : 1;
+      const deductQty = line.it.qty * pieceMultiplier;
       const r = db.prepare(
         "UPDATE products SET stock = stock - ?, stock_status = CASE " +
         "WHEN stock - ? <= 0 THEN 'out_of_stock' " +
         "WHEN stock - ? <= low_stock_threshold THEN 'low_stock' ELSE 'in_stock' END WHERE id=? AND stock >= ?"
-      ).run(qty, qty, qty, line.prod.id, qty);
+      ).run(deductQty, deductQty, deductQty, line.prod.id, deductQty);
       if (r.changes !== 1) {
         const live = db.prepare('SELECT stock FROM products WHERE id=?').get(line.prod.id) as any;
-        throw new OrderInputError(`Only ${live ? live.stock : 0} left in stock for ${line.prod.name}`);
+        throw new OrderInputError(`Only ${live ? live.stock : 0} ${isPiece ? 'pieces' : 'left'} in stock for ${line.prod.name}`);
       }
       db.prepare('INSERT INTO inventory_transactions (product_id, type, quantity, note) VALUES (?,?,?,?)')
-        .run(line.prod.id, 'reserved', -qty, `Order ${orderNumber}`);
+        .run(line.prod.id, 'reserved', -deductQty, `Order ${orderNumber}`);
     }
 
     // 10. Book slot capacity

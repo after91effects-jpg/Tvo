@@ -1027,7 +1027,7 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
                             : 'text-[var(--danger)] bg-[var(--danger-light)]'
                         }`}
                       >
-                        {prod.stock} in stock
+                        {prod.stock} {prod.sellingUnit === 'piece' ? 'pcs in stock' : 'in stock'}
                       </span>
                     </td>
 
@@ -1181,7 +1181,7 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-[var(--text-main)] mb-1">
-                Inventory Stock Count
+                {formSellingUnit === 'piece' ? 'Inventory Stock Count (Pieces)' : 'Inventory Stock Count (Units)'}
               </label>
               <input
                 type="number"

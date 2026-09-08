@@ -337,20 +337,29 @@ let ordersUrl = '/api/orders';
     let reorderedCount = 0;
     order.items.forEach((item) => {
       // Find original product or create fallback
-      const matchingProduct = products.find((p) => p.id === item.productId) || {
+      const foundProduct = products.find((p) => p.id === item.productId);
+      const isPiece = (item as any).sellingUnit === 'piece' || /piece/i.test(item.weight || '');
+      const fallbackOption: WeightOption = {
+        label: item.weight || (isPiece ? '1 piece' : '1.0 kg'),
+        weightKg: isPiece ? 0 : 1.0,
+        price: item.unitPrice,
+        mrp: item.unitPrice + 200,
+      };
+      const matchingProduct: Product = foundProduct || {
         id: item.productId,
-        sku: item.sku,
         name: item.name,
-        slug: item.name.toLowerCase().replace(/\s+/g, '-'),
-        shortDescription: 'Fresh artisan cake recipe',
-        description: 'Fresh artisan cake recipe',
-        category: 'birthday',
+        slug: item.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+        sku: item.sku || 'TVO-RO-1',
+        price: item.unitPrice,
+        regularPrice: item.unitPrice + 200,
+        shortDescription: 'Fresh artisan bakery recipe',
+        description: 'Fresh artisan bakery recipe',
+        category: 'cakes',
         tags: ['Celebration'],
         flavours: [item.flavour || 'Classic Belgian Dark Chocolate'],
         eggless: true,
-        weightOptions: [
-          { label: item.weight || '1.0 kg', weightKg: 1.0, price: item.unitPrice, mrp: item.unitPrice + 200 },
-        ],
+        sellingUnit: isPiece ? 'piece' : 'weight',
+        weightOptions: [fallbackOption],
         images: [{ url: item.imageUrl || '', alt: item.name }],
         rating: 5.0,
         reviewCount: 24,
@@ -364,12 +373,7 @@ let ordersUrl = '/api/orders';
 
       const selectedWeight: WeightOption = matchingProduct.weightOptions.find(
         (w) => w.label === item.weight
-      ) || {
-        label: item.weight || '1.0 kg',
-        weightKg: 1.0,
-        price: item.unitPrice,
-        mrp: item.unitPrice + 200,
-      };
+      ) || fallbackOption;
 
       const addons: CartItemAddon[] = (item.addons || []).map((addonName, idx) => ({
         id: `addon-${idx}`,
@@ -932,7 +936,7 @@ let ordersUrl = '/api/orders';
                             </h4>
                             <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--text-muted)]">
                               <span className="px-2 py-0.5 rounded-md bg-[var(--bg-surface)] border border-[var(--border)] font-medium">
-                                {item.weight || '1.0 kg'}
+                                {item.weight || ((item as any).sellingUnit === 'piece' ? '1 piece' : '1.0 kg')}
                               </span>
                               <span>•</span>
                               <span>{item.flavour || 'Belgian Dark Truffle'}</span>
