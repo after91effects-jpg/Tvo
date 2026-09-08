@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   MapPin,
   Search,
@@ -67,6 +68,11 @@ export const Header: React.FC<HeaderProps> = ({
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [mobileExpandedCat, setMobileExpandedCat] = useState<string | null>('cat-main-cakes');
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const userMenuRef = useRef<HTMLDivElement>(null);
   const navBarRef = useRef<HTMLDivElement>(null);
@@ -102,6 +108,17 @@ export const Header: React.FC<HeaderProps> = ({
         didLockMobileNavRef.current = false;
       }
     };
+  }, [isMobileNavOpen]);
+
+  // Close mobile drawer on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isMobileNavOpen) {
+        setIsMobileNavOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isMobileNavOpen]);
 
   const handleCategoryClick = (slug: string) => {
@@ -179,7 +196,9 @@ export const Header: React.FC<HeaderProps> = ({
               type="button"
               onClick={() => setIsMobileNavOpen(!isMobileNavOpen)}
               className="p-2 -ml-1 text-[var(--text-main)] hover:bg-[var(--bg-subtle)] rounded-xl lg:hidden transition-colors cursor-pointer shrink-0"
-              aria-label="Toggle navigation drawer"
+              aria-label={isMobileNavOpen ? 'Close navigation drawer' : 'Open navigation drawer'}
+              aria-expanded={isMobileNavOpen}
+              aria-controls="mobile-nav-drawer"
             >
               {isMobileNavOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
@@ -548,17 +567,24 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* ========================================================================= */}
       {/* MOBILE FULL NAVIGATION DRAWER (ACCORDION PROGRESSIVE HIERARCHY)           */}
+      {/* Portaled directly to document.body to escape header's backdrop-filter box */}
       {/* ========================================================================= */}
-      {isMobileNavOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden">
+      {mounted && isMobileNavOpen && createPortal(
+        <div
+          id="mobile-nav-drawer"
+          className="fixed inset-0 z-[60] lg:hidden"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Mobile Navigation Menu"
+        >
           {/* Backdrop */}
           <div
-            className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity"
+            className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
             onClick={() => setIsMobileNavOpen(false)}
           />
 
-          {/* Slide-in Panel */}
-          <div className="fixed inset-y-0 left-0 w-[85vw] max-w-sm bg-[var(--bg-surface)] shadow-2xl z-50 flex flex-col animate-in slide-in-from-left duration-200">
+          {/* Slide-in Panel from LEFT */}
+          <div className="fixed inset-y-0 left-0 w-[85vw] max-w-sm bg-[var(--bg-surface)] shadow-2xl z-[61] flex flex-col animate-in slide-in-from-left duration-200 overscroll-contain">
             {/* Drawer Header */}
             <div className="p-4 bg-gradient-to-r from-[#FF2B6D] via-[#FF457D] to-[#FF2B6D] text-white flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -772,7 +798,8 @@ export const Header: React.FC<HeaderProps> = ({
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </header>
   );
