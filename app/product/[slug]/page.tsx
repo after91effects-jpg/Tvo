@@ -11,6 +11,7 @@ import { MobileBottomNav } from '../../../components/layout/MobileBottomNav';
 import { ProductDetailModal } from '../../../components/storefront/ProductDetailModal';
 import { CheckoutModal } from '../../../components/storefront/CheckoutModal';
 import { useLocalStorageJSON } from '../../../lib/useLocalStorage';
+import { normalizeImageUrl } from '../../../lib/imageUrl';
 
 export default function ProductPage() {
   const params = useParams<{ slug: string }>();
@@ -100,7 +101,13 @@ export default function ProductPage() {
               price: Number(w.price ?? basePrice),
               mrp: Number(w.mrp ?? baseMrp),
             })) : [{ label: isPiece ? '1 piece' : '0.5 kg', weightKg: isPiece ? 0 : 0.5, price: basePrice, mrp: Math.max(basePrice, baseMrp) }],
-            images: images.map((im: any) => (typeof im === 'string' ? { url: im } : { url: im.url, thumbUrl: im.thumbUrl, alt: im.alt })).filter((i: any) => i.url),
+            images: images.map((im: any) => {
+              const rawUrl = typeof im === 'string' ? im : (im.url || '');
+              const url = normalizeImageUrl(rawUrl);
+              const mediumUrl = normalizeImageUrl(typeof im === 'object' && im.mediumUrl ? im.mediumUrl : url);
+              const thumbUrl = normalizeImageUrl(typeof im === 'object' && im.thumbUrl ? im.thumbUrl : mediumUrl);
+              return { url, mediumUrl, thumbUrl, alt: im.alt || p.name };
+            }).filter((i: any) => i.url),
             rating: p.rating || 4.9,
             reviewCount: p.reviewCount || 0,
             stock: p.stock ?? 10,
