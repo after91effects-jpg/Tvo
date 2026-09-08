@@ -257,6 +257,7 @@ export const HeroCarousel: React.FC<{ onNavigate: (view: string, param?: string)
     >
       {/* Sliding Track containing all slides side-by-side */}
       <div
+        id="hero-carousel-track"
         className="flex h-full min-h-[440px] sm:min-h-[500px] lg:h-[520px] transition-transform duration-700 ease-out will-change-transform motion-reduce:transition-none"
         style={{
           width: `${HERO_SLIDES.length * 100}%`,

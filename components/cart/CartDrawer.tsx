@@ -5,6 +5,7 @@ import { X, ShoppingBag, Plus, Minus, Trash2, Tag, ArrowRight, Sparkles, Check }
 import { useCart } from '../../context/CartContext';
 import { DEFAULT_STORE_SETTINGS } from '../../lib/seedData';
 import { lockBodyScroll, unlockBodyScroll } from '../../lib/scrollLock';
+import { handleImageFallback, DEFAULT_FALLBACK_IMAGE } from '../../lib/imageUrl';
 
 interface CartDrawerProps {
   onNavigateToCheckout?: () => void;
@@ -177,8 +178,9 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                   {/* Thumbnail */}
                   <div className="w-20 h-20 rounded-lg overflow-hidden bg-[var(--bg-subtle)] shrink-0 border border-[var(--border)]">
                     <img
-                      src={item.product.images?.[0]?.thumbUrl || item.product.images?.[0]?.url || 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=200&q=80'}
+                      src={item.product.images?.[0]?.thumbUrl || item.product.images?.[0]?.url || DEFAULT_FALLBACK_IMAGE}
                       alt={item.product.name}
+                      onError={(e) => handleImageFallback(e, item.product.images?.[0]?.url)}
                       className="w-full h-full object-cover"
                     />
                   </div>

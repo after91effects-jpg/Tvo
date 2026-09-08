@@ -189,11 +189,12 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="w-full px-3 sm:px-6 lg:px-8 xl:px-12 py-2.5 sm:py-3.5">
         <div className="flex items-center justify-between gap-2 sm:gap-4">
           {/* Mobile Menu & Logo */}
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <button
+              id="mobile-nav-toggle-btn"
               type="button"
               onClick={() => setIsMobileNavOpen(!isMobileNavOpen)}
-              className="p-2 -ml-1 text-[var(--text-main)] hover:bg-[var(--bg-subtle)] rounded-xl lg:hidden transition-colors cursor-pointer"
+              className="p-2 -ml-1 text-[var(--text-main)] hover:bg-[var(--bg-subtle)] rounded-xl lg:hidden transition-colors cursor-pointer shrink-0"
               aria-label="Toggle navigation drawer"
             >
               {isMobileNavOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -203,16 +204,16 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               type="button"
               onClick={() => onNavigate('home')}
-              className="flex items-center gap-2 group cursor-pointer text-left"
+              className="flex items-center gap-2 group cursor-pointer text-left shrink-0"
             >
-              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-tr from-[#FF2B6D] to-[#FF6B9D] flex items-center justify-center text-white font-black text-sm shadow-md group-hover:scale-105 transition-transform">
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-tr from-[#FF2B6D] to-[#FF6B9D] flex items-center justify-center text-white font-black text-sm shadow-md group-hover:scale-105 transition-transform shrink-0">
                 <Cake className="w-5 h-5" />
               </div>
-              <div className="flex flex-col">
-                <span className="font-extrabold text-base sm:text-lg tracking-tight text-[var(--text-main)] group-hover:text-[#FF2B6D] transition-colors leading-none">
+              <div className="flex flex-col min-w-0">
+                <span className="font-extrabold text-base sm:text-lg tracking-tight text-[var(--text-main)] group-hover:text-[#FF2B6D] transition-colors leading-none whitespace-nowrap">
                   TVO Flavours
                 </span>
-                <span className="text-[10px] text-[var(--text-muted)] font-semibold tracking-wider uppercase">
+                <span className="text-[10px] text-[var(--text-muted)] font-semibold tracking-wider uppercase whitespace-nowrap">
                   Artisan Bakery
                 </span>
               </div>
@@ -270,7 +271,7 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           {/* Right Action Icons */}
-          <div className="flex items-center gap-1.5 sm:gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
             <NotificationBellDrawer onNavigateToTrack={(orderNum) => onNavigate('track', orderNum)} />
 
             {/* Wishlist */}
@@ -278,7 +279,7 @@ export const Header: React.FC<HeaderProps> = ({
               id="header-wishlist-btn"
               type="button"
               onClick={() => onNavigate('wishlist')}
-              className="relative p-2 rounded-full border border-[var(--border)] hover:bg-[var(--bg-subtle)] text-[var(--text-main)] hover:text-rose-500 transition-all cursor-pointer"
+              className="hidden sm:flex relative p-2 rounded-full border border-[var(--border)] hover:bg-[var(--bg-subtle)] text-[var(--text-main)] hover:text-rose-500 transition-all cursor-pointer"
               aria-label={`View favorites (${wishlistCount} saved)`}
             >
               <Heart
@@ -296,7 +297,7 @@ export const Header: React.FC<HeaderProps> = ({
             <ThemeToggle />
 
             {/* User Account */}
-            <div className="relative" ref={userMenuRef}>
+            <div className="relative hidden sm:block" ref={userMenuRef}>
               <button
                 id="header-user-menu-btn"
                 onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
@@ -604,7 +605,7 @@ export const Header: React.FC<HeaderProps> = ({
           />
 
           {/* Slide-in Panel */}
-          <div className="fixed inset-y-0 left-0 max-w-xs sm:max-w-sm w-full bg-[var(--bg-surface)] shadow-2xl z-50 flex flex-col animate-in slide-in-from-left duration-200">
+          <div className="fixed inset-y-0 left-0 w-[85vw] max-w-sm bg-[var(--bg-surface)] shadow-2xl z-50 flex flex-col animate-in slide-in-from-left duration-200">
             {/* Drawer Header */}
             <div className="p-4 bg-gradient-to-r from-[#FF2B6D] via-[#FF457D] to-[#FF2B6D] text-white flex items-center justify-between">
               <div className="flex items-center gap-3">

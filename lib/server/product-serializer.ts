@@ -1,15 +1,24 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { jsonParseSafe } from './api';
 import { normalizeImageUrl, mediumImageUrl } from '../imageUrl';
+import { stripHtmlAndMetadata, cleanDescription } from '../sanitizeDescription';
 
 export function serializeProduct(row: any) {
   if (!row) return null;
+
+  const rawShort = row.short_description || '';
+  const rawDesc = row.description || '';
+  const cleanShort = stripHtmlAndMetadata(rawShort || rawDesc);
+  const cleanDesc = cleanDescription(rawDesc || rawShort);
+
   return {
     id: String(row.id),
     sku: row.sku,
     name: row.name,
     slug: row.slug,
-    shortDescription: row.short_description,
-    description: row.description,
+    shortDescription: cleanShort,
+    description: cleanDesc,
     category: row.category_slug || '',
     categoryId: row.category_id,
     categoryName: row.category_name,
@@ -21,7 +30,12 @@ export function serializeProduct(row: any) {
     weightOptions: jsonParseSafe(row.variations_json, []),
     images: jsonParseSafe(row.images_json, []).map((u: any) => {
       const url = normalizeImageUrl(typeof u === 'string' ? u : (u?.url || ''));
-      return { url, mediumUrl: mediumImageUrl(url), isPrimary: true };
+      const candidateMedium = mediumImageUrl(url);
+      // Only serve mediumUrl if file physically exists on disk, otherwise serve original url directly
+      const mediumExists = candidateMedium && candidateMedium !== url &&
+        fs.existsSync(path.join(process.cwd(), 'public', candidateMedium));
+      const finalMedium = mediumExists ? candidateMedium : url;
+      return { url, mediumUrl: finalMedium, thumbUrl: finalMedium, isPrimary: true };
     }).filter((i: any) => i.url),
     flavours: jsonParseSafe(row.flavours, []),
     badges: jsonParseSafe(row.badges, []),

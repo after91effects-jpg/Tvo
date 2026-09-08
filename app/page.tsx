@@ -724,7 +724,7 @@ export default function Home() {
 
                   {/* Product Cards Grid */}
                   {isLoading ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-6 py-12">
+                    <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4 md:gap-6 py-12">
                       {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
                         <div
                           key={i}
@@ -757,7 +757,7 @@ export default function Home() {
                       </button>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-6">
+                    <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4 md:gap-6">
                       {filteredStoreProducts.map((product) => (
                         <ProductCard
                           key={product.id}

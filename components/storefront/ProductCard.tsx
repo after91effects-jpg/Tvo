@@ -6,6 +6,8 @@ import { Product, WeightOption } from '../../lib/types';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 import { StarRating } from '../common/StarRating';
+import { stripHtmlAndMetadata } from '../../lib/sanitizeDescription';
+import { handleImageFallback, DEFAULT_FALLBACK_IMAGE } from '../../lib/imageUrl';
 
 interface ProductCardProps {
   product: Product;
@@ -26,8 +28,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onViewProduct
   const [isAdding, setIsAdding] = useState(false);
   const [isBuying, setIsBuying] = useState(false);
 
+  const isOutOfStock = product.stockStatus === 'out_of_stock' || (typeof product.stock === 'number' && product.stock <= 0);
+
   const handleQuickAdd = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (isOutOfStock) return;
     setIsAdding(true);
     const flavour = product.flavours?.[0] || 'Original';
     addToCart(product, selectedWeight, flavour, '', [], 1);
@@ -36,6 +41,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onViewProduct
 
   const handleQuickBuy = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (isOutOfStock) return;
     setIsBuying(true);
     const flavour = product.flavours?.[0] || 'Original';
     addToCart(product, selectedWeight, flavour, '', [], 1);
@@ -58,7 +64,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onViewProduct
   const mainImage =
     product.images?.[0]?.mediumUrl ||
     product.images?.[0]?.url ||
-    'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=600&q=80';
+    DEFAULT_FALLBACK_IMAGE;
 
   return (
     <div
@@ -70,6 +76,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onViewProduct
         <img
           src={mainImage}
           alt={product.name}
+          onError={(e) => handleImageFallback(e, product.images?.[0]?.url)}
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
           loading="lazy"
         />
@@ -152,11 +159,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onViewProduct
       </div>
 
       {/* Product Content Details */}
-      <div className="p-4 sm:p-5 flex-1 flex flex-col justify-between">
+      <div className="p-3 sm:p-5 flex-1 flex flex-col justify-between">
         <div>
           {/* Rating */}
           <div className="flex items-center justify-between gap-2 mb-1.5">
-            <StarRating rating={product.rating || 4.8} showValue count={product.reviewCount || 42} />
+            <StarRating rating={product.rating || 4.8} showValue count={product.reviewCount || 0} />
             <span className="text-[10px] text-[var(--text-subtle)] uppercase tracking-wider font-semibold">
               {product.category}
             </span>
@@ -169,7 +176,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onViewProduct
 
           {/* Short Description */}
           <p className="text-xs text-[var(--text-muted)] mt-1 line-clamp-2 leading-relaxed">
-            {product.shortDescription}
+            {stripHtmlAndMetadata(product.shortDescription || '')}
           </p>
 
           {/* Weight Option Selector Pills */}
@@ -195,26 +202,26 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onViewProduct
 
         {/* Price & Actions footer */}
         <div className="mt-4 pt-3 border-t border-[var(--border)] flex items-center justify-between gap-2">
-          <div>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-base sm:text-lg font-bold text-[var(--text-main)] font-display">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-baseline gap-1.5 flex-wrap">
+              <span className="text-sm sm:text-lg font-bold text-[var(--text-main)] font-display">
                 ₹{selectedWeight.price}
               </span>
               {selectedWeight.mrp && selectedWeight.mrp > selectedWeight.price && (
-                <span className="text-xs text-[var(--text-subtle)] line-through">
+                <span className="text-[10px] sm:text-xs text-[var(--text-subtle)] line-through">
                   ₹{selectedWeight.mrp}
                 </span>
               )}
             </div>
             {discountPercent > 0 && (
-              <span className="text-[10px] text-[var(--success)] font-semibold">
+              <span className="text-[9px] sm:text-[10px] text-[var(--success)] font-semibold block sm:inline">
                 {discountPercent}% OFF
               </span>
             )}
           </div>
 
-          <div className="flex items-center gap-1.5">
-            {/* Direct Quick View Button in Footer */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            {/* Direct Quick View Button in Footer (Desktop only) */}
             <button
               id={`quick-view-btn-${product.id}`}
               type="button"
@@ -224,41 +231,56 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onViewProduct
               }}
               aria-label={`Quick view ${product.name}`}
               title="Quick View & Customize"
-              className="p-2 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--primary-light)] text-[var(--text-muted)] hover:text-[var(--primary)] border border-[var(--border)] hover:border-[var(--primary)]/30 transition-all cursor-pointer shadow-xs active:scale-95"
+              className="hidden sm:flex p-2 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--primary-light)] text-[var(--text-muted)] hover:text-[var(--primary)] border border-[var(--border)] hover:border-[var(--primary)]/30 transition-all cursor-pointer shadow-xs active:scale-95"
             >
               <Eye className="w-4 h-4" />
             </button>
 
-            {/* Quick Add Button */}
+            {/* Quick Add Button: Prominent compact ADD on mobile, standard on desktop */}
             <button
               id={`quick-add-${product.id}`}
               type="button"
+              disabled={isOutOfStock}
               onClick={handleQuickAdd}
               aria-label={`Add ${product.name} to cart`}
               title="Add to Cart"
-              className="p-2 sm:px-3 sm:py-2 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--primary-light)] text-[var(--text-main)] hover:text-[var(--primary)] border border-[var(--border)] hover:border-[var(--primary)]/30 text-xs font-semibold flex items-center gap-1.5 shadow-xs active:scale-95 transition-all cursor-pointer"
+              className={`px-3 py-1.5 sm:px-3 sm:py-2 rounded-lg sm:rounded-xl text-xs font-bold sm:font-semibold flex items-center justify-center gap-1.5 shadow-xs active:scale-95 transition-all cursor-pointer ${
+                isOutOfStock
+                  ? 'bg-stone-200 dark:bg-stone-800 text-stone-400 cursor-not-allowed border border-transparent'
+                  : isAdding
+                  ? 'bg-emerald-600 text-white sm:bg-[var(--primary-light)] sm:text-emerald-600 sm:border sm:border-emerald-500/30'
+                  : 'bg-[var(--primary)] text-white sm:bg-[var(--bg-subtle)] sm:text-[var(--text-main)] sm:hover:bg-[var(--primary-light)] sm:hover:text-[var(--primary)] sm:border sm:border-[var(--border)] sm:hover:border-[var(--primary)]/30'
+              }`}
             >
-              {isAdding ? (
+              {isOutOfStock ? (
+                <span>Sold Out</span>
+              ) : isAdding ? (
                 <>
-                  <Check className="w-3.5 h-3.5 text-emerald-500 animate-in zoom-in" />
-                  <span className="hidden sm:inline text-emerald-600">Added</span>
+                  <Check className="w-3.5 h-3.5 text-white sm:text-emerald-500 animate-in zoom-in" />
+                  <span>Added</span>
                 </>
               ) : (
                 <>
-                  <ShoppingBag className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Add</span>
+                  <ShoppingBag className="w-3.5 h-3.5 hidden sm:inline" />
+                  <span>ADD</span>
+                  <span className="sm:hidden font-bold text-xs">+</span>
                 </>
               )}
             </button>
 
-            {/* Quick Buy Button */}
+            {/* Quick Buy Button (Desktop only) */}
             <button
               id={`quick-buy-${product.id}`}
               type="button"
+              disabled={isOutOfStock}
               onClick={handleQuickBuy}
               aria-label={`Quick buy ${product.name}`}
               title="Quick Buy & Instant Checkout"
-              className="px-3 py-2 rounded-xl bg-gradient-to-r from-[#FF2B6D] via-[#FF3B77] to-[#E61D52] hover:brightness-110 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs active:scale-95 transition-all cursor-pointer whitespace-nowrap"
+              className={`hidden sm:flex px-3 py-2 rounded-xl text-white text-xs font-bold items-center gap-1.5 shadow-xs active:scale-95 transition-all whitespace-nowrap ${
+                isOutOfStock
+                  ? 'bg-stone-300 dark:bg-stone-800 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-[#FF2B6D] via-[#FF3B77] to-[#E61D52] hover:brightness-110 cursor-pointer'
+              }`}
             >
               {isBuying ? (
                 <>

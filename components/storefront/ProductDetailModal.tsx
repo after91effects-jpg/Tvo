@@ -35,6 +35,8 @@ import { useWishlist } from '../../context/WishlistContext';
 import { StarRating } from '../common/StarRating';
 import { ReviewSection } from './ReviewSection';
 import { Modal } from '../common/Modal';
+import { stripHtmlAndMetadata, normalizeDescriptionParagraphs } from '../../lib/sanitizeDescription';
+import { handleImageFallback, DEFAULT_FALLBACK_IMAGE } from '../../lib/imageUrl';
 
 interface ProductDetailModalProps {
   product: Product | null;
@@ -91,7 +93,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   const [messageOnCake, setMessageOnCake] = useState<string>('');
   const [selectedAddOns, setSelectedAddOns] = useState<AddOn[]>([]);
   const [quantity, setQuantity] = useState<number>(1);
-  const [activeTab, setActiveTab] = useState<'details' | 'description' | 'reviews' | 'delivery'>('details');
+  const [activeTab, setActiveTab] = useState<'details' | 'delivery' | 'description' | 'reviews'>('details');
   const [activeImageIndex, setActiveImageIndex] = useState<number>(0);
   const [isAdded, setIsAdded] = useState<boolean>(false);
   const [selectedDeliverySlot, setSelectedDeliverySlot] = useState<number>(0);
@@ -108,12 +110,12 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   const images = product.images?.length
     ? product.images
     : [
-        {
-          url: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=800&q=80',
-          thumbUrl: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=200&q=80',
-          alt: product.name,
-        },
-      ];
+      {
+        url: DEFAULT_FALLBACK_IMAGE,
+        thumbUrl: DEFAULT_FALLBACK_IMAGE,
+        alt: product.name,
+      },
+    ];
 
   const handleToggleAddOn = (addon: AddOn) => {
     if (selectedAddOns.some((a) => a.id === addon.id)) {
@@ -123,47 +125,34 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
     }
   };
 
+  const addOnsTotal = selectedAddOns.reduce((sum, a) => sum + a.price, 0);
+  const deliveryCharge = DELIVERY_SLOTS[selectedDeliverySlot]?.price || 0;
+  const giftWrapPrice = giftWrap ? 149 : 0;
+  const itemUnitPrice = selectedWeight.price + addOnsTotal + deliveryCharge + giftWrapPrice;
+
+  // Maximum order quantity: bounded by available inventory
+  const qtyMax = Math.max(1, Math.min(10, product.stock ?? 10));
+
   const handleAddToCart = () => {
-    addToCart(
-      product,
-      selectedWeight,
-      selectedFlavour,
-      messageOnCake,
-      selectedAddOns,
-      quantity
-    );
+    addToCart(product, selectedWeight, selectedFlavour, messageOnCake, selectedAddOns, quantity);
     setIsAdded(true);
-    setTimeout(() => {
-      setIsAdded(false);
-      if (!isEmbedded) onClose();
-      setIsCartOpen(true);
-    }, 400);
+    setTimeout(() => setIsAdded(false), 2000);
   };
 
   const handleBuyNow = () => {
-    addToCart(
-      product,
-      selectedWeight,
-      selectedFlavour,
-      messageOnCake,
-      selectedAddOns,
-      quantity
-    );
-    if (!isEmbedded) onClose();
-    onOpenCheckout();
+    addToCart(product, selectedWeight, selectedFlavour, messageOnCake, selectedAddOns, quantity);
+    onClose();
+    if (onOpenCheckout) {
+      onOpenCheckout();
+    } else {
+      setIsCartOpen(true);
+    }
   };
 
-  const addOnsTotal = selectedAddOns.reduce((acc, curr) => acc + curr.price, 0);
-  const deliveryCharge = DELIVERY_SLOTS[selectedDeliverySlot].price;
-  const giftWrapCharge = giftWrap ? 149 : 0;
-  const itemUnitPrice = selectedWeight.price + addOnsTotal + deliveryCharge + giftWrapCharge;
   const savings = selectedWeight.mrp ? (selectedWeight.mrp - selectedWeight.price) * quantity : 0;
-  const savingsPercent = selectedWeight.mrp ? Math.round(((selectedWeight.mrp - selectedWeight.price) / selectedWeight.mrp) * 100) : 0;
-  // For piece products quantity is the number of pieces, so allow ordering up to the
-  // available piece stock (bounded to a sane maximum). Weight products keep 1-10.
-  const qtyMax = product.sellingUnit === 'piece'
-    ? Math.max(1, Math.min(Number(product.stock) || 10, 500))
-    : 10;
+  const savingsPercent = selectedWeight.mrp
+    ? Math.round(((selectedWeight.mrp - selectedWeight.price) / selectedWeight.mrp) * 100)
+    : 0;
 
   const today = new Date();
   const minDeliveryDate = new Date(today.setDate(today.getDate() + 2)).toISOString().split('T')[0];
@@ -176,11 +165,12 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
           {/* Main Image */}
           <div className="relative aspect-square rounded-2xl overflow-hidden bg-[var(--bg-subtle)] border border-[var(--border)] group">
             <img
-              src={images[activeImageIndex]?.url || images[0].url}
+              src={images[activeImageIndex]?.url || images[0]?.url || DEFAULT_FALLBACK_IMAGE}
               alt={product.name}
+              onError={(e) => handleImageFallback(e, images[activeImageIndex]?.url || images[0]?.url)}
               className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
             />
-            
+
             {/* Badges Overlay */}
             <div className="absolute top-3 left-3 flex flex-col gap-2">
               {product.eggless && (
@@ -215,16 +205,14 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                 type="button"
                 onClick={() => toggleWishlist(product.id, product.name)}
                 aria-label={isWishlisted ? `Remove ${product.name} from favorites` : `Save ${product.name} to favorites`}
-                className={`p-2.5 rounded-full backdrop-blur-md transition-all duration-200 cursor-pointer shadow-md ${
-                  isWishlisted
+                className={`p-2.5 rounded-full backdrop-blur-md transition-all duration-200 cursor-pointer shadow-md ${isWishlisted
                     ? 'bg-white/95 dark:bg-stone-900/95 text-rose-500 border border-rose-200 dark:border-rose-900/50 scale-105'
                     : 'bg-white/80 dark:bg-stone-900/80 text-stone-600 dark:text-stone-300 hover:text-rose-500 hover:bg-white dark:hover:bg-stone-900 hover:scale-110'
-                }`}
+                  }`}
               >
                 <Heart
-                  className={`w-4 h-4 ${
-                    isWishlisted ? 'fill-rose-500 text-rose-500 stroke-rose-500' : 'stroke-current'
-                  }`}
+                  className={`w-4 h-4 ${isWishlisted ? 'fill-rose-500 text-rose-500 stroke-rose-500' : 'stroke-current'
+                    }`}
                 />
               </button>
               <button
@@ -249,13 +237,17 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                 <button
                   key={idx}
                   onClick={() => setActiveImageIndex(idx)}
-                  className={`w-16 h-16 rounded-xl overflow-hidden border-2 transition-all shrink-0 cursor-pointer ${
-                    activeImageIndex === idx
+                  className={`w-16 h-16 rounded-xl overflow-hidden border-2 transition-all shrink-0 cursor-pointer ${activeImageIndex === idx
                       ? 'border-[var(--primary)] shadow-sm scale-105'
                       : 'border-transparent opacity-60 hover:opacity-100'
-                  }`}
+                    }`}
                 >
-                  <img src={img.thumbUrl || img.url} alt="" className="w-full h-full object-cover" />
+                  <img
+                    src={img.thumbUrl || img.url}
+                    alt=""
+                    onError={(e) => handleImageFallback(e, img.thumbUrl || img.url)}
+                    className="w-full h-full object-cover"
+                  />
                 </button>
               ))}
             </div>
@@ -321,7 +313,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   {product.name}
                 </h2>
                 <div className="mt-2 flex items-center gap-3 flex-wrap">
-                  <StarRating rating={product.rating || 4.9} showValue count={product.reviewCount || 38} />
+                  <StarRating rating={product.rating || 4.9} showValue count={product.reviewCount || 0} />
                   <span className="text-xs text-[var(--success)] font-bold bg-[var(--success-light)] px-2 py-0.5 rounded-full flex items-center gap-1">
                     <BadgeCheck className="w-3 h-3" />
                     In Stock ({product.stock} left)
@@ -355,7 +347,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
             {/* Short Description */}
             <div className="mt-3">
               <p className="text-sm text-[var(--text-main)] leading-relaxed font-medium">
-                {product.shortDescription}
+                {stripHtmlAndMetadata(product.shortDescription || '')}
               </p>
             </div>
 
@@ -377,18 +369,18 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
             <div className="flex items-center gap-1 border-b border-[var(--border)] mt-4 mb-4 overflow-x-auto">
               {[
                 { id: 'details', label: 'Customize' },
-                { id: 'description', label: 'Description' },
                 { id: 'delivery', label: 'Delivery' },
-                { id: 'reviews', label: `Reviews (${product.reviewCount || 42})` },
+                { id: 'description', label: 'Description' },
+                { id: 'reviews', label: product.reviewCount && product.reviewCount > 0 ? `Reviews (${product.reviewCount})` : 'Reviews' },
               ].map((tab) => (
                 <button
                   key={tab.id}
+                  id={`product-tab-${tab.id}`}
                   onClick={() => setActiveTab(tab.id as any)}
-                  className={`pb-2 px-3 text-[11px] font-bold uppercase tracking-wider transition-colors cursor-pointer whitespace-nowrap ${
-                    activeTab === tab.id
+                  className={`pb-2 px-3 text-[11px] font-bold uppercase tracking-wider transition-colors cursor-pointer whitespace-nowrap ${activeTab === tab.id
                       ? 'text-[var(--primary)] border-b-2 border-[var(--primary)]'
                       : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
-                  }`}
+                    }`}
                 >
                   {tab.label}
                 </button>
@@ -413,11 +405,10 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                             key={opt.label}
                             type="button"
                             onClick={() => setSelectedWeight(opt)}
-                            className={`relative p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                              selectedWeight.label === opt.label
+                            className={`relative p-3 rounded-xl border text-left transition-all cursor-pointer ${selectedWeight.label === opt.label
                                 ? 'border-[var(--primary)] bg-[var(--primary-light)] shadow-md ring-2 ring-[var(--primary)]/20'
                                 : 'border-[var(--border)] bg-[var(--bg-surface)] hover:border-[var(--border-strong)] hover:shadow-sm'
-                            }`}
+                              }`}
                           >
                             {discount > 0 && (
                               <div className="absolute -top-1.5 -right-1.5 bg-rose-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full">
@@ -430,9 +421,9 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                             <div className="text-[10px] text-[var(--text-muted)] mt-0.5">
                               {product.sellingUnit === 'piece'
                                 ? (() => {
-                                    const pc = pieceCountFromLabel(opt.label);
-                                    return pc != null ? `${pc} ${pc === 1 ? 'piece' : 'pieces'}` : 'Sold per piece';
-                                  })()
+                                  const pc = pieceCountFromLabel(opt.label);
+                                  return pc != null ? `${pc} ${pc === 1 ? 'piece' : 'pieces'}` : 'Sold per piece';
+                                })()
                                 : `Serves ${Math.ceil(opt.weightKg * 8)}-${Math.ceil(opt.weightKg * 12)}`}
                             </div>
                             <div className="flex items-baseline gap-1 mt-1">
@@ -461,11 +452,10 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                           key={f}
                           type="button"
                           onClick={() => setSelectedFlavour(f)}
-                          className={`px-4 py-2 rounded-xl text-xs font-semibold border-2 transition-all cursor-pointer ${
-                            selectedFlavour === f
+                          className={`px-4 py-2 rounded-xl text-xs font-semibold border-2 transition-all cursor-pointer ${selectedFlavour === f
                               ? 'bg-[var(--primary)] text-white border-[var(--primary)] shadow-md'
                               : 'bg-[var(--bg-surface)] text-[var(--text-main)] border-[var(--border)] hover:border-[var(--primary)]/50'
-                          }`}
+                            }`}
                         >
                           {f}
                         </button>
@@ -513,18 +503,16 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                         <label
                           key={addon.id}
                           onClick={() => handleToggleAddOn(addon)}
-                          className={`flex items-center justify-between p-3 rounded-xl border-2 text-xs cursor-pointer transition-all ${
-                            isSelected
+                          className={`flex items-center justify-between p-3 rounded-xl border-2 text-xs cursor-pointer transition-all ${isSelected
                               ? 'bg-[var(--primary-light)] border-[var(--primary)] shadow-sm'
                               : 'bg-[var(--bg-surface)] border-[var(--border)] hover:bg-[var(--bg-subtle)] hover:border-[var(--border-strong)]'
-                          }`}
+                            }`}
                         >
                           <div className="flex items-center gap-3">
-                            <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
-                              isSelected
+                            <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${isSelected
                                 ? 'bg-[var(--primary)] border-[var(--primary)]'
                                 : 'border-[var(--border)]'
-                            }`}>
+                              }`}>
                               {isSelected && <Check className="w-3 h-3 text-white" />}
                             </div>
                             <div>
@@ -587,6 +575,99 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
               </div>
             )}
 
+            {activeTab === 'delivery' && (
+              <div className="space-y-4">
+                {/* Delivery Date */}
+                <div>
+                  <label className="block text-xs font-bold text-[var(--text-main)] uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-[var(--primary)]" />
+                    Select Delivery Date
+                  </label>
+                  <input
+                    type="date"
+                    min={minDeliveryDate}
+                    value={deliveryDate}
+                    onChange={(e) => setDeliveryDate(e.target.value)}
+                    className="w-full px-4 py-3 text-sm rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--primary)] transition-all"
+                  />
+                  <p className="text-[10px] text-[var(--text-muted)] mt-1">📅 Minimum 2 days advance booking required</p>
+                </div>
+
+                {/* Delivery Slots */}
+                <div>
+                  <label className="block text-xs font-bold text-[var(--text-main)] uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                    <Truck className="w-3.5 h-3.5 text-emerald-600" />
+                    Choose Delivery Slot
+                  </label>
+                  <div className="space-y-2">
+                    {DELIVERY_SLOTS.map((slot, idx) => (
+                      <label
+                        key={idx}
+                        onClick={() => setSelectedDeliverySlot(idx)}
+                        className={`flex items-center justify-between p-3 rounded-xl border-2 cursor-pointer transition-all ${selectedDeliverySlot === idx
+                            ? 'bg-[var(--primary-light)] border-[var(--primary)] shadow-sm'
+                            : 'bg-[var(--bg-surface)] border-[var(--border)] hover:bg-[var(--bg-subtle)]'
+                          }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="text-lg">{slot.icon}</span>
+                          <div>
+                            <div className="text-xs font-bold text-[var(--text-main)]">{slot.label}</div>
+                            <div className="text-[10px] text-[var(--text-muted)]">{slot.time}</div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          {slot.price === 0 ? (
+                            <span className="text-xs font-bold text-emerald-600">FREE</span>
+                          ) : (
+                            <span className="text-xs font-bold text-[var(--primary)]">+₹{slot.price}</span>
+                          )}
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Gift Wrap Option */}
+                <div className="p-4 rounded-xl bg-gradient-to-r from-rose-50 to-pink-50 dark:from-rose-950/20 dark:to-pink-950/20 border border-rose-200 dark:border-rose-800">
+                  <label className="flex items-center justify-between cursor-pointer">
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl">🎁</span>
+                      <div>
+                        <div className="text-xs font-bold text-[var(--text-main)]">Premium Gift Wrapping</div>
+                        <div className="text-[10px] text-[var(--text-muted)]">Beautiful ribbon & handmade tag</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs font-bold text-[var(--primary)]">+₹149</span>
+                      <div className={`w-10 h-6 rounded-full transition-all cursor-pointer ${giftWrap ? 'bg-[var(--primary)]' : 'bg-[var(--border)]'
+                        }`} onClick={() => setGiftWrap(!giftWrap)}>
+                        <div className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${giftWrap ? 'translate-x-5' : 'translate-x-0.5'
+                          }`} />
+                      </div>
+                    </div>
+                  </label>
+                </div>
+
+                {/* Delivery Info */}
+                <div className="p-4 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border)] space-y-3">
+                  <h3 className="text-xs font-bold text-[var(--text-main)] uppercase tracking-wider">Delivery Policy</h3>
+                  {[
+                    { icon: '🚚', text: 'Free delivery on orders above ₹999' },
+                    { icon: '❄️', text: 'Temperature-controlled cold-chain vans' },
+                    { icon: '📍', text: 'Live GPS tracking for your order' },
+                    { icon: '🔄', text: 'Easy rescheduling up to 4 hours before delivery' },
+                    { icon: '💰', text: '100% refund if cake is damaged in transit' },
+                  ].map((item) => (
+                    <div key={item.text} className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
+                      <span>{item.icon}</span>
+                      <span>{item.text}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {activeTab === 'description' && (
               <div className="space-y-4">
                 {/* Long Description */}
@@ -596,9 +677,19 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                     About This Product
                   </h3>
                   <div className="text-sm text-[var(--text-main)] leading-relaxed space-y-3">
-                    <p>{product.description || product.shortDescription}</p>
+                    {(() => {
+                      const cleanDesc = stripHtmlAndMetadata(product.description || product.shortDescription || '');
+                      const paragraphs = normalizeDescriptionParagraphs(cleanDesc);
+                      return paragraphs.length > 0 ? (
+                        paragraphs.map((para, idx) => (
+                          <p key={idx} className="leading-relaxed">{para}</p>
+                        ))
+                      ) : (
+                        <p className="leading-relaxed">Freshly baked handcrafted artisanal creation using 100% eggless ingredients.</p>
+                      );
+                    })()}
                     {showFullDescription && (
-                      <div className="space-y-3 text-[var(--text-muted)]">
+                      <div className="space-y-3 text-[var(--text-muted)] pt-2 border-t border-[var(--border)]">
                         <p>Our artisan bakers handcraft each cake using premium imported ingredients and traditional techniques. Every creation is baked fresh to order, ensuring maximum flavour and quality.</p>
                         <p>We use only the finest Belgian chocolate, pure Madagascar vanilla, fresh dairy cream, and 100% eggless recipes. Our cold-chain delivery ensures your cake arrives in perfect condition.</p>
                       </div>
@@ -606,7 +697,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                     <button
                       type="button"
                       onClick={() => setShowFullDescription(!showFullDescription)}
-                      className="text-xs font-bold text-[var(--primary)] hover:underline flex items-center gap-1"
+                      className="text-xs font-bold text-[var(--primary)] hover:underline flex items-center gap-1 mt-2"
                     >
                       {showFullDescription ? 'Show Less' : 'Read More'}
                       <ChevronDown className={`w-3 h-3 transition-transform ${showFullDescription ? 'rotate-180' : ''}`} />
@@ -686,102 +777,6 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
               </div>
             )}
 
-            {activeTab === 'delivery' && (
-              <div className="space-y-4">
-                {/* Delivery Date */}
-                <div>
-                  <label className="block text-xs font-bold text-[var(--text-main)] uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                    <Calendar className="w-3.5 h-3.5 text-[var(--primary)]" />
-                    Select Delivery Date
-                  </label>
-                  <input
-                    type="date"
-                    min={minDeliveryDate}
-                    value={deliveryDate}
-                    onChange={(e) => setDeliveryDate(e.target.value)}
-                    className="w-full px-4 py-3 text-sm rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--primary)] transition-all"
-                  />
-                  <p className="text-[10px] text-[var(--text-muted)] mt-1">📅 Minimum 2 days advance booking required</p>
-                </div>
-
-                {/* Delivery Slots */}
-                <div>
-                  <label className="block text-xs font-bold text-[var(--text-main)] uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                    <Truck className="w-3.5 h-3.5 text-emerald-600" />
-                    Choose Delivery Slot
-                  </label>
-                  <div className="space-y-2">
-                    {DELIVERY_SLOTS.map((slot, idx) => (
-                      <label
-                        key={idx}
-                        onClick={() => setSelectedDeliverySlot(idx)}
-                        className={`flex items-center justify-between p-3 rounded-xl border-2 cursor-pointer transition-all ${
-                          selectedDeliverySlot === idx
-                            ? 'bg-[var(--primary-light)] border-[var(--primary)] shadow-sm'
-                            : 'bg-[var(--bg-surface)] border-[var(--border)] hover:bg-[var(--bg-subtle)]'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className="text-lg">{slot.icon}</span>
-                          <div>
-                            <div className="text-xs font-bold text-[var(--text-main)]">{slot.label}</div>
-                            <div className="text-[10px] text-[var(--text-muted)]">{slot.time}</div>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          {slot.price === 0 ? (
-                            <span className="text-xs font-bold text-emerald-600">FREE</span>
-                          ) : (
-                            <span className="text-xs font-bold text-[var(--primary)]">+₹{slot.price}</span>
-                          )}
-                        </div>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Gift Wrap Option */}
-                <div className="p-4 rounded-xl bg-gradient-to-r from-rose-50 to-pink-50 dark:from-rose-950/20 dark:to-pink-950/20 border border-rose-200 dark:border-rose-800">
-                  <label className="flex items-center justify-between cursor-pointer">
-                    <div className="flex items-center gap-3">
-                      <span className="text-2xl">🎁</span>
-                      <div>
-                        <div className="text-xs font-bold text-[var(--text-main)]">Premium Gift Wrapping</div>
-                        <div className="text-[10px] text-[var(--text-muted)]">Beautiful ribbon & handmade tag</div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs font-bold text-[var(--primary)]">+₹149</span>
-                      <div className={`w-10 h-6 rounded-full transition-all cursor-pointer ${
-                        giftWrap ? 'bg-[var(--primary)]' : 'bg-[var(--border)]'
-                      }`} onClick={() => setGiftWrap(!giftWrap)}>
-                        <div className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${
-                          giftWrap ? 'translate-x-5' : 'translate-x-0.5'
-                        }`} />
-                      </div>
-                    </div>
-                  </label>
-                </div>
-
-                {/* Delivery Info */}
-                <div className="p-4 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border)] space-y-3">
-                  <h3 className="text-xs font-bold text-[var(--text-main)] uppercase tracking-wider">Delivery Policy</h3>
-                  {[
-                    { icon: '🚚', text: 'Free delivery on orders above ₹999' },
-                    { icon: '❄️', text: 'Temperature-controlled cold-chain vans' },
-                    { icon: '📍', text: 'Live GPS tracking for your order' },
-                    { icon: '🔄', text: 'Easy rescheduling up to 4 hours before delivery' },
-                    { icon: '💰', text: '100% refund if cake is damaged in transit' },
-                  ].map((item) => (
-                    <div key={item.text} className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
-                      <span>{item.icon}</span>
-                      <span>{item.text}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {activeTab === 'reviews' && (
               <ReviewSection
                 productId={product.id}
@@ -793,76 +788,74 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
           </div>
 
           {/* Action Buttons */}
-          {activeTab === 'details' && (
-            <div className="pt-4 border-t border-[var(--border)] space-y-3">
-              {/* Price Summary */}
-              <div className="p-3 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border)] space-y-1.5">
+          <div className="pt-4 border-t border-[var(--border)] space-y-3">
+            {/* Price Summary */}
+            <div className="p-3 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border)] space-y-1.5">
+              <div className="flex justify-between text-xs text-[var(--text-muted)]">
+                <span>Base Price ({product.sellingUnit === 'piece' ? selectedWeight.label : `${selectedWeight.weightKg} kg`})</span>
+                <span>₹{selectedWeight.price}</span>
+              </div>
+              {addOnsTotal > 0 && (
                 <div className="flex justify-between text-xs text-[var(--text-muted)]">
-                  <span>Base Price ({product.sellingUnit === 'piece' ? selectedWeight.label : `${selectedWeight.weightKg} kg`})</span>
-                  <span>₹{selectedWeight.price}</span>
+                  <span>Add-ons ({selectedAddOns.length} items)</span>
+                  <span>+₹{addOnsTotal}</span>
                 </div>
-                {addOnsTotal > 0 && (
-                  <div className="flex justify-between text-xs text-[var(--text-muted)]">
-                    <span>Add-ons ({selectedAddOns.length} items)</span>
-                    <span>+₹{addOnsTotal}</span>
-                  </div>
-                )}
-                {deliveryCharge > 0 && (
-                  <div className="flex justify-between text-xs text-[var(--text-muted)]">
-                    <span>Express Delivery</span>
-                    <span>+₹{deliveryCharge}</span>
-                  </div>
-                )}
-                {giftWrap && (
-                  <div className="flex justify-between text-xs text-[var(--text-muted)]">
-                    <span>Gift Wrapping</span>
-                    <span>+₹149</span>
-                  </div>
-                )}
-                <div className="flex justify-between text-xs font-bold text-[var(--text-main)] pt-1.5 border-t border-[var(--border)]">
-                  <span>Total ({quantity} {quantity === 1 ? (product.sellingUnit === 'piece' ? 'piece' : 'item') : (product.sellingUnit === 'piece' ? 'pieces' : 'items')})</span>
-                  <span>₹{itemUnitPrice * quantity}</span>
+              )}
+              {deliveryCharge > 0 && (
+                <div className="flex justify-between text-xs text-[var(--text-muted)]">
+                  <span>Express Delivery</span>
+                  <span>+₹{deliveryCharge}</span>
                 </div>
-              </div>
-
-              {/* Buttons */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={handleAddToCart}
-                  className="py-3.5 px-4 rounded-xl border-2 border-[var(--primary)] text-[var(--primary)] hover:bg-[var(--primary-light)] text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer"
-                >
-                  {isAdded ? (
-                    <>
-                      <Check className="w-4 h-4" />
-                      <span>Added to Cart ✓</span>
-                    </>
-                  ) : (
-                    <>
-                      <ShoppingBag className="w-4 h-4" />
-                      <span>Add to Cart</span>
-                    </>
-                  )}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleBuyNow}
-                  className="py-3.5 px-4 rounded-xl bg-gradient-to-r from-[var(--primary)] to-[var(--primary-hover)] hover:brightness-110 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all cursor-pointer"
-                >
-                  <Zap className="w-4 h-4" />
-                  <span>Buy Now - ₹{itemUnitPrice * quantity}</span>
-                </button>
-              </div>
-
-              {/* Micro Trust */}
-              <div className="flex items-center justify-center gap-4 text-[9px] text-[var(--text-muted)] pt-2">
-                <span className="flex items-center gap-1"><ShieldCheck className="w-3 h-3" /> Secure Payment</span>
-                <span className="flex items-center gap-1"><Truck className="w-3 h-3" /> Fast Delivery</span>
-                <span className="flex items-center gap-1"><BadgeCheck className="w-3 h-3" /> Quality Assured</span>
+              )}
+              {giftWrap && (
+                <div className="flex justify-between text-xs text-[var(--text-muted)]">
+                  <span>Gift Wrapping</span>
+                  <span>+₹149</span>
+                </div>
+              )}
+              <div className="flex justify-between text-xs font-bold text-[var(--text-main)] pt-1.5 border-t border-[var(--border)]">
+                <span>Total ({quantity} {quantity === 1 ? (product.sellingUnit === 'piece' ? 'piece' : 'item') : (product.sellingUnit === 'piece' ? 'pieces' : 'items')})</span>
+                <span>₹{itemUnitPrice * quantity}</span>
               </div>
             </div>
-          )}
+
+            {/* Buttons */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={handleAddToCart}
+                className="py-3.5 px-4 rounded-xl border-2 border-[var(--primary)] text-[var(--primary)] hover:bg-[var(--primary-light)] text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer"
+              >
+                {isAdded ? (
+                  <>
+                    <Check className="w-4 h-4" />
+                    <span>Added to Cart ✓</span>
+                  </>
+                ) : (
+                  <>
+                    <ShoppingBag className="w-4 h-4" />
+                    <span>Add to Cart</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleBuyNow}
+                className="py-3.5 px-4 rounded-xl bg-gradient-to-r from-[var(--primary)] to-[var(--primary-hover)] hover:brightness-110 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all cursor-pointer"
+              >
+                <Zap className="w-4 h-4" />
+                <span>Buy Now - ₹{itemUnitPrice * quantity}</span>
+              </button>
+            </div>
+
+            {/* Micro Trust */}
+            <div className="flex items-center justify-center gap-4 text-[9px] text-[var(--text-muted)] pt-2">
+              <span className="flex items-center gap-1"><ShieldCheck className="w-3 h-3" /> Secure Payment</span>
+              <span className="flex items-center gap-1"><Truck className="w-3 h-3" /> Fast Delivery</span>
+              <span className="flex items-center gap-1"><BadgeCheck className="w-3 h-3" /> Quality Assured</span>
+            </div>
+          </div>
         </div>
       </div>
     </Modal>
