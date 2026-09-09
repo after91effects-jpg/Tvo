@@ -350,7 +350,11 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   {product.name}
                 </h2>
                 <div className="mt-2 flex items-center gap-3 flex-wrap">
-                  <StarRating rating={product.rating || 4.9} showValue count={product.reviewCount || 0} />
+                  {typeof product.rating === 'number' && product.rating > 0 ? (
+                    <StarRating rating={product.rating} showValue count={product.reviewCount || 0} />
+                  ) : (
+                    <span className="text-xs text-[var(--text-subtle)]">No ratings yet</span>
+                  )}
                   <span className="text-xs text-[var(--success)] font-bold bg-[var(--success-light)] px-2 py-0.5 rounded-full flex items-center gap-1">
                     <BadgeCheck className="w-3 h-3" />
                     In Stock ({product.stock} left)

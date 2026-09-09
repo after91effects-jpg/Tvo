@@ -160,7 +160,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onViewProduct
         <div>
           {/* Rating & Category */}
           <div className="flex items-center justify-between gap-1 sm:gap-2 mb-1">
-            <StarRating rating={product.rating || 4.8} showValue count={product.reviewCount || 0} />
+            {typeof product.rating === 'number' && product.rating > 0 ? (
+              <StarRating rating={product.rating} showValue count={product.reviewCount || 0} />
+            ) : (
+              <span className="text-[9px] sm:text-[10px] text-[var(--text-subtle)]">No ratings yet</span>
+            )}
             <span className="text-[9px] sm:text-[10px] text-[var(--text-subtle)] uppercase tracking-wider font-semibold truncate max-w-[70px] sm:max-w-none">
               {product.category}
             </span>

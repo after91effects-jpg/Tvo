@@ -42,7 +42,6 @@ interface CustomerOrderHistoryViewProps {
   products: Product[];
   onNavigate: (view: string, param?: string) => void;
   onSelectProduct?: (productId: string) => void;
-  onOpenAuthModal?: () => void;
 }
 
 const STATUS_CONFIG: Record<
@@ -102,7 +101,6 @@ export const CustomerOrderHistoryView: React.FC<CustomerOrderHistoryViewProps> =
   products,
   onNavigate,
   onSelectProduct,
-  onOpenAuthModal,
 }) => {
   const { user, loginWithEmail, registerCustomer } = useAuth();
   const { addToCart, setIsCartOpen } = useCart();
@@ -127,8 +125,8 @@ export const CustomerOrderHistoryView: React.FC<CustomerOrderHistoryViewProps> =
 
   // Guest lookup & Login modal fallback
   const [guestEmailLookup, setGuestEmailLookup] = useState<string>('');
-  const [loginEmail, setLoginEmail] = useState<string>('aarav.sharma@example.com');
-  const [loginPassword, setLoginPassword] = useState<string>('TVO Flavours123!');
+  const [loginEmail, setLoginEmail] = useState<string>('');
+  const [loginPassword, setLoginPassword] = useState<string>('');
   const [isLoggingIn, setIsLoggingIn] = useState<boolean>(false);
 
   // Fetch orders from Firestore
@@ -457,14 +455,6 @@ let ordersUrl = '/api/orders';
     }
   };
 
-  // Quick switch demo user
-  const handleQuickCustomerSwitch = async (email: string, name: string) => {
-    setIsLoggingIn(true);
-    await registerCustomer(name, email, 'TVO Flavours123!');
-    setGuestEmailLookup('');
-    setIsLoggingIn(false);
-  };
-
   // Quick email sign-in form
   const handleCustomerSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -532,7 +522,7 @@ let ordersUrl = '/api/orders';
         </div>
       </div>
 
-      {/* User Status Bar & Quick Switcher */}
+      {/* User Status Bar */}
       <div className="p-4 sm:p-5 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border)] shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div className="flex items-center gap-3.5">
           <div className="w-12 h-12 rounded-2xl bg-[var(--primary-light)] text-[var(--primary)] font-bold flex items-center justify-center text-base shrink-0 shadow-inner">
@@ -553,44 +543,6 @@ let ordersUrl = '/api/orders';
               {user?.email || 'Sign in to access your saved delivery addresses and cake favorites'}
             </div>
           </div>
-        </div>
-
-        {/* Demo Persona Switcher & Quick Lookup for Testing */}
-        <div className="flex flex-wrap items-center gap-2 pt-2 lg:pt-0 border-t lg:border-t-0 border-[var(--border)]">
-          <span className="text-[11px] font-semibold text-[var(--text-muted)]">Switch Customer:</span>
-          <button
-            id="switch-aarav-btn"
-            onClick={() => handleQuickCustomerSwitch('aarav.sharma@example.com', 'Aarav Sharma')}
-            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
-              user?.email === 'aarav.sharma@example.com'
-                ? 'bg-[var(--primary)] text-white'
-                : 'bg-[var(--bg-subtle)] text-[var(--text-main)] hover:bg-[var(--bg-accent)] border border-[var(--border)]'
-            }`}
-          >
-            Aarav Sharma
-          </button>
-          <button
-            id="switch-sneha-btn"
-            onClick={() => handleQuickCustomerSwitch('sneha.patel@example.com', 'Sneha Patel')}
-            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
-              user?.email === 'sneha.patel@example.com'
-                ? 'bg-[var(--primary)] text-white'
-                : 'bg-[var(--bg-subtle)] text-[var(--text-main)] hover:bg-[var(--bg-accent)] border border-[var(--border)]'
-            }`}
-          >
-            Sneha Patel
-          </button>
-          <button
-            id="switch-admin-btn"
-            onClick={() => handleQuickCustomerSwitch('admin@confetto.store', 'Chef Alessandro')}
-            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
-              user?.email === 'admin@confetto.store'
-                ? 'bg-[var(--primary)] text-white'
-                : 'bg-[var(--bg-subtle)] text-[var(--text-main)] hover:bg-[var(--bg-accent)] border border-[var(--border)]'
-            }`}
-          >
-            Chef Admin (All Orders)
-          </button>
         </div>
       </div>
 

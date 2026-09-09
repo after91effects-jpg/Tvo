@@ -18,14 +18,12 @@ import { useWishlist } from '../../context/WishlistContext';
 interface MobileBottomNavProps {
   activeView: string;
   onNavigate: (view: string, param?: string) => void;
-  onOpenAuthModal?: () => void;
   onOpenMenuDrawer?: () => void;
 }
 
 export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   activeView,
   onNavigate,
-  onOpenAuthModal,
   onOpenMenuDrawer,
 }) => {
   const { itemCount, subtotal, setIsCartOpen } = useCart();
@@ -172,13 +170,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
             id="mobile-nav-account-btn"
             type="button"
             onClick={() => {
-              if (user) {
-                onNavigate('orders');
-              } else if (onOpenAuthModal) {
-                onOpenAuthModal();
-              } else {
-                onNavigate('admin');
-              }
+              onNavigate('orders');
             }}
             className={`flex flex-col items-center justify-center py-1 rounded-xl transition-all cursor-pointer relative text-[var(--text-muted)] hover:text-[var(--text-main)]`}
           >

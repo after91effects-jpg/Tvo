@@ -108,7 +108,7 @@ export default function ProductPage() {
               const thumbUrl = normalizeImageUrl(typeof im === 'object' && im.thumbUrl ? im.thumbUrl : mediumUrl);
               return { url, mediumUrl, thumbUrl, alt: im.alt || p.name };
             }).filter((i: any) => i.url),
-            rating: p.rating || 4.9,
+            rating: typeof p.rating === 'number' ? p.rating : 0,
             reviewCount: p.reviewCount || 0,
             stock: p.stock ?? 10,
             stockStatus: p.stockStatus || (p.stock > 0 ? 'in_stock' : 'out_of_stock'),
@@ -234,7 +234,6 @@ export default function ProductPage() {
       <MobileBottomNav
         activeView="home"
         onNavigate={handleNavigate}
-        onOpenAuthModal={() => router.push('/')}
       />
 
       <CartDrawer onCheckout={() => setIsCheckoutOpen(true)} />

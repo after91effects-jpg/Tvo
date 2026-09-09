@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ShieldCheck, Lock, Mail, Key, UserCheck, ArrowRight, Sparkles } from 'lucide-react';
+import { ShieldCheck, Lock, Mail } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Modal } from '../common/Modal';
 
@@ -16,9 +16,9 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
   onClose,
   onSuccess,
 }) => {
-  const { login, quickLoginAs } = useAuth();
-  const [email, setEmail] = useState('admin@tvoflavours.com');
-  const [password, setPassword] = useState('admin123');
+  const { login } = useAuth();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -37,12 +37,6 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
     }
   };
 
-  const handleQuickLogin = (role: 'admin' | 'staff') => {
-    quickLoginAs(role);
-    onClose();
-    onSuccess();
-  };
-
   return (
     <Modal
       isOpen={isOpen}
@@ -52,47 +46,10 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
       maxWidth="md"
     >
       <div className="space-y-6">
-        {/* Quick Demo Role Switcher */}
-        <div className="p-4 rounded-2xl bg-[var(--bg-subtle)] border border-[var(--border)] space-y-2.5">
-          <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-subtle)] flex items-center gap-1.5">
-            <Sparkles className="w-3.5 h-3.5 text-[var(--accent-gold)]" />
-            <span>1-Click Fast Access</span>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => handleQuickLogin('admin')}
-              className="p-3 rounded-xl border border-[var(--primary)] bg-[var(--primary-light)] text-[var(--primary)] text-left hover:bg-[var(--primary)] hover:text-white transition-all group cursor-pointer"
-            >
-              <div className="text-xs font-bold flex items-center justify-between">
-                <span>Chef Admin</span>
-                <ArrowRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity" />
-              </div>
-              <div className="text-[10px] opacity-80 mt-0.5">Full Catalog & CSV Hub</div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleQuickLogin('staff')}
-              className="p-3 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-main)] text-left hover:border-[var(--primary)] transition-all group cursor-pointer"
-            >
-              <div className="text-xs font-bold flex items-center justify-between">
-                <span>Kitchen Staff</span>
-                <ArrowRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity" />
-              </div>
-              <div className="text-[10px] text-[var(--text-muted)] mt-0.5">Orders & Status Only</div>
-            </button>
-          </div>
-        </div>
-
         {/* Divider */}
         <div className="relative text-center">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-[var(--border)]" />
-          </div>
           <span className="relative bg-[var(--bg-card)] px-3 text-[10px] uppercase font-bold text-[var(--text-subtle)]">
-            Or Sign In with Credentials
+            Sign In with Credentials
           </span>
         </div>
 

@@ -16,7 +16,7 @@ export const AboutView: React.FC = () => {
           Where European Pâtisserie Meets Joyful Celebrations
         </h1>
         <p className="text-xs sm:text-sm text-[var(--text-muted)] leading-relaxed">
-          Founded in 2022 by classical French and Belgian trained pastry chefs, TVO Flavours was created with a singular mission: never let an important celebration settle for commercial premix cakes.
+          TVO Flavours, "The All-in-one Bakery Shop", was created with a singular mission: never let an important celebration settle for commercial premix cakes. Our bakers handcraft each cake fresh to order so every milestone is genuinely special.
         </p>
       </div>
 
@@ -27,10 +27,10 @@ export const AboutView: React.FC = () => {
             <Award className="w-6 h-6" />
           </div>
           <h3 className="text-base font-bold font-display text-[var(--text-main)]">
-            54% Callebaut & Real Dairy
+            Premium Cocoa & Real Dairy
           </h3>
           <p className="text-xs text-[var(--text-muted)] leading-relaxed">
-            We exclusively source sustainable cocoa from Belgium and pure French butter. Zero artificial shortening, zero palm oil, and zero synthetic emulsifiers.
+            We use rich cocoa and pure dairy butter in our recipes — no artificial shortening, no palm oil, and no synthetic emulsifiers.
           </p>
         </div>
 
@@ -39,10 +39,10 @@ export const AboutView: React.FC = () => {
             <Leaf className="w-6 h-6" />
           </div>
           <h3 className="text-base font-bold font-display text-[var(--text-main)]">
-            Certified 100% Eggless
+            Eggless Fresh Range
           </h3>
           <p className="text-xs text-[var(--text-muted)] leading-relaxed">
-            Our pure vegetarian line is baked in isolated, sterilised stations using natural curd cultured sponges, silken tofu emulsions, and real fruit purées.
+            Our pure vegetarian recipes use natural curd cultured sponges, silken tofu emulsions, and real fruit purées for soft, moist cakes.
           </p>
         </div>
 
@@ -74,7 +74,7 @@ export const AboutView: React.FC = () => {
             </span>
             <span>•</span>
             <span className="flex items-center gap-1.5">
-              <Heart className="w-4 h-4" /> Over 100,000+ Celebrations
+              <Heart className="w-4 h-4" /> Handcrafted Fresh to Order
             </span>
           </div>
         </div>

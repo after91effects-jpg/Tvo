@@ -12,51 +12,25 @@ interface ReviewSectionProps {
   initialReviewCount?: number;
 }
 
-const DEFAULT_SAMPLE_REVIEWS: Review[] = [
-  {
-    id: 'rev-01',
-    customerName: 'Ananya Deshmukh',
-    rating: 5,
-    comment: 'The Belgian dark truffle was sublime! Delivered in under 90 minutes for my sister’s midnight birthday surprise in Gurugram. The chocolate writing was so neat.',
-    verified: true,
-    createdAt: '2026-08-25T14:20:00.000Z',
-  },
-  {
-    id: 'rev-02',
-    customerName: 'Rohan Mehra',
-    rating: 5,
-    comment: 'Best 100% eggless cake in town. Extremely soft texture and not overly sugary. Real Valrhona cocoa richness throughout.',
-    verified: true,
-    createdAt: '2026-08-22T09:15:00.000Z',
-  },
-  {
-    id: 'rev-03',
-    customerName: 'Kavita Sundaram',
-    rating: 4,
-    comment: 'Ordered for our 10th anniversary. Gorgeous presentation and the insulated cold box kept it in pristine condition.',
-    verified: true,
-    createdAt: '2026-08-18T18:40:00.000Z',
-  },
-];
-
 export const ReviewSection: React.FC<ReviewSectionProps> = ({
   productId,
   productName,
-  initialRating = 4.8,
-  initialReviewCount = 42,
+  initialRating = 0,
+  initialReviewCount = 0,
 }) => {
-  const [reviews, setReviews] = useState<Review[]>(DEFAULT_SAMPLE_REVIEWS);
+  const [reviews, setReviews] = useState<Review[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [formName, setFormName] = useState('');
   const [formRating, setFormRating] = useState(5);
   const [formComment, setFormComment] = useState('');
   const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [submitError, setSubmitError] = useState('');
 
   useEffect(() => {
     const fetchReviews = async () => {
       try {
-        const res = await fetch(`/api/reviews?productId=${productId}`);
+        const res = await fetch(`/api/reviews?product_id=${productId}`);
         const data = await res.json();
         if (data.reviews && data.reviews.length > 0) {
           setReviews(data.reviews.map((r: any) => ({
@@ -69,7 +43,7 @@ export const ReviewSection: React.FC<ReviewSectionProps> = ({
           })));
         }
       } catch (e) {
-        // Fallback to sample reviews
+        // No reviews available; leave the section empty
       }
     };
     fetchReviews();
@@ -81,52 +55,34 @@ export const ReviewSection: React.FC<ReviewSectionProps> = ({
 
     try {
       setIsSubmitting(true);
-      const newReviewData: Omit<Review, 'id'> = {
-        customerName: formName.trim(),
-        rating: formRating,
-        comment: formComment.trim(),
-        verified: true,
-        createdAt: new Date().toISOString(),
-      };
-
-      const docRef = await fetch('/api/reviews', {
+      const res = await fetch('/api/reviews', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          productId,
-          customerName: formName.trim(),
+          product_id: productId,
+          customer_name: formName.trim(),
           rating: formRating,
           comment: formComment.trim(),
         }),
-      }).then(r => r.json());
+      });
+      const data = await res.json();
 
-      const addedReview: Review = {
-        id: docRef.id || `rev-${Date.now()}`,
-        ...newReviewData,
-      };
+      if (!data.ok || !res.ok) {
+        setSubmitError(data?.message || 'Unable to submit your review. Please try again.');
+        setIsSubmitting(false);
+        return;
+      }
 
-      setReviews((prev) => [addedReview, ...prev]);
       setSubmitSuccess(true);
       setFormName('');
       setFormComment('');
+      setFormRating(5);
       setTimeout(() => {
         setSubmitSuccess(false);
         setShowForm(false);
       }, 2500);
     } catch (e) {
-      // Local fallback
-      const localRev: Review = {
-        id: `rev-${Date.now()}`,
-        customerName: formName.trim(),
-        rating: formRating,
-        comment: formComment.trim(),
-        verified: true,
-        createdAt: new Date().toISOString(),
-      };
-      setReviews((prev) => [localRev, ...prev]);
-      setSubmitSuccess(true);
-      setFormName('');
-      setFormComment('');
+      setSubmitError('Unable to submit your review. Please try again later.');
     } finally {
       setIsSubmitting(false);
     }
@@ -135,6 +91,7 @@ export const ReviewSection: React.FC<ReviewSectionProps> = ({
   return (
     <div className="space-y-6">
       {/* Header & Rating Summary */}
+      {reviews.length > 0 && (
       <div className="p-6 rounded-2xl bg-[var(--bg-subtle)] border border-[var(--border)] flex flex-col sm:flex-row items-center justify-between gap-6">
         <div className="flex items-center gap-4 text-center sm:text-left">
           <div className="text-4xl font-bold font-display text-[var(--text-main)]">
@@ -156,6 +113,7 @@ export const ReviewSection: React.FC<ReviewSectionProps> = ({
           <span>{showForm ? 'Cancel Review' : 'Write a Review'}</span>
         </button>
       </div>
+      )}
 
       {/* Review Submission Form */}
       {showForm && (
@@ -206,7 +164,14 @@ export const ReviewSection: React.FC<ReviewSectionProps> = ({
           {submitSuccess && (
             <p className="text-xs text-[var(--success)] font-semibold flex items-center gap-1">
               <CheckCircle className="w-4 h-4" />
-              Thank you! Your verified review has been published.
+              Thank you! Your review has been submitted and will appear after moderation.
+            </p>
+          )}
+
+          {submitError && (
+            <p className="text-xs text-red-600 font-semibold flex items-center gap-1">
+              <span>✕</span>
+              {submitError}
             </p>
           )}
 
@@ -223,6 +188,15 @@ export const ReviewSection: React.FC<ReviewSectionProps> = ({
 
       {/* Reviews List */}
       <div className="space-y-3">
+        {reviews.length === 0 && !showForm && (
+          <div className="p-6 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] shadow-xs text-center">
+            <Star className="w-6 h-6 mx-auto mb-2 text-[var(--text-subtle)]" />
+            <p className="text-xs font-semibold text-[var(--text-main)]">No reviews yet</p>
+            <p className="text-xs text-[var(--text-muted)] mt-1">
+              Be the first to share your experience with {productName}.
+            </p>
+          </div>
+        )}
         {reviews.map((rev) => (
           <div
             key={rev.id}

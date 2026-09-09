@@ -136,7 +136,7 @@ function normalizeProductRecord(p: any): Product {
     weight: p.weight || (isPiece ? '1 piece' : '1.0 kg'),
     weightOptions: normalizedOptions,
     flavourOptions: p.flavourOptions || undefined,
-    rating: p.rating || 4.9,
+    rating: typeof p.rating === 'number' ? p.rating : 0,
     reviewCount: p.reviewCount || 0,
     published: p.published !== 0 && p.published !== false,
     eggless: Boolean(p.eggless),
@@ -635,7 +635,6 @@ export default function Home() {
             onSelectCategory={(slug) => handleNavigate('category', slug)}
             onNavigate={handleNavigate}
             activeView={storeSubView}
-            onOpenAuthModal={() => setIsAdminLoginOpen(true)}
           />
 
           {/* Sub-view Content */}
@@ -650,7 +649,6 @@ export default function Home() {
                 products={products}
                 onNavigate={handleNavigate}
                 onSelectProduct={handleOpenProduct}
-                onOpenAuthModal={() => setIsAdminLoginOpen(true)}
               />
             ) : storeSubView === 'about' ? (
               <AboutView />
@@ -853,7 +851,6 @@ export default function Home() {
           <MobileBottomNav
             activeView={storeSubView}
             onNavigate={handleNavigate}
-            onOpenAuthModal={() => setIsAdminLoginOpen(true)}
           />
 
           {/* Cart Drawer */}
