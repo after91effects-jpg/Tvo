@@ -206,8 +206,54 @@ export default function ProductPage() {
     );
   }
 
+  const productTitle = product ? `${product.name} | TVO Flavours` : 'TVO Flavours';
+  const productDescription = product
+    ? `Shop ${product.name} from TVO Flavours. View price, available options, product details and delivery information.`
+    : 'The all-in-one bakery shop in Gurugram, Haryana.';
+  const canonicalUrl = `https://tvoflavours.com/product/${slug}`;
+
+  const weightPrices = (product?.weightOptions || [])
+    .map((w: any) => Number(w.price) || 0)
+    .filter((p: number) => p > 0);
+
+  const productJsonLd = product ? {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name: product.name,
+    description: product.shortDescription || productDescription,
+    image: product.images?.[0]?.url
+      ? [product.images[0].url.startsWith('http') ? product.images[0].url : `https://tvoflavours.com${product.images[0].url}`]
+      : ['https://tvoflavours.com/images/brand/logo.png'],
+    url: canonicalUrl,
+    ...(product.sku ? { sku: product.sku } : {}),
+    offers: weightPrices.length > 1 ? {
+      '@type': 'AggregateOffer',
+      priceCurrency: 'INR',
+      lowPrice: Math.min(...weightPrices),
+      highPrice: Math.max(...weightPrices),
+      offerCount: weightPrices.length,
+      availability: product.stockStatus !== 'out_of_stock' ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+      url: canonicalUrl,
+    } : {
+      '@type': 'Offer',
+      price: Number(product.price || 0),
+      priceCurrency: 'INR',
+      availability: product.stockStatus !== 'out_of_stock' ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+      url: canonicalUrl,
+    },
+  } : null;
+
   return (
     <div className="min-h-dvh bg-[var(--bg-app)]">
+      <title>{productTitle}</title>
+      <meta name="description" content={productDescription} />
+      <link rel="canonical" href={canonicalUrl} />
+      {productJsonLd && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd) }}
+        />
+      )}
       <Header products={products} onNavigate={handleNavigate} />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 pb-24 sm:pb-6">

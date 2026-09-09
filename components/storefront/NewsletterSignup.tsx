@@ -125,7 +125,7 @@ export const NewsletterSignup: React.FC = () => {
           </h3>
 
           <p className="text-xs sm:text-sm text-[var(--text-muted)] leading-relaxed max-w-xl">
-            Join 12,000+ dessert connoisseurs. Receive private chef tasting invitations, secret midnight delivery vouchers, and seasonal cake release alerts directly in your inbox.
+            Freshly made for every occasion. Receive seasonal cake release alerts, special offers, and new flavor announcements directly in your inbox.
           </p>
 
           {/* Feature Badges */}

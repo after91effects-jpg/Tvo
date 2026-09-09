@@ -17,6 +17,10 @@ export const metadata: Metadata = {
   applicationName: 'TVO Flavours',
   authors: [{ name: 'TVO Flavours' }],
   alternates: { canonical: '/' },
+  icons: {
+    icon: '/images/brand/logo.png',
+    apple: '/images/brand/logo.png',
+  },
   robots: {
     index: true,
     follow: true,
@@ -30,12 +34,21 @@ export const metadata: Metadata = {
     description:
       'The all-in-one bakery shop in Gurugram, Haryana — artisan cakes, pastries, chocolates and celebration hampers for every occasion.',
     url: 'https://tvoflavours.com',
+    images: [
+      {
+        url: '/images/brand/logo.png',
+        width: 1254,
+        height: 1254,
+        alt: 'TVO Flavours - The All-in-one Bakery Shop',
+      },
+    ],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'TVO Flavours | The All-in-one Bakery Shop',
     description:
       'The all-in-one bakery shop in Gurugram, Haryana — artisan cakes, pastries, chocolates and celebration hampers for every occasion.',
+    images: ['/images/brand/logo.png'],
   },
 };
 
@@ -63,6 +76,7 @@ export default function RootLayout({
               name: 'TVO Flavours',
               description: 'The All-in-one Bakery Shop.',
               url: 'https://tvoflavours.com',
+              image: 'https://tvoflavours.com/images/brand/logo.png',
               telephone: '+91 76782 59522',
               email: 'hello@tvoflavours.com',
               address: {
