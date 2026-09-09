@@ -12,10 +12,10 @@ export async function logAuditEvent(params: {
 }): Promise<void> {
   try {
     const auditData = {
-      actorUid: params.actorUid || 'chef-admin-root',
-      actorName: params.actorName || 'Chef Administrator',
-      actorEmail: params.actorEmail || 'admin@tvoflavours.com',
-      role: params.role || 'admin',
+      actorUid: params.actorUid || 'system',
+      actorName: params.actorName || 'System',
+      actorEmail: params.actorEmail || '',
+      role: params.role || 'system',
       action: params.action,
       targetType: params.targetType,
       targetId: params.targetId || '',

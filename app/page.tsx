@@ -18,7 +18,6 @@ import { Product, Order, Category, HamperSettings } from '../lib/types';
 import {
   INITIAL_PRODUCTS,
   INITIAL_CATEGORIES,
-  INITIAL_SAMPLE_ORDERS,
   DEFAULT_HAMPER_SETTINGS,
 } from '../lib/seedData';
 import { useAuth } from '../context/AuthContext';
@@ -187,7 +186,7 @@ export default function Home() {
   // Live Firestore Data State
   const [products, setProducts] = useState<Product[]>(() => INITIAL_PRODUCTS.map(normalizeProductRecord));
   const [categories, setCategories] = useState<Category[]>(INITIAL_CATEGORIES);
-  const [orders, setOrders] = useState<Order[]>(INITIAL_SAMPLE_ORDERS);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSeeding, setIsSeeding] = useState(false);
   const [recentlyViewedIds, setRecentlyViewedIds] = useLocalStorageJSON<string[]>(
@@ -260,16 +259,16 @@ export default function Home() {
         if (ordData.orders && ordData.orders.length > 0) {
           setOrders(ordData.orders);
         } else {
-          setOrders(INITIAL_SAMPLE_ORDERS);
+          setOrders([]);
         }
       } catch {
-        setOrders(INITIAL_SAMPLE_ORDERS);
+        setOrders([]);
       }
     } catch (err) {
       console.warn('Fetch fallback:', err);
       setProducts(INITIAL_PRODUCTS.map(normalizeProductRecord));
       setCategories(INITIAL_CATEGORIES);
-      setOrders(INITIAL_SAMPLE_ORDERS);
+      setOrders([]);
     } finally {
       setIsLoading(false);
     }

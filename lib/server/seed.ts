@@ -15,8 +15,11 @@ export const BUSINESS = {
   language: 'English',
 };
 
-const ADMIN_EMAIL = 'admin@tvoflavours.com';
-const ADMIN_PASSWORD = 'admin123';
+// No hardcoded admin credentials live in source. The optional admin bootstrap
+// in seedAdmin() runs only in non-production environments AND requires the
+// SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD environment variables to be set.
+// Without an explicit opt-in it silently no-ops, so nothing auto-creates a
+// known-privilege account.
 
 // Reusable actions
 function insert(table: string, obj: Record<string, unknown>) {
@@ -137,18 +140,25 @@ function seedRoles() {
 }
 
 function seedAdmin() {
-  const existing = db.prepare('SELECT id FROM users WHERE email=?').get(ADMIN_EMAIL);
+  // Dev-only opt-in bootstrap. Never runs in production and never uses
+  // hardcoded credentials: both SEED_ADMIN_EMAIL and SEED_ADMIN_PASSWORD must
+  // be provided via the environment explicitly.
+  if (process.env.NODE_ENV === 'production') return;
+  const email = (process.env.SEED_ADMIN_EMAIL || '').toLowerCase().trim();
+  const password = process.env.SEED_ADMIN_PASSWORD || '';
+  if (!email || !password) return;
+
+  const existing = db.prepare('SELECT id FROM users WHERE email=?').get(email);
   if (!existing) {
     insert('users', {
       name: 'TVO Flavours Admin',
-      email: ADMIN_EMAIL,
-      password_hash: hashPassword(ADMIN_PASSWORD),
+      email,
+      password_hash: hashPassword(password),
       phone: '+91 7678259522',
       role: 'super_admin',
       status: 'active',
     });
   }
-  console.log('Admin seeded. Login with', ADMIN_EMAIL, '/', ADMIN_PASSWORD);
 }
 
 function seedDelivery() {

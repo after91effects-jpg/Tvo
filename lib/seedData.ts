@@ -125,58 +125,6 @@ export const DEFAULT_HAMPER_SETTINGS: HamperSettings = {
   minItemsRequired: 1,
 };
 
-export const INITIAL_SAMPLE_ORDERS = [
-  {
-    id: 'ord-cnf-1001',
-    orderNumber: 'CNF-892147',
-    customer: {
-      name: 'Aarav Sharma',
-      phone: '+91 98765 12345',
-      email: 'aarav.sharma@example.com',
-      address: 'Flat 402, Lotus Heights, Sector 48, Gurugram',
-      pincode: '122001',
-      city: 'Gurugram',
-      deliveryDate: 'Today',
-      deliverySlot: 'Midnight Surprise (11 PM - 12 AM)',
-      slotSurcharge: 199,
-      giftMessage: 'Happy 30th Birthday Priya! May your year be as sweet as this truffle cake.',
-    },
-    items: [
-      {
-        productId: 'prod-6600',
-        name: 'Choco Chip Truffle Cake',
-        sku: 'CCTC',
-        qty: 1,
-        weight: '1.0 Kg',
-        flavour: 'Dark Chocolate',
-        messageOnCake: 'Happy 30th Priya',
-        unitPrice: 949,
-        totalPrice: 949,
-        imageUrl: 'https://tvoflavours.com/wp-content/uploads/2026/05/Choco-Chip-Truffle-Cake.png',
-      }
-    ],
-    subtotal: 949,
-    deliveryFee: 0,
-    slotSurcharge: 199,
-    discount: 95,
-    promoCode: 'CONFETTO10',
-    tax: 52,
-    total: 1105,
-    deliveryDate: 'Today',
-    deliverySlot: 'Midnight Surprise (11 PM - 12 AM)',
-    status: 'Baking in Kitchen' as const,
-    paymentMethod: 'UPI' as const,
-    paymentStatus: 'Paid' as const,
-    transactionId: 'UPI-TXN-88492019',
-    statusHistory: [
-      { status: 'Order Placed' as const, timestamp: new Date(Date.now() - 3600000).toISOString(), note: 'Order confirmed via instant UPI payment' },
-      { status: 'Baking in Kitchen' as const, timestamp: new Date(Date.now() - 1800000).toISOString(), note: 'Chef started chocolate sponge ganache tempering' },
-    ],
-    createdAt: new Date(Date.now() - 3600000).toISOString(),
-    updatedAt: new Date(Date.now() - 1800000).toISOString(),
-  }
-];
-
 // Helper to seed Firestore if empty or force update
 export async function seedFirestoreDatabase(force: boolean = false): Promise<{ success: boolean; message: string }> {
   try {
@@ -202,11 +150,6 @@ export async function seedFirestoreDatabase(force: boolean = false): Promise<{ s
 
     // Seed Store Settings
     await setDoc(doc(db, COLLECTIONS.SETTINGS, 'general'), DEFAULT_STORE_SETTINGS);
-
-    // Seed Sample Orders
-    for (const ord of INITIAL_SAMPLE_ORDERS) {
-      await setDoc(doc(db, COLLECTIONS.ORDERS, ord.id), ord);
-    }
 
     return { success: true, message: 'TVO Flavours database successfully seeded with all CSV products and categories!' };
   } catch (error: any) {

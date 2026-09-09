@@ -104,7 +104,7 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ onNavigateToStore }) =
               {user?.name || 'Chef Administrator'}
             </div>
             <div className="text-[10px] text-[var(--text-subtle)] leading-tight flex items-center gap-1">
-              <span className="capitalize">{role}</span> • {user?.email || 'admin@tvoflavours.com'}
+              <span className="capitalize">{role}</span> • {user?.email || '—'}
             </div>
           </div>
         </div>
