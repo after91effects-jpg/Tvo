@@ -248,9 +248,6 @@ export default function ProductPage() {
 
   return (
     <div className="min-h-dvh bg-[var(--bg-app)]">
-      <title>{productTitle}</title>
-      <meta name="description" content={productDescription} />
-      <link rel="canonical" href={canonicalUrl} />
       {productJsonLd && (
         <script
           type="application/ld+json"
