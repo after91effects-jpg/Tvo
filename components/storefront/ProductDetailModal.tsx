@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   ShoppingBag,
   Sparkles,
@@ -17,6 +17,7 @@ import {
   Star,
   Share2,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   Info,
   Award,
@@ -102,6 +103,49 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   const [showFullDescription, setShowFullDescription] = useState<boolean>(false);
   const [showAllAddOns, setShowAllAddOns] = useState<boolean>(false);
 
+  // Mobile Gallery Touch-Swipe tracking (Horizontal swipe to browse images, preserving vertical page scroll)
+  const touchStartXRef = useRef<number | null>(null);
+  const touchStartYRef = useRef<number | null>(null);
+  const isSwipingRef = useRef<boolean>(false);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (images.length <= 1) return;
+    touchStartXRef.current = e.targetTouches[0].clientX;
+    touchStartYRef.current = e.targetTouches[0].clientY;
+    isSwipingRef.current = true;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isSwipingRef.current || touchStartXRef.current === null || touchStartYRef.current === null) return;
+    // Let natural vertical page scrolling work unimpeded
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (!isSwipingRef.current || touchStartXRef.current === null || touchStartYRef.current === null) {
+      isSwipingRef.current = false;
+      return;
+    }
+    const touchEndX = e.changedTouches[0].clientX;
+    const touchEndY = e.changedTouches[0].clientY;
+    const diffX = touchStartXRef.current - touchEndX;
+    const diffY = touchStartYRef.current - touchEndY;
+    const minSwipeDistance = 35;
+
+    // Trigger only if horizontal swipe dominates vertical movement
+    if (Math.abs(diffX) > minSwipeDistance && Math.abs(diffX) > Math.abs(diffY) * 1.2) {
+      if (diffX > 0) {
+        // Swiped left -> Next image
+        setActiveImageIndex((prev) => (prev + 1) % images.length);
+      } else {
+        // Swiped right -> Previous image
+        setActiveImageIndex((prev) => (prev - 1 + images.length) % images.length);
+      }
+    }
+    touchStartXRef.current = null;
+    touchStartYRef.current = null;
+    isSwipingRef.current = false;
+  };
+
   // Sync state whenever the active product changes
   React.useEffect(() => {
     if (!product) return;
@@ -117,6 +161,9 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
     setQuantity(1);
     setActiveImageIndex(0);
     setActiveTab('details');
+    const today = new Date();
+    const minDeliveryDate = new Date(today.setDate(today.getDate() + 2)).toISOString().split('T')[0];
+    setDeliveryDate(minDeliveryDate);
   }, [product?.id]);
 
   const isEmbedded = variant === 'embedded';
@@ -139,8 +186,8 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   const images = rawImages.map((img: any) => {
     const rawUrl = typeof img === 'string' ? img : (img.url || '');
     const u = normalizeImageUrl(rawUrl);
-    const m = normalizeImageUrl(typeof img === 'object' && img.mediumUrl ? img.mediumUrl : u);
-    const t = normalizeImageUrl(typeof img === 'object' && img.thumbUrl ? img.thumbUrl : m);
+    const m = typeof img === 'object' && img.mediumUrl ? normalizeImageUrl(img.mediumUrl) : undefined;
+    const t = typeof img === 'object' && img.thumbUrl ? normalizeImageUrl(img.thumbUrl) : undefined;
     return {
       url: u || DEFAULT_FALLBACK_IMAGE,
       mediumUrl: m || u || DEFAULT_FALLBACK_IMAGE,
@@ -188,25 +235,28 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
     ? Math.round(((selectedWeight.mrp - selectedWeight.price) / selectedWeight.mrp) * 100)
     : 0;
 
-  const today = new Date();
-  const minDeliveryDate = new Date(today.setDate(today.getDate() + 2)).toISOString().split('T')[0];
-
   return (
     <Modal isOpen={isOpen || isEmbedded} onClose={onClose} maxWidth="5xl" embedded={isEmbedded}>
       <div className={`grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8 ${isEmbedded ? '' : 'max-h-[85vh] overflow-y-auto pr-1'}`}>
         {/* Left: Image Gallery & Trust Badges */}
         <div className="lg:col-span-5 space-y-4">
-          {/* Main Image */}
-          <div className="relative aspect-square rounded-2xl overflow-hidden bg-[var(--bg-subtle)] border border-[var(--border)] group">
+          {/* Main Image with Touch Swipe */}
+          <div
+            className="relative aspect-square rounded-2xl overflow-hidden bg-[var(--bg-subtle)] border border-[var(--border)] group touch-pan-y select-none"
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+          >
             <img
+              key={activeImageIndex}
               src={images[activeImageIndex]?.url || images[0]?.url || DEFAULT_FALLBACK_IMAGE}
-              alt={product.name}
+              alt={images[activeImageIndex]?.alt || product.name}
               onError={(e) => handleImageFallback(e, images[activeImageIndex]?.url || images[0]?.url)}
-              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105 animate-in fade-in duration-200"
             />
             
             {/* Badges Overlay */}
-            <div className="absolute top-3 left-3 flex flex-col gap-2">
+            <div className="absolute top-3 left-3 flex flex-col gap-2 pointer-events-none z-10">
               {product.eggless && (
                 <div className="bg-[var(--success-light)] text-[var(--success)] border border-[var(--success)]/20 px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center gap-1 shadow-sm backdrop-blur-sm">
                   <Leaf className="w-3 h-3" />
@@ -233,7 +283,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
             </div>
 
             {/* Wishlist & Share */}
-            <div className="absolute top-3 right-3 flex flex-col gap-2">
+            <div className="absolute top-3 right-3 flex flex-col gap-2 z-10">
               <button
                 id={`modal-wishlist-toggle-${product.id}`}
                 type="button"
@@ -260,10 +310,58 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
               </button>
             </div>
 
-            {/* Image Counter */}
-            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/60 text-white px-3 py-1 rounded-full text-[10px] font-bold backdrop-blur-sm">
-              {activeImageIndex + 1} / {images.length}
-            </div>
+            {/* Touch & Tap Previous / Next Chevrons */}
+            {images.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveImageIndex((prev) => (prev - 1 + images.length) % images.length);
+                  }}
+                  aria-label="Previous product image"
+                  className="absolute left-2.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/45 hover:bg-black/70 text-white backdrop-blur-md flex items-center justify-center transition-all opacity-85 sm:opacity-0 sm:group-hover:opacity-100 cursor-pointer z-20 shadow-md active:scale-95"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveImageIndex((prev) => (prev + 1) % images.length);
+                  }}
+                  aria-label="Next product image"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/45 hover:bg-black/70 text-white backdrop-blur-md flex items-center justify-center transition-all opacity-85 sm:opacity-0 sm:group-hover:opacity-100 cursor-pointer z-20 shadow-md active:scale-95"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </>
+            )}
+
+            {/* Mobile-Friendly Indicator Dots & Counter */}
+            {images.length > 1 && (
+              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-black/60 text-white px-2.5 py-1 rounded-full backdrop-blur-sm z-20">
+                <div className="flex items-center gap-1">
+                  {images.map((_, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveImageIndex(idx);
+                      }}
+                      aria-label={`Go to image ${idx + 1}`}
+                      className={`h-1.5 rounded-full transition-all cursor-pointer ${
+                        activeImageIndex === idx ? 'w-4 bg-white' : 'w-1.5 bg-white/50 hover:bg-white/80'
+                      }`}
+                    />
+                  ))}
+                </div>
+                <span className="text-[10px] font-bold ml-1 pl-1 border-l border-white/20">
+                  {activeImageIndex + 1}/{images.length}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Thumbnails */}
