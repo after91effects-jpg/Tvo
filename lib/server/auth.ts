@@ -1,7 +1,21 @@
 import crypto from 'crypto';
 import { db, initDb } from './db';
 
-const SECRET = process.env.JWT_SECRET || 'tvoflavours_dev_secret_change_me';
+// The JWT signing secret MUST be supplied via the environment at runtime.
+// There is deliberately NO hardcoded or default fallback: if JWT_SECRET is
+// missing the server fails safely (no tokens are signed, token verification
+// returns null) rather than publishing tokens with a known value.
+function getJwtSecret(): string {
+  const secret = (process.env.JWT_SECRET || '').trim();
+  if (!secret) {
+    console.error(
+      '[auth] Server configuration error: JWT_SECRET is not set. ' +
+      'Refusing to sign/verify tokens. Set JWT_SECRET in the server environment before starting.'
+    );
+    throw new Error('Server configuration error: JWT_SECRET is not set.');
+  }
+  return secret;
+}
 
 export function hashPassword(pw: string): string {
   const salt = crypto.randomBytes(16).toString('hex');
@@ -23,6 +37,7 @@ export function hashToken(token: string): string {
 }
 
 export function signToken(payload: Record<string, unknown>, expiresInSeconds = 7 * 24 * 3600): string {
+  const SECRET = getJwtSecret();
   const now = Math.floor(Date.now() / 1000);
   const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
   const body = Buffer.from(JSON.stringify({
@@ -36,6 +51,7 @@ export function signToken(payload: Record<string, unknown>, expiresInSeconds = 7
 
 export function verifyToken(token: string): Record<string, unknown> | null {
   try {
+    const SECRET = getJwtSecret();
     const [header, body, sig] = token.split('.');
     if (!header || !body || !sig) return null;
     const expected = crypto.createHmac('sha256', SECRET).update(`${header}.${body}`).digest('base64url');
