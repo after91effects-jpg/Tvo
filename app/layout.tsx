@@ -5,9 +5,12 @@ import { AuthProvider } from '../context/AuthContext';
 import { CartProvider } from '../context/CartContext';
 import { NotificationProvider } from '../context/NotificationContext';
 import { WishlistProvider } from '../context/WishlistContext';
+import { getSiteUrl } from '../lib/siteUrl';
+
+const SITE_URL = getSiteUrl();
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://tvoflavours.com'),
+  metadataBase: new URL(SITE_URL),
   title: {
     default: 'TVO Flavours | The All-in-one Bakery Shop',
     template: '%s | TVO Flavours',
@@ -33,7 +36,7 @@ export const metadata: Metadata = {
     title: 'TVO Flavours | The All-in-one Bakery Shop',
     description:
       'The all-in-one bakery shop in Gurugram, Haryana — artisan cakes, pastries, chocolates and celebration hampers for every occasion.',
-    url: 'https://tvoflavours.com',
+    url: SITE_URL,
     images: [
       {
         url: '/images/brand/logo.png',
@@ -72,11 +75,11 @@ export default function RootLayout({
             __html: JSON.stringify({
               '@context': 'https://schema.org',
               '@type': 'Bakery',
-              '@id': 'https://tvoflavours.com/#bakery',
+              '@id': `${SITE_URL}/#bakery`,
               name: 'TVO Flavours',
               description: 'The All-in-one Bakery Shop.',
-              url: 'https://tvoflavours.com',
-              image: 'https://tvoflavours.com/images/brand/logo.png',
+              url: SITE_URL,
+              image: `${SITE_URL}/images/brand/logo.png`,
               telephone: '+91 76782 59522',
               email: 'hello@tvoflavours.com',
               address: {

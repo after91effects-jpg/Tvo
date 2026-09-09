@@ -1,10 +1,11 @@
 import { MetadataRoute } from 'next';
 import { db } from '../lib/server/db';
+import { getSiteUrl } from '../lib/siteUrl';
 
 export const revalidate = 86400; // 24 hours
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = 'https://tvoflavours.com';
+  const baseUrl = getSiteUrl();
 
   const staticRoutes: MetadataRoute.Sitemap = [
     {

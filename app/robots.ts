@@ -1,4 +1,5 @@
 import { MetadataRoute } from 'next';
+import { getSiteUrl } from '../lib/siteUrl';
 
 export default function robots(): MetadataRoute.Robots {
   return {
@@ -7,6 +8,6 @@ export default function robots(): MetadataRoute.Robots {
       allow: '/',
       disallow: ['/admin', '/admin/*', '/api/*'],
     },
-    sitemap: 'https://tvoflavours.com/sitemap.xml',
+    sitemap: `${getSiteUrl()}/sitemap.xml`,
   };
 }

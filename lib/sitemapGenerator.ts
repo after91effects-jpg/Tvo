@@ -1,6 +1,7 @@
 import { MASTER_5_MAIN_CATEGORIES } from './masterCatalogHierarchy';
 import { RESTRUCTURED_MASTER_PRODUCTS } from './productOrganizer';
 import { Product } from './types';
+import { getSiteUrl } from './siteUrl';
 
 export interface SitemapUrl {
   loc: string;
@@ -9,7 +10,7 @@ export interface SitemapUrl {
   priority: number;
 }
 
-export function generateSitemapUrls(baseUrl: string = 'https://tvoflavours.com'): SitemapUrl[] {
+export function generateSitemapUrls(baseUrl: string = getSiteUrl()): SitemapUrl[] {
   const urls: SitemapUrl[] = [
     {
       loc: `${baseUrl}/`,
@@ -65,7 +66,7 @@ export function generateSitemapUrls(baseUrl: string = 'https://tvoflavours.com')
 
 export function generateBreadcrumbJsonLd(
   breadcrumbs: { name: string; url: string }[],
-  baseUrl: string = 'https://tvoflavours.com'
+  baseUrl: string = getSiteUrl()
 ) {
   return {
     '@context': 'https://schema.org',
@@ -79,7 +80,7 @@ export function generateBreadcrumbJsonLd(
   };
 }
 
-export function generateProductJsonLd(product: Product, baseUrl: string = 'https://tvoflavours.com') {
+export function generateProductJsonLd(product: Product, baseUrl: string = getSiteUrl()) {
   const primaryWeight = product.weightOptions?.find((w) => w.isDefault) || product.weightOptions?.[0];
   const primaryImg = product.images?.[0]?.url || '';
 

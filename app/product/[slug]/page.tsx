@@ -12,6 +12,9 @@ import { ProductDetailModal } from '../../../components/storefront/ProductDetail
 import { CheckoutModal } from '../../../components/storefront/CheckoutModal';
 import { useLocalStorageJSON } from '../../../lib/useLocalStorage';
 import { normalizeImageUrl } from '../../../lib/imageUrl';
+import { getSiteUrl } from '../../../lib/siteUrl';
+
+const SITE_URL = getSiteUrl();
 
 export default function ProductPage() {
   const params = useParams<{ slug: string }>();
@@ -210,7 +213,7 @@ export default function ProductPage() {
   const productDescription = product
     ? `Shop ${product.name} from TVO Flavours. View price, available options, product details and delivery information.`
     : 'The all-in-one bakery shop in Gurugram, Haryana.';
-  const canonicalUrl = `https://tvoflavours.com/product/${slug}`;
+  const canonicalUrl = `${SITE_URL}/product/${slug}`;
 
   const weightPrices = (product?.weightOptions || [])
     .map((w: any) => Number(w.price) || 0)
@@ -222,8 +225,8 @@ export default function ProductPage() {
     name: product.name,
     description: product.shortDescription || productDescription,
     image: product.images?.[0]?.url
-      ? [product.images[0].url.startsWith('http') ? product.images[0].url : `https://tvoflavours.com${product.images[0].url}`]
-      : ['https://tvoflavours.com/images/brand/logo.png'],
+      ? [product.images[0].url.startsWith('http') ? product.images[0].url : `${SITE_URL}${product.images[0].url}`]
+      : [`${SITE_URL}/images/brand/logo.png`],
     url: canonicalUrl,
     ...(product.sku ? { sku: product.sku } : {}),
     offers: weightPrices.length > 1 ? {
