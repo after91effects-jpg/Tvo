@@ -6,7 +6,7 @@ import { Product, WeightOption } from '../../lib/types';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 import { StarRating } from '../common/StarRating';
-import { stripHtmlAndMetadata } from '../../lib/sanitizeDescription';
+import { stripHtmlAndMetadata, getProductShortDescription } from '../../lib/sanitizeDescription';
 import { handleImageFallback, resolveProductImage, DEFAULT_FALLBACK_IMAGE } from '../../lib/imageUrl';
 
 interface ProductCardProps {
@@ -175,9 +175,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onViewProduct
             {product.name}
           </h3>
 
-          {/* Short Description (Desktop only) */}
-          <p className="hidden sm:block text-xs text-[var(--text-muted)] mt-1 line-clamp-2 leading-relaxed">
-            {stripHtmlAndMetadata(product.shortDescription || '')}
+          {/* Short Description — Clean, scannable, purchase-oriented */}
+          <p className="text-[11px] sm:text-xs text-[var(--text-muted)] mt-1 line-clamp-2 leading-relaxed">
+            {getProductShortDescription(product)}
           </p>
 
           {/* Weight Option Selector Pills (Desktop only) */}
