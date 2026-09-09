@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { db } from '../../../lib/server/db';
 import { serializeProduct, PRODUCT_BASE_SELECT } from '../../../lib/server/product-serializer';
 import { getSiteUrl } from '../../../lib/siteUrl';
+import { stripHtmlAndMetadata } from '../../../lib/sanitizeDescription';
 
 interface ProductLayoutProps {
   children: React.ReactNode;
@@ -48,10 +49,11 @@ export async function generateMetadata({
   }
 
   const title = product.seoTitle || `${product.name} | TVO Flavours`;
-  const description =
+  const rawDescription =
     product.seoDescription ||
     product.shortDescription ||
     `Shop ${product.name} from TVO Flavours. View price, available options, product details and delivery information.`;
+  const description = stripHtmlAndMetadata(rawDescription).slice(0, 160).trim();
   const canonicalUrl = `${siteUrl}/product/${product.slug || slug}`;
 
   const rawImageUrl = product.images?.[0]?.url || '/images/brand/logo.png';
