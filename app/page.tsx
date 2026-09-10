@@ -25,6 +25,7 @@ import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
 import { useLocalStorageJSON } from '../lib/useLocalStorage';
 import { normalizeImageUrl } from '../lib/imageUrl';
+import { occasionAnalytics } from '../lib/analytics';
 
 // Layout & Storefront Components
 import { Header } from '../components/layout/Header';
@@ -167,6 +168,8 @@ export interface ActiveOccasionMeta {
   homepageSectionTitle: string | null;
   homepageSectionSubtitle: string | null;
   bannerImage: string | null;
+  ctaLabel: string | null;
+  ctaDestination: string | null;
   homepageVisibility: boolean;
 }
 
@@ -395,7 +398,6 @@ export default function Home() {
       setSearchQuery('');
       setStoreSubView('home');
       setActiveView('storefront');
-      // Smooth scroll to products section
       setTimeout(() => {
         document.getElementById('artisan-products-grid')?.scrollIntoView({ behavior: 'smooth' });
       }, 100);
@@ -407,10 +409,17 @@ export default function Home() {
       setSelectedCategorySlug('all');
       setStoreSubView('home');
       setActiveView('storefront');
-      // Smooth scroll to products section
       setTimeout(() => {
         document.getElementById('artisan-products-grid')?.scrollIntoView({ behavior: 'smooth' });
       }, 100);
+      return;
+    }
+
+    if (view === 'occasion' && param) {
+      if (activeOccasion) {
+        occasionAnalytics.trackOccasionCtaClick(activeOccasion.slug, activeOccasion.name, `/occasion/${param}`);
+      }
+      router.push(`/occasion/${param}`);
       return;
     }
 
@@ -486,7 +495,7 @@ export default function Home() {
   };
 
   // Filtered Products for Storefront
-  const filteredStoreProducts = products.filter((p) => {
+  const filteredStoreProductsBase = products.filter((p) => {
     if (!p.published) return false;
     const query = searchQuery.toLowerCase().trim();
     const matchesSearch =
@@ -598,6 +607,31 @@ export default function Home() {
     return true;
   });
 
+  // Festival: reorder filtered products to prioritize active occasion products
+  // Occasion products appear first (in occasion priority order), then the rest
+  const filteredStoreProducts = React.useMemo(() => {
+    const occasionProductSet = new Set(occasionProductIds.map((id) => String(id)));
+    if (!activeOccasion?.homepageVisibility || occasionError || occasionProductIds.length === 0) {
+      return filteredStoreProductsBase;
+    }
+    // When on "All" category with no search, prioritize occasion products
+    if (selectedCategorySlug === 'all' || !selectedCategorySlug) {
+      if (!searchQuery) {
+        const occasionSorted = [...filteredStoreProductsBase].sort((a, b) => {
+          const aIsIn = occasionProductSet.has(String(a.id)) ? 0 : 1;
+          const bIsIn = occasionProductSet.has(String(b.id)) ? 0 : 1;
+          if (aIsIn !== bIsIn) return aIsIn - bIsIn;
+          const aIdx = occasionProductIds.indexOf(Number(a.id));
+          const bIdx = occasionProductIds.indexOf(Number(b.id));
+          if (aIdx >= 0 && bIdx >= 0) return aIdx - bIdx;
+          return 0;
+        });
+        return occasionSorted;
+      }
+    }
+    return filteredStoreProductsBase;
+  }, [filteredStoreProductsBase, activeOccasion, occasionProductIds, occasionError, selectedCategorySlug, searchQuery]);
+
   // Festival occasion products — filtered from already-loaded products by occasion product IDs
   // (ordered by occasion-specific priority from the API, avoiding duplicate product fetches)
   const occasionProducts = React.useMemo(() => {
@@ -612,14 +646,30 @@ export default function Home() {
   // Festival: construct a HeroCarousel slide from the active occasion's configured data
   const occasionSlide = React.useMemo(() => {
     if (!activeOccasion || !activeOccasion.homepageVisibility || !activeOccasion.bannerImage || occasionError) return undefined;
+    const ctaText = activeOccasion.ctaLabel || 'View Celebration Cakes';
+    let ctaAction = 'category';
+    let ctaParam = activeOccasion.slug || 'all';
+    if (activeOccasion.ctaDestination) {
+      const dest = activeOccasion.ctaDestination;
+      if (dest.startsWith('http') || dest.startsWith('/occasion/')) {
+        ctaAction = 'occasion';
+        ctaParam = dest.replace(/^\//, '').replace('occasion/', '');
+      } else if (dest.startsWith('/')) {
+        ctaAction = 'category';
+        ctaParam = dest.replace(/^\//, '');
+      } else {
+        ctaAction = 'category';
+        ctaParam = dest;
+      }
+    }
     return {
       id: `occasion-hero-${activeOccasion.id}`,
       title: activeOccasion.homepageSectionTitle || activeOccasion.name,
       subtitle: activeOccasion.homepageSectionSubtitle || activeOccasion.description || '',
       tag: activeOccasion.name,
-      ctaText: 'View Celebration Cakes',
-      ctaAction: 'category',
-      param: 'all',
+      ctaText,
+      ctaAction,
+      param: ctaParam,
       bgGradient: 'from-[#2D1625]/95 via-[#23121D]/90 to-[#1A0C16]/95',
       imageUrl: normalizeImageUrl(activeOccasion.bannerImage),
       badgeEmoji: '🎉',
@@ -627,6 +677,12 @@ export default function Home() {
       badgeSubtitle: '',
     };
   }, [activeOccasion, occasionError]);
+
+  React.useEffect(() => {
+    if (occasionSlide && activeOccasion) {
+      occasionAnalytics.trackOccasionHeroImpression(activeOccasion.slug, activeOccasion.name);
+    }
+  }, [occasionSlide, activeOccasion]);
 
   const pendingOrdersCount = orders.filter(
     (o) => o.status !== 'Delivered' && o.status !== 'Cancelled'
@@ -812,6 +868,7 @@ export default function Home() {
                       occasion={activeOccasion}
                       products={occasionProducts}
                       onViewProduct={handleOpenProduct}
+                      onViewAll={() => router.push(`/occasion/${activeOccasion.slug}`)}
                     />
                   )}
 

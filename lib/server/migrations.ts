@@ -199,6 +199,8 @@ export function runMigrations() {
       homepage_section_title TEXT,
       homepage_section_subtitle TEXT,
       banner_image TEXT,
+      cta_label TEXT,
+      cta_destination TEXT,
       seo_title TEXT,
       seo_description TEXT,
       canonical_url TEXT,

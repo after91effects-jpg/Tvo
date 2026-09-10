@@ -1,9 +1,10 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Product } from '../../lib/types';
 import { ProductCard } from './ProductCard';
 import { normalizeImageUrl, DEFAULT_BANNER_FALLBACK } from '../../lib/imageUrl';
+import { occasionAnalytics } from '../../lib/analytics';
 
 interface OccasionSectionProps {
   occasion: {
@@ -18,16 +19,26 @@ interface OccasionSectionProps {
     homepageSectionTitle: string | null;
     homepageSectionSubtitle: string | null;
     bannerImage: string | null;
+    ctaLabel: string | null;
+    ctaDestination: string | null;
   };
   products: Product[];
   onViewProduct: (productId: string) => void;
+  onViewAll?: () => void;
 }
 
 export const OccasionSection: React.FC<OccasionSectionProps> = ({
   occasion,
   products,
   onViewProduct,
+  onViewAll,
 }) => {
+  useEffect(() => {
+    products.forEach((product, index) => {
+      occasionAnalytics.trackOccasionProductImpression(occasion.slug, product.id, index);
+    });
+  }, [products, occasion.slug]);
+
   const title = occasion.homepageSectionTitle || `Celebrate ${occasion.name}`;
   const subtitle = occasion.homepageSectionSubtitle || occasion.description || '';
 
@@ -76,6 +87,17 @@ export const OccasionSection: React.FC<OccasionSectionProps> = ({
                 onViewProduct={onViewProduct}
               />
             ))}
+          </div>
+        )}
+
+        {products.length >= 8 && onViewAll && (
+          <div className="mt-8 text-center">
+            <button
+              onClick={onViewAll}
+              className="px-6 py-3 rounded-full bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white text-sm font-bold shadow-xs hover:shadow-lg transition-all cursor-pointer"
+            >
+              {occasion.ctaLabel || 'View All Celebration Products'}
+            </button>
           </div>
         )}
       </div>

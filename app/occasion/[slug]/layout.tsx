@@ -3,7 +3,6 @@ import { db } from '../../../lib/server/db';
 import { getSiteUrl } from '../../../lib/siteUrl';
 import { stripHtmlAndMetadata } from '../../../lib/sanitizeDescription';
 import { normalizeImageUrl } from '../../../lib/imageUrl';
-import { getOccasionBySlug } from '../../../lib/server/occasions';
 
 export async function generateMetadata({
   params,
@@ -28,6 +27,8 @@ export async function generateMetadata({
           seoTitle: row.seo_title ?? null,
           seoDescription: row.seo_description ?? null,
           bannerImage: row.banner_image ?? null,
+          startDate: row.start_date ?? null,
+          endDate: row.end_date ?? null,
         };
       }
     } catch {
@@ -39,9 +40,7 @@ export async function generateMetadata({
     return {
       title: 'Occasion | TVO Flavours',
       description: 'The all-in-one bakery shop in Gurugram, Haryana.',
-      alternates: {
-        canonical: `${siteUrl}/occasion/${slug}`,
-      },
+      alternates: { canonical: `${siteUrl}/occasion/${slug}` },
       openGraph: {
         title: 'Occasion | TVO Flavours',
         description: 'The all-in-one bakery shop in Gurugram, Haryana.',
@@ -77,13 +76,9 @@ export async function generateMetadata({
   }
 
   return {
-    title: {
-      absolute: title,
-    },
+    title: { absolute: title },
     description,
-    alternates: {
-      canonical: canonicalUrl,
-    },
+    alternates: { canonical: canonicalUrl },
     openGraph: {
       title,
       description,
@@ -91,12 +86,7 @@ export async function generateMetadata({
       type: 'website',
       siteName: 'TVO Flavours',
       locale: 'en_IN',
-      images: [
-        {
-          url: ogImageUrl,
-          alt: occasion.name,
-        },
-      ],
+      images: [{ url: ogImageUrl, alt: occasion.name }],
     },
     twitter: {
       card: 'summary_large_image',

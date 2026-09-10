@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
+import Head from 'next/head';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Package } from 'lucide-react';
 import { Product } from '../../../lib/types';
@@ -11,6 +12,9 @@ import { MobileBottomNav } from '../../../components/layout/MobileBottomNav';
 import { CheckoutModal } from '../../../components/storefront/CheckoutModal';
 import { ProductCard } from '../../../components/storefront/ProductCard';
 import { normalizeImageUrl, DEFAULT_BANNER_FALLBACK } from '../../../lib/imageUrl';
+import { getSiteUrl } from '../../../lib/siteUrl';
+import { stripHtmlAndMetadata } from '../../../lib/sanitizeDescription';
+import { occasionAnalytics } from '../../../lib/analytics';
 
 interface OccasionData {
   id: number;
@@ -64,6 +68,7 @@ export default function OccasionPage() {
         if (data.occasion) {
           setOccasion(data.occasion);
           setProducts(normalizeOccasionProducts(data.products || []));
+          occasionAnalytics.trackOccasionPageView(data.occasion.slug, data.occasion.name);
         } else {
           setNotFound(true);
           setOccasion(null);
@@ -156,8 +161,35 @@ export default function OccasionPage() {
   const subtitle = occasion.homepageSectionSubtitle || occasion.description || '';
   const bannerUrl = occasion.bannerImage ? normalizeImageUrl(occasion.bannerImage) : null;
 
+  // Build CTA: link to related category or all products
+  const occasionCtaLabel = 'Shop Celebration Cakes';
+  const occasionCtaHref = `/`;
   return (
     <div className="min-h-dvh bg-[var(--bg-app)]">
+      <Head>
+        {occasion && typeof document !== 'undefined' && (
+          <script
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{
+              __html: JSON.stringify({
+                '@context': 'https://schema.org',
+                '@type': 'Event',
+                name: occasion.name,
+                description: stripHtmlAndMetadata(occasion.description || '').slice(0, 200).trim(),
+                startDate: occasion.startDate,
+                endDate: occasion.endDate,
+                url: `${getSiteUrl()}/occasion/${occasion.slug}`,
+                image: bannerUrl || `${getSiteUrl()}/images/brand/logo.png`,
+                organizer: {
+                  '@type': 'Bakery',
+                  name: 'TVO Flavours',
+                  url: getSiteUrl(),
+                },
+              }),
+            }}
+          />
+        )}
+      </Head>
       <Header products={allProducts} onNavigate={handleNavigate} />
 
       <main className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6">
@@ -208,13 +240,16 @@ export default function OccasionPage() {
 
         {products.length > 0 ? (
           <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-2.5 sm:gap-4 md:gap-6">
-            {products.map((product) => (
-              <ProductCard
-                key={product.id}
-                product={product}
-                onViewProduct={handleOpenProduct}
-              />
-            ))}
+          {products.map((product, index) => (
+            <ProductCard
+              key={product.id}
+              product={product}
+              onViewProduct={(id: string) => {
+                occasionAnalytics.trackOccasionProductClick(occasion.slug, id, index);
+                handleOpenProduct(id);
+              }}
+            />
+          ))}
           </div>
         ) : (
           <div className="text-center py-16">

@@ -99,6 +99,8 @@ export interface Occasion {
   homepageSectionTitle: string | null;
   homepageSectionSubtitle: string | null;
   bannerImage: string | null;
+  ctaLabel: string | null;
+  ctaDestination: string | null;
   seoTitle: string | null;
   seoDescription: string | null;
   canonicalUrl: string | null;
@@ -225,6 +227,8 @@ function rowToOccasion(row: any): Occasion {
     homepageSectionTitle: row.homepage_section_title ?? null,
     homepageSectionSubtitle: row.homepage_section_subtitle ?? null,
     bannerImage: row.banner_image ?? null,
+    ctaLabel: row.cta_label ?? null,
+    ctaDestination: row.cta_destination ?? null,
     seoTitle: row.seo_title ?? null,
     seoDescription: row.seo_description ?? null,
     canonicalUrl: row.canonical_url ?? null,
@@ -404,6 +408,8 @@ export interface ActiveOccasionForHomepage {
   homepageSectionTitle: string | null;
   homepageSectionSubtitle: string | null;
   bannerImage: string | null;
+  ctaLabel: string | null;
+  ctaDestination: string | null;
   homepageVisibility: boolean;
 }
 
@@ -434,6 +440,8 @@ export function getActiveOccasionForHomepage(limit = 8): { occasion: ActiveOccas
     homepageSectionTitle: resolved.homepageSectionTitle,
     homepageSectionSubtitle: resolved.homepageSectionSubtitle,
     bannerImage: resolved.bannerImage,
+    ctaLabel: resolved.ctaLabel,
+    ctaDestination: resolved.ctaDestination,
     homepageVisibility: resolved.homepageVisibility,
   };
   return { occasion, productIds: ids };

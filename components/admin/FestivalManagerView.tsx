@@ -112,6 +112,8 @@ export const FestivalManagerView: React.FC = () => {
   const [formSeoTitle, setFormSeoTitle] = useState('');
   const [formSeoDescription, setFormSeoDescription] = useState('');
   const [formCanonicalUrl, setFormCanonicalUrl] = useState('');
+  const [formCtaLabel, setFormCtaLabel] = useState('');
+  const [formCtaDestination, setFormCtaDestination] = useState('');
 
   // Year management state (for variable-date occasions)
   const [isYearModalOpen, setIsYearModalOpen] = useState(false);
@@ -265,6 +267,8 @@ export const FestivalManagerView: React.FC = () => {
     setFormSeoTitle('');
     setFormSeoDescription('');
     setFormCanonicalUrl('');
+    setFormCtaLabel('');
+    setFormCtaDestination('');
     setFormError(null);
     setFormSuccess(null);
   };
@@ -307,6 +311,8 @@ export const FestivalManagerView: React.FC = () => {
     setFormSeoTitle(occasion.seo_title || '');
     setFormSeoDescription(occasion.seo_description || '');
     setFormCanonicalUrl(occasion.canonical_url || '');
+    setFormCtaLabel(occasion.cta_label || '');
+    setFormCtaDestination(occasion.cta_destination || '');
     setIsFormOpen(true);
   };
 
@@ -415,6 +421,8 @@ export const FestivalManagerView: React.FC = () => {
       seo_title: formSeoTitle || null,
       seo_description: formSeoDescription || null,
       canonical_url: formCanonicalUrl || null,
+      cta_label: formCtaLabel || null,
+      cta_destination: formCtaDestination || null,
     };
     if (editingOccasion) payload.id = editingOccasion.id;
 
@@ -1477,6 +1485,32 @@ export const FestivalManagerView: React.FC = () => {
                   disabled={isSaving}
                   placeholder="Leave blank to auto-generate"
                   className="w-full px-3 py-2 text-sm bg-[var(--bg-subtle)] border border-[var(--border)] rounded-xl text-[var(--text-main)] focus:outline-none focus:border-[#FF2B6D] disabled:opacity-50 font-mono"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-[var(--text-subtle)] mb-1.5">
+                  CTA Label
+                </label>
+                <input
+                  type="text"
+                  value={formCtaLabel}
+                  onChange={(e) => setFormCtaLabel(e.target.value)}
+                  disabled={isSaving}
+                  placeholder="e.g. Shop Valentine Cakes"
+                  className="w-full px-3 py-2 text-sm bg-[var(--bg-subtle)] border border-[var(--border)] rounded-xl text-[var(--text-main)] focus:outline-none focus:border-[#FF2B6D] disabled:opacity-50"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-[var(--text-subtle)] mb-1.5">
+                  CTA Destination
+                </label>
+                <input
+                  type="text"
+                  value={formCtaDestination}
+                  onChange={(e) => setFormCtaDestination(e.target.value)}
+                  disabled={isSaving}
+                  placeholder="/occasion/valentines-day or /category/birthday"
+                  className="w-full px-3 py-2 text-sm bg-[var(--bg-subtle)] border border-[var(--border)] rounded-xl text-[var(--text-main)] focus:outline-none focus:border-[#FF2B6D] disabled:opacity-50"
                 />
               </div>
               <div className="md:col-span-2">
