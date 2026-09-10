@@ -95,6 +95,18 @@ export async function GET(req: Request) {
     if (type === 'notifications') return ok({ notifications: ops.getNotifications(user) });
     if (type === 'customers_simple') return ok({ customers: db.prepare('SELECT id, name, email, phone FROM customers ORDER BY name LIMIT 500').all() });
     if (type === 'products_simple') return ok({ products: db.prepare('SELECT id, name, sku, sale_price, regular_price FROM products WHERE deleted_at IS NULL AND published=1 ORDER BY name LIMIT 1500').all() });
+
+    // ---- Festival & Special Days Automation ----
+    if (type === 'occasions') return ok({ occasions: ops.listOccasions(user) });
+    if (type === 'occasions_all') return ok({ occasions: ops.listOccasions(user, { includeDeleted: true }) });
+    if (type === 'occasion_detail') {
+      const id = Number(url.searchParams.get('id'));
+      const d = ops.getOccasionDetail(user, id);
+      if (!d) return err('Occasion not found', 404);
+      return ok({ occasion: d });
+    }
+    if (type === 'occasion_preview') return ok({ ...ops.getOccasionResolutionPreview(user) });
+    if (type === 'occasions_default') { ops.seedDefaultOccasions(user); return ok({ ok: true }); }
     return ok({});
   } catch (e: any) { return err(e.message, 500); }
 }
@@ -346,9 +358,23 @@ export async function POST(req: Request) {
     if (type === 'roles' && action === 'save') { if (!isSuper(user)) return err('Super admin access required', 403); return ok(ops.saveRole(user, body)); }
     if (type === 'roles' && action === 'delete') { if (!isSuper(user)) return err('Super admin access required', 403); return ok(ops.deleteRole(user, body.id)); }
 
-    // ---- Support / notifications ----
-    if (type === 'tickets' && action === 'update_status') return ok(ops.updateTicketStatus(user, body.id, body.status));
+     // ---- Support / notifications ----
+     if (type === 'tickets' && action === 'update_status') return ok(ops.updateTicketStatus(user, body.id, body.status));
 
-    return err('Unknown admin action');
+     // ---- Festival & Special Days Automation ----
+     if (type === 'occasions' && (action === 'save' || action === 'create' || action === 'update')) return ok(ops.saveOccasion(user, body));
+     if (type === 'occasions' && action === 'archive') return ok(ops.archiveOccasion(user, Number(body.id), true));
+     if (type === 'occasions' && action === 'restore') return ok(ops.archiveOccasion(user, Number(body.id), false));
+     if (type === 'occasions' && action === 'set_active') return ok(ops.setOccasionActive(user, Number(body.id), body.active !== false));
+     if (type === 'occasions' && action === 'delete') return ok(ops.archiveOccasion(user, Number(body.id), true));
+
+     if (type === 'occasion_years' && action === 'save') return ok(ops.saveOccasionYear(user, body));
+     if (type === 'occasion_years' && action === 'delete') return ok(ops.deleteOccasionYear(user, Number(body.id)));
+
+     if (type === 'product_occasions' && action === 'map') return ok(ops.mapProductToOccasion(user, Number(body.product_id), Number(body.occasion_id), Number(body.priority) || 0));
+     if (type === 'product_occasions' && action === 'unmap') return ok(ops.removeProductMapping(user, Number(body.product_id), Number(body.occasion_id)));
+     if (type === 'product_occasions' && action === 'priority') return ok(ops.updateProductMappingPriority(user, Number(body.product_id), Number(body.occasion_id), Number(body.priority) || 0));
+
+     return err('Unknown admin action');
   } catch (e: any) { return err(e.message, 500); }
 }

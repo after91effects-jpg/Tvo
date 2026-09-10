@@ -175,6 +175,68 @@ export function runMigrations() {
   try {
     db.exec("DELETE FROM order_status_history WHERE order_id NOT IN (SELECT id FROM orders)");
   } catch {}
+
+  // ---- Festival & Special Days Automation Engine ----
+  // occasions: master definition of a festival/special day.
+  // occasion_years: per-year date overrides for variable-date occasions (lunar calendars).
+  // product_occasions: many-to-many product → occasion mapping with occasion-specific priority.
+  addTable(`CREATE TABLE IF NOT EXISTS occasions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      slug TEXT UNIQUE NOT NULL,
+      description TEXT,
+      status TEXT NOT NULL DEFAULT 'draft',
+      occasion_type TEXT NOT NULL DEFAULT 'general',
+      recurrence_type TEXT NOT NULL DEFAULT 'fixed',
+      start_date TEXT,
+      end_date TEXT,
+      year INTEGER,
+      priority INTEGER DEFAULT 0,
+      display_order INTEGER DEFAULT 0,
+      active INTEGER DEFAULT 1,
+      campaign_start_date TEXT,
+      homepage_visibility INTEGER DEFAULT 1,
+      homepage_section_title TEXT,
+      homepage_section_subtitle TEXT,
+      banner_image TEXT,
+      seo_title TEXT,
+      seo_description TEXT,
+      canonical_url TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT,
+      deleted_at TEXT
+  )`);
+  addTable(`CREATE TABLE IF NOT EXISTS occasion_years (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      occasion_id INTEGER NOT NULL,
+      year INTEGER NOT NULL,
+      start_date TEXT,
+      end_date TEXT,
+      campaign_start_date TEXT,
+      notes TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT,
+      UNIQUE(occasion_id, year),
+      FOREIGN KEY (occasion_id) REFERENCES occasions(id) ON DELETE CASCADE
+  )`);
+  addTable(`CREATE TABLE IF NOT EXISTS product_occasions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      product_id INTEGER NOT NULL,
+      occasion_id INTEGER NOT NULL,
+      priority INTEGER DEFAULT 0,
+      active INTEGER DEFAULT 1,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT,
+      UNIQUE(product_id, occasion_id),
+      FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+      FOREIGN KEY (occasion_id) REFERENCES occasions(id) ON DELETE CASCADE
+  )`);
+  addTable(`CREATE INDEX IF NOT EXISTS idx_occasions_slug ON occasions(slug)`);
+  addTable(`CREATE INDEX IF NOT EXISTS idx_occasions_active ON occasions(active, priority DESC)`);
+  addTable(`CREATE INDEX IF NOT EXISTS idx_occasions_dates ON occasions(start_date, end_date)`);
+  addTable(`CREATE INDEX IF NOT EXISTS idx_occasion_years ON occasion_years(occasion_id, year)`);
+  addTable(`CREATE INDEX IF NOT EXISTS idx_product_occasions_occasion ON product_occasions(occasion_id, priority)`);
+  addTable(`CREATE INDEX IF NOT EXISTS idx_product_occasions_product ON product_occasions(product_id)`);
 }
 
 // allow-testing helper

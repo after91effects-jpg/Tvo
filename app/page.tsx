@@ -45,6 +45,7 @@ import { AboutView } from '../components/storefront/AboutView';
 import { ContactView } from '../components/storefront/ContactView';
 import { WishlistView } from '../components/storefront/WishlistView';
 import { RecentlyViewed } from '../components/storefront/RecentlyViewed';
+import { OccasionSection } from '../components/storefront/OccasionSection';
 import { AdminLoginModal } from '../components/storefront/AdminLoginModal';
 import { CustomerOrderHistoryView } from '../components/storefront/CustomerOrderHistoryView';
 import { OrderNotificationToasts } from '../components/common/OrderNotificationToasts';
@@ -61,6 +62,7 @@ import { CustomerOrdersView } from '../components/admin/CustomerOrdersView';
 import { WooCommerceHubView } from '../components/admin/WooCommerceHubView';
 import { SecurityAuditLogsView } from '../components/admin/SecurityAuditLogsView';
 import { HamperSettingsView } from '../components/admin/HamperSettingsView';
+import { FestivalManagerView } from '../components/admin/FestivalManagerView';
 
 function normalizeProductRecord(p: any): Product {
   const categorySlug = p.category || p.category_slug || '';
@@ -153,6 +155,21 @@ function normalizeProductRecord(p: any): Product {
   } as Product;
 }
 
+export interface ActiveOccasionMeta {
+  id: number;
+  name: string;
+  slug: string;
+  description: string | null;
+  recurrenceType: string;
+  resolvedStartDate: string | null;
+  resolvedEndDate: string | null;
+  priority: number;
+  homepageSectionTitle: string | null;
+  homepageSectionSubtitle: string | null;
+  bannerImage: string | null;
+  homepageVisibility: boolean;
+}
+
 export default function Home() {
   const router = useRouter();
   const { user, isAuthenticated, isAdmin } = useAuth();
@@ -193,6 +210,11 @@ export default function Home() {
     'confetto_recently_viewed_ids',
     []
   );
+
+  // Festival & Special Days — Active Occasion State
+  const [activeOccasion, setActiveOccasion] = useState<ActiveOccasionMeta | null>(null);
+  const [occasionProductIds, setOccasionProductIds] = useState<number[]>([]);
+  const [occasionError, setOccasionError] = useState<string | null>(null);
 
   // Track product view in state and LocalStorage (max 5 items, latest first)
   const addToRecentlyViewed = React.useCallback(
@@ -263,6 +285,25 @@ export default function Home() {
         }
       } catch {
         setOrders([]);
+      }
+
+      // Fetch Active Occasion (Festival & Special Days Automation)
+      try {
+        const occRes = await fetch('/api/occasions?mode=homepage&limit=8');
+        if (occRes.ok) {
+          const occData = await occRes.json();
+          setActiveOccasion(occData.activeOccasion || null);
+          setOccasionProductIds(occData.productIds || []);
+          setOccasionError(null);
+        } else {
+          setOccasionError('Failed to load occasion data');
+          setActiveOccasion(null);
+          setOccasionProductIds([]);
+        }
+      } catch {
+        setOccasionError('Failed to load occasion data');
+        setActiveOccasion(null);
+        setOccasionProductIds([]);
       }
     } catch (err) {
       console.warn('Fetch fallback:', err);
@@ -557,6 +598,36 @@ export default function Home() {
     return true;
   });
 
+  // Festival occasion products — filtered from already-loaded products by occasion product IDs
+  // (ordered by occasion-specific priority from the API, avoiding duplicate product fetches)
+  const occasionProducts = React.useMemo(() => {
+    if (!activeOccasion || !activeOccasion.homepageVisibility || occasionError) return [];
+    if (occasionProductIds.length === 0) return [];
+    const idToProduct = new Map(products.map((p) => [String(p.id), p]));
+    return occasionProductIds
+      .map((id) => idToProduct.get(String(id)))
+      .filter(Boolean) as Product[];
+  }, [products, activeOccasion, occasionProductIds, occasionError]);
+
+  // Festival: construct a HeroCarousel slide from the active occasion's configured data
+  const occasionSlide = React.useMemo(() => {
+    if (!activeOccasion || !activeOccasion.homepageVisibility || !activeOccasion.bannerImage || occasionError) return undefined;
+    return {
+      id: `occasion-hero-${activeOccasion.id}`,
+      title: activeOccasion.homepageSectionTitle || activeOccasion.name,
+      subtitle: activeOccasion.homepageSectionSubtitle || activeOccasion.description || '',
+      tag: activeOccasion.name,
+      ctaText: 'View Celebration Cakes',
+      ctaAction: 'category',
+      param: 'all',
+      bgGradient: 'from-[#2D1625]/95 via-[#23121D]/90 to-[#1A0C16]/95',
+      imageUrl: normalizeImageUrl(activeOccasion.bannerImage),
+      badgeEmoji: '🎉',
+      badgeTitle: activeOccasion.name,
+      badgeSubtitle: '',
+    };
+  }, [activeOccasion, occasionError]);
+
   const pendingOrdersCount = orders.filter(
     (o) => o.status !== 'Delivered' && o.status !== 'Cancelled'
   ).length;
@@ -620,6 +691,8 @@ export default function Home() {
                   onSave={(s) => setHamperSettings(s)}
                 />
               )}
+
+              {adminTab === 'festival' && <FestivalManagerView />}
             </main>
           </div>
         </div>
@@ -668,7 +741,7 @@ export default function Home() {
               <div className="space-y-10 pb-16">
                 {/* Hero Carousel Section */}
                 <section className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 pt-4 sm:pt-6">
-                  <HeroCarousel onNavigate={handleNavigate} />
+                  <HeroCarousel onNavigate={handleNavigate} occasionSlide={occasionSlide} />
                 </section>
 
                 {/* Build Your Own Hamper CTA */}
@@ -729,6 +802,18 @@ export default function Home() {
 
                 {/* Trust & Hygiene Strip */}
                 <TrustStrip />
+
+                {/* Festival & Special Days — Active Occasion Section */}
+                {!occasionError &&
+                  activeOccasion &&
+                  activeOccasion.homepageVisibility &&
+                  occasionProducts.length > 0 && (
+                    <OccasionSection
+                      occasion={activeOccasion}
+                      products={occasionProducts}
+                      onViewProduct={handleOpenProduct}
+                    />
+                  )}
 
                 {/* Products Catalog Section */}
                 <section

@@ -1,5 +1,6 @@
-import { ok, err, slugify } from '../../../lib/server/api';
+import { ok, err } from '../../../lib/server/api';
 import { serializeProduct, PRODUCT_BASE_SELECT } from '../../../lib/server/product-serializer';
+import { resolveActiveOccasion, getOccasionBySlug } from '../../../lib/server/occasions';
 
 export const runtime = 'nodejs';
 
@@ -22,6 +23,7 @@ export async function GET(req: Request) {
   const limit = Math.min(parseInt(url.searchParams.get('limit') || '100'), 200);
   const offset = parseInt(url.searchParams.get('offset') || '0');
   const order = url.searchParams.get('order') || '';
+  const occasionParam = url.searchParams.get('occasion') || '';
 
   try {
     if (slug) {
@@ -43,8 +45,39 @@ export async function GET(req: Request) {
       }
     }
 
-    let where = 'p.deleted_at IS NULL AND p.published = 1';
+    // --- Festival & Special Days: Occasion-aware filtering ---
+    // When `occasion` param is provided, resolve the active or specific occasion
+    // server-side using the existing occasion engine and filter products to only
+    // those mapped to that occasion, ordered by occasion-specific priority.
+    // Fully backward-compatible: absent the param, the query is unchanged.
+    let joinClause = '';
     const params: any[] = [];
+
+    if (occasionParam === 'true' || occasionParam === 'active') {
+      const active = resolveActiveOccasion();
+      if (active && active.homepageVisibility) {
+        joinClause = ` INNER JOIN product_occasions po ON po.product_id = p.id AND po.occasion_id = ? AND po.active = 1`;
+        params.push(active.id);
+      } else {
+        return ok({ products: [], total: 0 });
+      }
+    } else if (occasionParam) {
+      const occasion = getOccasionBySlug(occasionParam);
+      if (occasion && occasion.active && !occasion.deletedAt && occasion.homepageVisibility) {
+        joinClause = ` INNER JOIN product_occasions po ON po.product_id = p.id AND po.occasion_id = ? AND po.active = 1`;
+        params.push(occasion.id);
+      } else {
+        return ok({ products: [], total: 0 });
+      }
+    }
+
+    let where = 'p.deleted_at IS NULL AND p.published = 1';
+
+    // Stock/availability filter for occasion-aware requests (respects existing rules)
+    if (joinClause) {
+      where += ` AND p.stock_status != 'out_of_stock' AND (p.stock > 0 OR p.enable_stock = 0)`;
+    }
+
     if (search) {
       where += ` AND (p.name LIKE ? OR p.sku LIKE ? OR p.short_description LIKE ? OR p.tags LIKE ?)`;
       const like = `%${search}%`;
@@ -56,15 +89,19 @@ export async function GET(req: Request) {
     }
 
     let orderBy = 'p.name ASC';
-    if (order === 'price-asc') orderBy = 'COALESCE(p.sale_price,p.regular_price) ASC';
-    if (order === 'price-desc') orderBy = 'COALESCE(p.sale_price,p.regular_price) DESC';
-    if (order === 'bestseller') orderBy = 'p.bestseller DESC, p.name ASC';
-    if (order === 'newest') orderBy = 'p.created_at DESC';
+    if (order === 'price-asc') orderBy = `COALESCE(p.sale_price,p.regular_price) ASC`;
+    if (order === 'price-desc') orderBy = `COALESCE(p.sale_price,p.regular_price) DESC`;
+    if (order === 'bestseller') orderBy = `p.bestseller DESC, p.name ASC`;
+    if (order === 'newest') orderBy = `p.created_at DESC`;
+    // Occasion-aware ordering uses occasion-specific product priority
+    if (joinClause) {
+      orderBy = `po.priority DESC, p.name ASC`;
+    }
 
     const rows = data
-      .prepare(`${BASE_SELECT} WHERE ${where} ORDER BY ${orderBy} LIMIT ? OFFSET ?`)
+      .prepare(`${BASE_SELECT}${joinClause} WHERE ${where} ORDER BY ${orderBy} LIMIT ? OFFSET ?`)
       .all(...params, limit, offset);
-    const count = data.prepare(`SELECT COUNT(*) AS c FROM products p LEFT JOIN categories c ON p.category_id=c.id WHERE ${where}`).get(...params).c;
+    const count = data.prepare(`SELECT COUNT(*) AS c FROM products p LEFT JOIN categories c ON p.category_id=c.id${joinClause} WHERE ${where}`).get(...params).c;
     return ok({ products: rows.map(serializeProduct), total: count });
   } catch (e: any) {
     return err(e.message || 'Error fetching products', 500);

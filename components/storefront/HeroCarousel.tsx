@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Sparkles, ArrowRight } from 'lucide-react';
 
-interface HeroSlide {
+export interface HeroSlide {
   id: string;
   title: React.ReactNode;
   subtitle: string;
@@ -119,9 +119,11 @@ const HERO_SLIDES: HeroSlide[] = [
   },
 ];
 
-export const HeroCarousel: React.FC<{ onNavigate: (view: string, param?: string) => void }> = ({
+export const HeroCarousel: React.FC<{ onNavigate: (view: string, param?: string) => void; occasionSlide?: HeroSlide }> = ({
   onNavigate,
+  occasionSlide,
 }) => {
+  const allSlides = useMemo(() => (occasionSlide ? [occasionSlide, ...HERO_SLIDES] : HERO_SLIDES), [occasionSlide]);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
   const [isVisible, setIsVisible] = useState(true);
@@ -143,9 +145,9 @@ export const HeroCarousel: React.FC<{ onNavigate: (view: string, param?: string)
     clearTimer();
     if (isHoveredRef.current || !isVisibleRef.current) return;
     timerRef.current = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % HERO_SLIDES.length);
+      setCurrentSlide((prev) => (prev + 1) % allSlides.length);
     }, 5500);
-  }, [clearTimer]);
+  }, [clearTimer, allSlides.length]);
 
   // Clean interval lifecycle
   useEffect(() => {
@@ -172,14 +174,14 @@ export const HeroCarousel: React.FC<{ onNavigate: (view: string, param?: string)
   }, [startTimer, clearTimer]);
 
   const nextSlide = useCallback(() => {
-    setCurrentSlide((prev) => (prev + 1) % HERO_SLIDES.length);
+    setCurrentSlide((prev) => (prev + 1) % allSlides.length);
     startTimer();
-  }, [startTimer]);
+  }, [startTimer, allSlides.length]);
 
   const prevSlide = useCallback(() => {
-    setCurrentSlide((prev) => (prev - 1 + HERO_SLIDES.length) % HERO_SLIDES.length);
+    setCurrentSlide((prev) => (prev - 1 + allSlides.length) % allSlides.length);
     startTimer();
-  }, [startTimer]);
+  }, [startTimer, allSlides.length]);
 
   const goToSlide = useCallback(
     (index: number) => {
@@ -273,19 +275,19 @@ export const HeroCarousel: React.FC<{ onNavigate: (view: string, param?: string)
         id="hero-carousel-track"
         className="flex h-full min-h-[440px] sm:min-h-[500px] lg:h-[520px] transition-transform duration-700 ease-out will-change-transform motion-reduce:transition-none"
         style={{
-          width: `${HERO_SLIDES.length * 100}%`,
-          transform: `translateX(-${(currentSlide * 100) / HERO_SLIDES.length}%)`,
+          width: `${allSlides.length * 100}%`,
+          transform: `translateX(-${(currentSlide * 100) / allSlides.length}%)`,
         }}
         aria-live="polite"
       >
-        {HERO_SLIDES.map((slide, idx) => (
+        {allSlides.map((slide, idx) => (
           <div
             key={slide.id}
             role="group"
             aria-roledescription="slide"
-            aria-label={`Slide ${idx + 1} of ${HERO_SLIDES.length}`}
+            aria-label={`Slide ${idx + 1} of ${allSlides.length}`}
             aria-hidden={currentSlide !== idx}
-            style={{ width: `${100 / HERO_SLIDES.length}%` }}
+            style={{ width: `${100 / allSlides.length}%` }}
             className="relative shrink-0 h-full min-h-[440px] sm:min-h-[500px] lg:h-[520px] flex flex-col justify-center overflow-hidden"
           >
             {/* Background Image & Gradient overlay */}
@@ -375,7 +377,7 @@ export const HeroCarousel: React.FC<{ onNavigate: (view: string, param?: string)
 
       {/* Slide Indicators */}
       <div className="absolute bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 z-20">
-        {HERO_SLIDES.map((_, i) => (
+        {allSlides.map((_, i) => (
           <button
             key={i}
             id={`hero-dot-${i}`}

@@ -939,3 +939,268 @@ export function updateTicketStatus(user: User, id: number, status: string) {
 export function getNotifications(user: User) {
   return all('SELECT * FROM notifications WHERE user_id IS NULL OR user_id=? ORDER BY id DESC LIMIT 50', user?.id ?? null);
 }
+
+// ============================================================================
+// FESTIVAL & SPECIAL DAYS AUTOMATION ENGINE — Admin Operations
+// ============================================================================
+
+function ensureOccasionTables() {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS occasions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      slug TEXT UNIQUE NOT NULL,
+      description TEXT,
+      status TEXT NOT NULL DEFAULT 'draft',
+      occasion_type TEXT NOT NULL DEFAULT 'general',
+      recurrence_type TEXT NOT NULL DEFAULT 'fixed',
+      start_date TEXT,
+      end_date TEXT,
+      year INTEGER,
+      priority INTEGER DEFAULT 0,
+      display_order INTEGER DEFAULT 0,
+      active INTEGER DEFAULT 1,
+      campaign_start_date TEXT,
+      homepage_visibility INTEGER DEFAULT 1,
+      homepage_section_title TEXT,
+      homepage_section_subtitle TEXT,
+      banner_image TEXT,
+      seo_title TEXT,
+      seo_description TEXT,
+      canonical_url TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT,
+      deleted_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS occasion_years (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      occasion_id INTEGER NOT NULL,
+      year INTEGER NOT NULL,
+      start_date TEXT,
+      end_date TEXT,
+      campaign_start_date TEXT,
+      notes TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT,
+      UNIQUE(occasion_id, year),
+      FOREIGN KEY (occasion_id) REFERENCES occasions(id) ON DELETE CASCADE
+    );
+    CREATE TABLE IF NOT EXISTS product_occasions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      product_id INTEGER NOT NULL,
+      occasion_id INTEGER NOT NULL,
+      priority INTEGER DEFAULT 0,
+      active INTEGER DEFAULT 1,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT,
+      UNIQUE(product_id, occasion_id),
+      FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+      FOREIGN KEY (occasion_id) REFERENCES occasions(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_occasions_slug ON occasions(slug);
+    CREATE INDEX IF NOT EXISTS idx_occasions_active ON occasions(active, priority DESC);
+    CREATE INDEX IF NOT EXISTS idx_occasions_dates ON occasions(start_date, end_date);
+    CREATE INDEX IF NOT EXISTS idx_occasion_years ON occasion_years(occasion_id, year);
+    CREATE INDEX IF NOT EXISTS idx_product_occasions_occasion ON product_occasions(occasion_id, priority);
+    CREATE INDEX IF NOT EXISTS idx_product_occasions_product ON product_occasions(product_id);
+  `);
+}
+ensureOccasionTables();
+
+export const OCCASION_STATUS_VALUES = ['draft', 'scheduled', 'active', 'ended', 'disabled', 'archived'] as const;
+export const RECURRENCE_TYPES = ['fixed', 'range', 'variable', 'one_time'] as const;
+export const OCCASION_TYPES = ['festival', 'special_day', 'general'] as const;
+
+export function listOccasions(user: User, opts?: { includeDeleted?: boolean }) {
+  const where = opts?.includeDeleted ? '' : 'WHERE deleted_at IS NULL';
+  const rows = all<Row>(`SELECT * FROM occasions ${where} ORDER BY priority DESC, display_order ASC, name ASC`);
+  const result = rows.map((r) => {
+    const years = all<Row>('SELECT year, start_date, end_date, campaign_start_date, notes FROM occasion_years WHERE occasion_id=? ORDER BY year', r.id);
+    return {
+      ...r,
+      years,
+      productCount: count('SELECT COUNT(*) c FROM product_occasions WHERE occasion_id=? AND active=1', r.id),
+    };
+  });
+  audit(user, 'OCCASION_LIST', 'Occasion');
+  return result;
+}
+
+export function getOccasionDetail(user: User, id: number) {
+  const row = one<Row>('SELECT * FROM occasions WHERE id=? AND deleted_at IS NULL', id);
+  if (!row) return null;
+  const years = all<Row>('SELECT id, year, start_date, end_date, campaign_start_date, notes FROM occasion_years WHERE occasion_id=? ORDER BY year', id);
+  const mappings = all<Row>(`
+    SELECT po.product_id, po.priority, po.active, p.name AS product_name, p.stock, p.stock_status
+    FROM product_occasions po
+    LEFT JOIN products p ON po.product_id = p.id
+    WHERE po.occasion_id = ?
+    ORDER BY po.priority DESC, p.name ASC
+  `, id);
+  audit(user, 'OCCASION_VIEW', 'Occasion', String(id));
+  return { ...row, years, productMappings: mappings };
+}
+
+export function saveOccasion(user: User, data: any) {
+  if (!data.name || !data.name.trim()) return { ok: false, error: 'Occasion name is required' };
+  if (!data.slug || !data.slug.trim()) data.slug = slugify(data.name);
+  else data.slug = data.slug.trim();
+
+  if (!RECURRENCE_TYPES.includes(data.recurrence_type as any)) {
+    return { ok: false, error: 'Invalid recurrence type' };
+  }
+
+  // Validate fixed/variable date logic
+  const rt = data.recurrence_type;
+  if (rt === 'fixed' && !data.start_date) {
+    return { ok: false, error: 'Fixed-date occasions require a start date' };
+  }
+  if (rt === 'one_time') {
+    if (!data.start_date || !data.end_date) {
+      return { ok: false, error: 'One-time occasions require start and end dates' };
+    }
+  }
+  if (rt === 'range') {
+    if (!data.start_date || !data.end_date) {
+      return { ok: false, error: 'Date-range occasions require start and end dates' };
+    }
+  }
+
+  const existing = data.id ? one<Row>('SELECT id FROM occasions WHERE id=? AND deleted_at IS NULL', data.id) : null;
+  if (data.id && !existing) return { ok: false, error: 'Occasion not found' };
+
+  // Slug uniqueness
+  if (!existing) {
+    const dup = one('SELECT id FROM occasions WHERE slug=? AND deleted_at IS NULL', data.slug);
+    if (dup) return { ok: false, error: `An occasion with slug "${data.slug}" already exists` };
+  } else {
+    const dup = one('SELECT id FROM occasions WHERE slug=? AND id!=? AND deleted_at IS NULL', data.slug, data.id);
+    if (dup) return { ok: false, error: `An occasion with slug "${data.slug}" already exists` };
+  }
+
+  const now = new Date().toISOString();
+  const payload: any = {
+    name: data.name.trim(),
+    slug: data.slug,
+    description: data.description || null,
+    status: data.status || 'draft',
+    occasion_type: data.occasion_type || 'general',
+    recurrence_type: rt,
+    start_date: data.start_date || null,
+    end_date: data.end_date || null,
+    year: data.year || null,
+    priority: Number(data.priority) || 0,
+    display_order: Number(data.display_order) || 0,
+    active: data.active ? 1 : 0,
+    campaign_start_date: data.campaign_start_date || null,
+    homepage_visibility: data.homepage_visibility ? 1 : 0,
+    homepage_section_title: data.homepage_section_title || null,
+    homepage_section_subtitle: data.homepage_section_subtitle || null,
+    banner_image: data.banner_image || null,
+    seo_title: data.seo_title || null,
+    seo_description: data.seo_description || null,
+    canonical_url: data.canonical_url || null,
+  };
+
+  tx(() => {
+    if (existing) {
+      const sets = Object.keys(payload).map((k) => `${k}=?`).join(', ');
+      run(`UPDATE occasions SET ${sets}, updated_at=? WHERE id=?`, ...Object.values(payload), now, data.id);
+    } else {
+      const cols = Object.keys(payload).join(', ');
+      const placeholders = Object.keys(payload).map(() => '?').join(', ');
+      run(`INSERT INTO occasions (${cols}, created_at, updated_at) VALUES (${placeholders}, ?, ?)`, ...Object.values(payload), now, now);
+      const insertId = db.prepare('SELECT id FROM occasions WHERE slug=?').get(payload.slug) as any;
+      data.id = insertId?.id;
+    }
+  });
+
+  audit(user, existing ? 'OCCASION_UPDATE' : 'OCCASION_CREATE', 'Occasion', String(data.id), data.name);
+  return { ok: true, id: Number(data.id) };
+}
+
+export function archiveOccasion(user: User, id: number, archive = true) {
+  const existing = one<Row>('SELECT id, name FROM occasions WHERE id=? AND deleted_at IS NULL', id);
+  if (!existing) return { ok: false, error: 'Occasion not found' };
+  tx(() => {
+    if (archive) {
+      run("UPDATE occasions SET deleted_at=datetime('now'), active=0, updated_at=? WHERE id=?", new Date().toISOString(), id);
+    } else {
+      run("UPDATE occasions SET deleted_at=NULL, updated_at=? WHERE id=?", new Date().toISOString(), id);
+    }
+    run('DELETE FROM product_occasions WHERE occasion_id=?', id);
+  });
+  audit(user, archive ? 'OCCASION_ARCHIVE' : 'OCCASION_RESTORE', 'Occasion', String(id));
+  return { ok: true, id };
+}
+
+export function setOccasionActive(user: User, id: number, active: boolean) {
+  const existing = one<Row>('SELECT id FROM occasions WHERE id=? AND deleted_at IS NULL', id);
+  if (!existing) return { ok: false, error: 'Occasion not found' };
+  run('UPDATE occasions SET active=?, updated_at=? WHERE id=?', active ? 1 : 0, new Date().toISOString(), id);
+  audit(user, 'OCCASION_STATUS', 'Occasion', String(id), active ? 'active' : 'disabled');
+  return { ok: true };
+}
+
+export function saveOccasionYear(user: User, data: any) {
+  const occasionId = Number(data.occasion_id);
+  if (!occasionId) return { ok: false, error: 'occasion_id is required' };
+  const year = Number(data.year);
+  if (!year || year < 2000 || year > 2100) return { ok: false, error: 'Invalid year' };
+
+  const existing = one<Row>('SELECT id FROM occasion_years WHERE occasion_id=? AND year=?', occasionId, year);
+  if (existing) {
+    run('UPDATE occasion_years SET start_date=?, end_date=?, campaign_start_date=?, notes=?, updated_at=? WHERE id=?',
+      data.start_date || null, data.end_date || null, data.campaign_start_date || null, data.notes || null, new Date().toISOString(), existing.id);
+  } else {
+    run('INSERT INTO occasion_years (occasion_id, year, start_date, end_date, campaign_start_date, notes) VALUES (?,?,?,?,?,?)',
+      occasionId, year, data.start_date || null, data.end_date || null, data.campaign_start_date || null, data.notes || null);
+  }
+  audit(user, 'OCCASION_YEAR_SAVE', 'OccasionYear', `${occasionId}:${year}`);
+  return { ok: true, occasionId, year };
+}
+
+export function deleteOccasionYear(user: User, id: number) {
+  run('DELETE FROM occasion_years WHERE id=?', id);
+  audit(user, 'OCCASION_YEAR_DELETE', 'OccasionYear', String(id));
+  return { ok: true };
+}
+
+export function mapProductToOccasion(user: User, productId: number, occasionId: number, priority: number) {
+  const prod = one<Row>('SELECT id FROM products WHERE id=? AND deleted_at IS NULL AND published=1', productId);
+  if (!prod) return { ok: false, error: 'Product not found or not published' };
+  const occ = one<Row>('SELECT id FROM occasions WHERE id=? AND deleted_at IS NULL', occasionId);
+  if (!occ) return { ok: false, error: 'Occasion not found' };
+  run('INSERT OR REPLACE INTO product_occasions (product_id, occasion_id, priority, active) VALUES (?,?,?,1)',
+    productId, occasionId, priority || 0);
+  audit(user, 'PRODUCT_OCCASION_MAP', 'ProductOccasion', `${productId}:${occasionId}`, `priority ${priority || 0}`);
+  return { ok: true };
+}
+
+export function removeProductMapping(user: User, productId: number, occasionId: number) {
+  run('DELETE FROM product_occasions WHERE product_id=? AND occasion_id=?', productId, occasionId);
+  audit(user, 'PRODUCT_OCCASION_UNMAP', 'ProductOccasion', `${productId}:${occasionId}`);
+  return { ok: true };
+}
+
+export function updateProductMappingPriority(user: User, productId: number, occasionId: number, priority: number) {
+  run('UPDATE product_occasions SET priority=?, active=1, updated_at=? WHERE product_id=? AND occasion_id=?',
+    priority || 0, new Date().toISOString(), productId, occasionId);
+  audit(user, 'PRODUCT_OCCASION_PRIORITY', 'ProductOccasion', `${productId}:${occasionId}`, `priority ${priority || 0}`);
+  return { ok: true };
+}
+
+export function seedDefaultOccasions(user?: User) {
+  const { seedOccasionsIfEmpty } = require('./occasions');
+  seedOccasionsIfEmpty();
+  if (user) audit(user, 'OCCASION_SEED', 'Occasion', undefined, 'Default occasions seeded');
+}
+
+export function getOccasionResolutionPreview(user: User) {
+  const { resolveActiveOccasion, resolveUpcomingOccasions } = require('./occasions');
+  const now = new Date();
+  const active = resolveActiveOccasion(now);
+  const upcoming = resolveUpcomingOccasions(now, 5);
+  audit(user, 'OCCASION_PREVIEW', 'Occasion');
+  return { activeOccasion: active, upcomingOccasions: upcoming };
+}

@@ -12,6 +12,7 @@ import {
   Sparkles,
   FolderTree,
   Gift,
+  Calendar,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -23,7 +24,8 @@ export type AdminTab =
   | 'orders'
   | 'woocommerce'
   | 'security'
-  | 'hamper';
+  | 'hamper'
+  | 'festival';
 
 interface AdminSidebarProps {
   activeTab: AdminTab;
@@ -66,6 +68,12 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       label: 'Hamper Builder Settings',
       icon: <Gift className="w-4 h-4" />,
       badge: 'Custom',
+    },
+    {
+      id: 'festival',
+      label: 'Festival & Special Days',
+      icon: <Calendar className="w-4 h-4" />,
+      badge: 'Auto',
     },
     {
       id: 'media',

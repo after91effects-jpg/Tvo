@@ -63,7 +63,17 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.7,
     }));
 
-    return [...staticRoutes, ...categoryRoutes, ...productRoutes];
+    const activeOccasions = db.prepare(
+      "SELECT slug, updated_at FROM occasions WHERE deleted_at IS NULL AND active=1 AND homepage_visibility=1"
+    ).all() as { slug: string; updated_at?: string }[];
+    const occasionRoutes: MetadataRoute.Sitemap = activeOccasions.map((o) => ({
+      url: `${baseUrl}/occasion/${o.slug}`,
+      lastModified: o.updated_at ? new Date(o.updated_at) : new Date(),
+      changeFrequency: 'weekly' as const,
+      priority: 0.7,
+    }));
+
+    return [...staticRoutes, ...categoryRoutes, ...productRoutes, ...occasionRoutes];
   } catch {
     return staticRoutes;
   }
