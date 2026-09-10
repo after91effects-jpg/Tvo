@@ -241,14 +241,15 @@ export default function OccasionPage() {
         {products.length > 0 ? (
           <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-2.5 sm:gap-4 md:gap-6">
           {products.map((product, index) => (
-            <ProductCard
-              key={product.id}
-              product={product}
-              onViewProduct={(id: string) => {
-                occasionAnalytics.trackOccasionProductClick(occasion.slug, id, index);
-                handleOpenProduct(id);
-              }}
-            />
+             <ProductCard
+               key={product.id}
+               product={product}
+               onViewProduct={(id: string) => {
+                 occasionAnalytics.trackOccasionProductClick(occasion.slug, id, index);
+                 handleOpenProduct(id);
+               }}
+               occasionName={occasion.name}
+             />
           ))}
           </div>
         ) : (
@@ -265,7 +266,10 @@ export default function OccasionPage() {
 
       <MobileBottomNav activeView="home" onNavigate={handleNavigate} />
 
-      <CartDrawer onCheckout={() => setIsCheckoutOpen(true)} />
+      <CartDrawer 
+        onCheckout={() => setIsCheckoutOpen(true)} 
+        occasionSlug={occasion?.slug || undefined}
+      />
 
       <CheckoutModal
         isOpen={isCheckoutOpen}
@@ -274,6 +278,7 @@ export default function OccasionPage() {
           setIsCheckoutOpen(false);
           router.push('/');
         }}
+        occasionSlug={occasion?.slug || undefined}
       />
     </div>
   );

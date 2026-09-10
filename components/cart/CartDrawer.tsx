@@ -6,17 +6,20 @@ import { useCart } from '../../context/CartContext';
 import { DEFAULT_STORE_SETTINGS } from '../../lib/seedData';
 import { lockBodyScroll, unlockBodyScroll } from '../../lib/scrollLock';
 import { handleImageFallback, resolveProductImage, DEFAULT_FALLBACK_IMAGE } from '../../lib/imageUrl';
+import { occasionAnalytics } from '../../lib/analytics';
 
 interface CartDrawerProps {
   onNavigateToCheckout?: () => void;
   onCheckout?: () => void;
   onNavigateToShop?: () => void;
+  occasionSlug?: string;
 }
 
 export const CartDrawer: React.FC<CartDrawerProps> = ({
   onNavigateToCheckout,
   onCheckout,
   onNavigateToShop,
+  occasionSlug,
 }) => {
   const {
     items,
@@ -345,9 +348,15 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 id="cart-proceed-checkout-btn"
                 onClick={() => {
                   setIsCartOpen(false);
-                  if (onCheckout) {
+                if (onCheckout) {
+                    if (occasionSlug) {
+                      occasionAnalytics.trackOccasionCheckoutStart(occasionSlug);
+                    }
                     onCheckout();
                   } else if (onNavigateToCheckout) {
+                    if (occasionSlug) {
+                      occasionAnalytics.trackOccasionCheckoutStart(occasionSlug);
+                    }
                     onNavigateToCheckout();
                   }
                 }}

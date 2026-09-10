@@ -85,6 +85,7 @@ export const OccasionSection: React.FC<OccasionSectionProps> = ({
                 key={product.id}
                 product={product}
                 onViewProduct={onViewProduct}
+                occasionName={occasion.name}
               />
             ))}
           </div>

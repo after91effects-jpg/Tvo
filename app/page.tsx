@@ -995,23 +995,27 @@ export default function Home() {
           />
 
           {/* Cart Drawer */}
-          <CartDrawer onCheckout={() => setIsCheckoutOpen(true)} />
+           <CartDrawer 
+             onCheckout={() => setIsCheckoutOpen(true)} 
+             occasionSlug={activeOccasion?.slug || undefined}
+           />
 
-          {/* Custom Hamper Builder */}
-          <CustomHamperBuilder
-            products={products}
-            isOpen={isHamperBuilderOpen}
-            onClose={() => setIsHamperBuilderOpen(false)}
-            onOpenCheckout={() => setIsCheckoutOpen(true)}
-            settings={hamperSettings}
-          />
+           {/* Custom Hamper Builder */}
+           <CustomHamperBuilder
+             products={products}
+             isOpen={isHamperBuilderOpen}
+             onClose={() => setIsHamperBuilderOpen(false)}
+             onOpenCheckout={() => setIsCheckoutOpen(true)}
+             settings={hamperSettings}
+           />
 
-          {/* Checkout Modal */}
-          <CheckoutModal
-            isOpen={isCheckoutOpen}
-            onClose={() => setIsCheckoutOpen(false)}
-            onOrderSuccess={handleOrderSuccess}
-          />
+           {/* Checkout Modal */}
+           <CheckoutModal
+             isOpen={isCheckoutOpen}
+             onClose={() => setIsCheckoutOpen(false)}
+             onOrderSuccess={handleOrderSuccess}
+             occasionSlug={activeOccasion?.slug || undefined}
+           />
 
           {/* Admin Login Modal */}
           <AdminLoginModal

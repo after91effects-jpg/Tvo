@@ -107,6 +107,41 @@ export async function GET(req: Request) {
     }
     if (type === 'occasion_preview') return ok({ ...ops.getOccasionResolutionPreview(user) });
     if (type === 'occasions_default') { ops.seedDefaultOccasions(user); return ok({ ok: true }); }
+    if (type === 'analytics') {
+      const range = url.searchParams.get('range') || '30d';
+      let dateFilter = "date(created_at) >= date('now', '-30 days')";
+      switch (range) {
+        case '7d': dateFilter = "date(created_at) >= date('now', '-7 days')"; break;
+        case '90d': dateFilter = "date(created_at) >= date('now', '-90 days')"; break;
+        case 'all': dateFilter = '1=1'; break;
+      }
+      const topOccasions = db.prepare(`
+        SELECT occasion_slug, COUNT(*) as order_count,
+               ROUND(SUM(total), 2) as total_revenue,
+               ROUND(SUM(subtotal), 2) as total_subtotal
+        FROM orders
+        WHERE ${dateFilter} AND occasion_slug IS NOT NULL
+        GROUP BY occasion_slug
+        ORDER BY order_count DESC
+        LIMIT 20
+      `).all() as any[];
+      const dailyTrends = db.prepare(`
+        SELECT date(created_at) as day, COUNT(*) as orders, ROUND(SUM(total), 2) as revenue
+        FROM orders
+        WHERE ${dateFilter}
+        GROUP BY date(created_at)
+        ORDER BY day DESC
+        LIMIT 30
+      `).all() as any[];
+      const summary = db.prepare(`
+        SELECT COUNT(*) as total_orders, ROUND(SUM(total), 2) as revenue,
+               COUNT(CASE WHEN occasion_slug IS NOT NULL THEN 1 END) as occasion_orders,
+               ROUND(SUM(CASE WHEN occasion_slug IS NOT NULL THEN total ELSE 0 END), 2) as occasion_revenue
+        FROM orders
+        WHERE ${dateFilter}
+      `).get() as any;
+      return ok({ topOccasions, dailyTrends, summary, dateRange: range });
+    }
     return ok({});
   } catch (e: any) { return err(e.message, 500); }
 }

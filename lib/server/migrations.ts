@@ -239,6 +239,11 @@ export function runMigrations() {
   addTable(`CREATE INDEX IF NOT EXISTS idx_occasion_years ON occasion_years(occasion_id, year)`);
   addTable(`CREATE INDEX IF NOT EXISTS idx_product_occasions_occasion ON product_occasions(occasion_id, priority)`);
   addTable(`CREATE INDEX IF NOT EXISTS idx_product_occasions_product ON product_occasions(product_id)`);
+
+  // Add occasion context to orders for analytics attribution
+  addColumn('orders', 'occasion_slug', 'occasion_slug TEXT');
+  addColumn('orders', 'occasion_id', 'occasion_id INTEGER');
+  addTable(`CREATE INDEX IF NOT EXISTS idx_orders_occasion ON orders(occasion_slug) WHERE occasion_slug IS NOT NULL`);
 }
 
 // allow-testing helper

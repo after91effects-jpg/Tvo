@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   CreditCard,
   MapPin,
@@ -30,6 +30,7 @@ import { Order, OrderStatus } from '../../lib/types';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
 import { logAuditEvent } from '../../lib/audit';
+import { occasionAnalytics } from '../../lib/analytics';
 import { Modal } from '../common/Modal';
 import { DEFAULT_STORE_SETTINGS } from '../../lib/seedData';
 
@@ -62,6 +63,7 @@ interface CheckoutModalProps {
   isOpen: boolean;
   onClose: () => void;
   onOrderSuccess: (orderNumber: string) => void;
+  occasionSlug?: string;
 }
 
 interface DeliverySlotOption {
@@ -147,9 +149,16 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   isOpen,
   onClose,
   onOrderSuccess,
+  occasionSlug,
 }) => {
   const { cartItems, subtotal, clearCart } = useCart();
   const { user } = useAuth();
+
+  useEffect(() => {
+    if (isOpen && occasionSlug) {
+      occasionAnalytics.trackOccasionCheckoutStart(occasionSlug);
+    }
+  }, [isOpen, occasionSlug]);
 
   // Reference now
   const now = useMemo(() => new Date(), []);
@@ -436,36 +445,37 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         const res = await fetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-           items: newOrder.items.map((item: any) => ({
-             productId: item.productId,
-             name: item.name,
-             sku: item.sku || '',
-             qty: item.qty,
-             price: item.unitPrice,
-             weight: item.weight || (item.sellingUnit === 'piece' ? '1 piece' : '0.5 kg'),
-             flavour: item.flavour || '',
-             messageOnCake: item.messageOnCake || '',
-             addons: item.addons || [],
-             sellingUnit: item.sellingUnit || 'weight',
-           })),
-           customer: {
-             name: recipientName.trim(),
-             phone: recipientPhone.trim(),
-             email: recipientEmail.trim(),
-             address: address.trim(),
-           },
-           pincode: pincode.trim(),
-           city: city.trim(),
-           deliveryDate: newOrder.deliveryDate,
-           deliverySlot: newOrder.deliverySlot,
-           paymentMethod: newOrder.paymentMethod,
-           deliveryFee: newOrder.deliveryFee,
-           slot_surcharge: newOrder.slotSurcharge,
-           coupon_code: couponCode,
-           session_id: sessionId,
-           orderNotes: specialInstructions.trim() || undefined,
-        }),
+         body: JSON.stringify({
+            items: newOrder.items.map((item: any) => ({
+              productId: item.productId,
+              name: item.name,
+              sku: item.sku || '',
+              qty: item.qty,
+              price: item.unitPrice,
+              weight: item.weight || (item.sellingUnit === 'piece' ? '1 piece' : '0.5 kg'),
+              flavour: item.flavour || '',
+              messageOnCake: item.messageOnCake || '',
+              addons: item.addons || [],
+              sellingUnit: item.sellingUnit || 'weight',
+            })),
+            customer: {
+              name: recipientName.trim(),
+              phone: recipientPhone.trim(),
+              email: recipientEmail.trim(),
+              address: address.trim(),
+            },
+            pincode: pincode.trim(),
+            city: city.trim(),
+            deliveryDate: newOrder.deliveryDate,
+            deliverySlot: newOrder.deliverySlot,
+            paymentMethod: newOrder.paymentMethod,
+            deliveryFee: newOrder.deliveryFee,
+            slot_surcharge: newOrder.slotSurcharge,
+            coupon_code: couponCode,
+            session_id: sessionId,
+            orderNotes: specialInstructions.trim() || undefined,
+            occasion_slug: occasionSlug || undefined,
+          }),
       });
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));
@@ -579,6 +589,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       clearCart();
       setCreatedOrderNumber(null);
       onClose();
+      if (occasionSlug) {
+        occasionAnalytics.trackOccasionPurchase(occasionSlug, serverOrderNumber, totalAmount);
+      }
       onOrderSuccess(serverOrderNumber);
     } catch (e: any) {
       setErrorMessage(e.message || 'Could not place order. Please try again.');

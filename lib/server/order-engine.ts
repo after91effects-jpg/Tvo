@@ -361,7 +361,7 @@ export function createOrder({ items, body, customerId, generateOrderNumber }: Cr
     const info = db.prepare(`INSERT INTO orders
       (order_number, customer_id, session_id, customer_name, customer_phone, customer_email, customer_address, pincode, city,
        items, addons, subtotal, discount, coupon_code, delivery_fee, slot_surcharge, tax, total,
-       delivery_date, delivery_slot, delivery_slot_id, status, priority, payment_method, payment_status, timeline, created_at, updated_at)
+       delivery_date, delivery_slot, delivery_slot_id, status, priority, payment_method, payment_status, timeline, occasion_slug, occasion_id, created_at, updated_at)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
       .run(
         orderNumber, customerId, body.session_id || null,
@@ -372,6 +372,8 @@ export function createOrder({ items, body, customerId, generateOrderNumber }: Cr
         body.deliveryDate || null, body.deliverySlot || null, slotCheck.slot?.id ?? (body.deliverySlotId || null),
         'Order Placed', body.priority || 'Normal', body.paymentMethod || 'UPI', 'Pending',
         JSON.stringify([{ status: 'Order Placed', created_at: new Date().toISOString() }]),
+        body.occasion_slug || body.occasionSlug || null,
+        body.occasion_id || body.occasionId || null,
         new Date().toISOString(), new Date().toISOString()
       );
     const orderId = Number(info.lastInsertRowid);

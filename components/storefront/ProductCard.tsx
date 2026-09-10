@@ -12,9 +12,10 @@ import { handleImageFallback, resolveProductImage, DEFAULT_FALLBACK_IMAGE } from
 interface ProductCardProps {
   product: Product;
   onViewProduct: (productId: string) => void;
+  occasionName?: string;
 }
 
-export const ProductCard: React.FC<ProductCardProps> = ({ product, onViewProduct }) => {
+export const ProductCard: React.FC<ProductCardProps> = ({ product, onViewProduct, occasionName }) => {
   const { addToCart, setIsCartOpen } = useCart();
   const { isInWishlist, toggleWishlist } = useWishlist();
   const isWishlisted = isInWishlist(product.id);
@@ -101,6 +102,17 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onViewProduct
 
         {/* Dietary / Bestseller Badges */}
         <div className="absolute top-2 left-2 sm:top-2.5 sm:left-2.5 flex flex-col gap-1 z-10">
+          {occasionName && (
+            <span className="px-1.5 sm:px-2 py-0.5 rounded-md bg-gradient-to-r from-[var(--primary)] to-purple-600 text-white text-[9px] sm:text-[10px] font-bold tracking-wide shadow-xs flex items-center gap-0.5">
+              <Sparkles className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+              <span className="truncate max-w-[80px] sm:max-w-[100px]">Featured</span>
+            </span>
+          )}
+          {occasionName && (
+            <span className="px-1.5 sm:px-2 py-0.5 rounded-md bg-white/90 dark:bg-stone-900/90 text-[var(--primary)] border border-[var(--primary)]/20 text-[8px] sm:text-[9px] font-medium truncate max-w-[80px] sm:max-w-[100px]">
+              {occasionName}
+            </span>
+          )}
           {product.badges?.slice(0, 1).map((badge) => (
             <span
               key={badge}

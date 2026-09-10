@@ -377,10 +377,12 @@ CREATE TABLE IF NOT EXISTS orders (
   transaction_id TEXT,
   is_custom INTEGER DEFAULT 0,
   custom_request_id INTEGER,
-  tracking_note TEXT,
-  internal_notes TEXT,
-  timeline TEXT DEFAULT '[]',
-  created_at TEXT DEFAULT (datetime('now')),
+   tracking_note TEXT,
+   internal_notes TEXT,
+   timeline TEXT DEFAULT '[]',
+   occasion_slug TEXT,
+   occasion_id INTEGER,
+   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT
 );
 
