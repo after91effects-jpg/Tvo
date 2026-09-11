@@ -24,8 +24,12 @@ import {
   createUserWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
+  sendPasswordResetEmail,
+  verifyPasswordResetCode,
+  confirmPasswordReset,
   User,
-  Auth
+  Auth,
+  ActionCodeSettings
 } from 'firebase/auth';
 import firebaseConfigData from '../firebase-applet-config.json';
 
@@ -78,7 +82,10 @@ export {
   serverTimestamp,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
+  verifyPasswordResetCode,
+  confirmPasswordReset,
   signOut,
   onAuthStateChanged
 };
-export type { User };
+export type { User, ActionCodeSettings };

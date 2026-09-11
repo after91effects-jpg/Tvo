@@ -42,6 +42,7 @@ interface CustomerOrderHistoryViewProps {
   products: Product[];
   onNavigate: (view: string, param?: string) => void;
   onSelectProduct?: (productId: string) => void;
+  onForgotPassword?: () => void;
 }
 
 const STATUS_CONFIG: Record<
@@ -101,6 +102,7 @@ export const CustomerOrderHistoryView: React.FC<CustomerOrderHistoryViewProps> =
   products,
   onNavigate,
   onSelectProduct,
+  onForgotPassword,
 }) => {
   const { user, loginWithEmail, registerCustomer } = useAuth();
   const { addToCart, setIsCartOpen } = useCart();
@@ -542,6 +544,15 @@ let ordersUrl = '/api/orders';
             <div className="text-xs text-[var(--text-muted)] mt-0.5">
               {user?.email || 'Sign in to access your saved delivery addresses and cake favorites'}
             </div>
+            {!user && onForgotPassword && (
+              <button
+                type="button"
+                onClick={onForgotPassword}
+                className="mt-1.5 text-[11px] font-semibold text-[var(--primary)] hover:underline transition-colors cursor-pointer"
+              >
+                Forgot Password?
+              </button>
+            )}
           </div>
         </div>
       </div>
