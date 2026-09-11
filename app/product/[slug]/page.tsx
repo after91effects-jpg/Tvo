@@ -162,6 +162,8 @@ export default function ProductPage() {
       router.push('/?view=wishlist');
     } else if (view === 'orders' || view === 'history') {
       router.push('/?view=orders');
+    } else if (view === 'addresses') {
+      router.push('/?view=addresses');
     } else if (view === 'admin') {
       router.push('/?view=admin');
     } else if (view === 'about' || view === 'contact' || view === 'faq') {

@@ -108,6 +108,8 @@ export default function OccasionPage() {
       router.push(param ? `/?q=${encodeURIComponent(param)}` : '/');
     } else if (view === 'track') {
       router.push(param ? `/?view=track&order=${encodeURIComponent(param)}` : '/?view=track');
+    } else if (view === 'addresses') {
+      router.push('/?view=addresses');
     } else if (view === 'about' || view === 'contact' || view === 'faq') {
       router.push(`/?view=${view}`);
     } else {

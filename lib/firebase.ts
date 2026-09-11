@@ -64,6 +64,7 @@ export const COLLECTIONS = {
   ADMIN_USERS: 'adminUsers',
   SEARCH_HISTORY: 'searchHistory',
   CUSTOMER_PROFILES: 'customerProfiles',
+  CUSTOMER_ADDRESSES: 'customerAddresses',
 } as const;
 
 export {

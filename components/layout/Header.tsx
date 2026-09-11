@@ -304,6 +304,18 @@ export const Header: React.FC<HeaderProps> = ({
                         </button>
                         <button
                           onClick={() => {
+                            onNavigate('addresses');
+                            setIsUserMenuOpen(false);
+                          }}
+                          className="w-full text-left px-3 py-2 text-xs font-semibold text-[var(--text-main)] hover:bg-[var(--bg-subtle)] rounded-lg transition-colors flex items-center justify-between"
+                        >
+                          <div className="flex items-center gap-2">
+                            <MapPin className="w-3.5 h-3.5 text-[var(--primary)]" />
+                            <span>My Addresses</span>
+                          </div>
+                        </button>
+                        <button
+                          onClick={() => {
                             onNavigate('wishlist');
                             setIsUserMenuOpen(false);
                           }}

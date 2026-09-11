@@ -52,6 +52,7 @@ import { ForgotPasswordModal } from '../components/storefront/ForgotPasswordModa
 import { ResetPasswordModal } from '../components/storefront/ResetPasswordModal';
 import { CustomerOrderHistoryView } from '../components/storefront/CustomerOrderHistoryView';
 import { ProfileView } from '../components/storefront/ProfileView';
+import { AddressBookView } from '../components/storefront/AddressBookView';
 import { OrderNotificationToasts } from '../components/common/OrderNotificationToasts';
 import { useNotifications } from '../context/NotificationContext';
 
@@ -186,7 +187,7 @@ export default function Home() {
   // Root View State
   const [activeView, setActiveView] = useState<'storefront' | 'admin'>('storefront');
   const [storeSubView, setStoreSubView] = useState<
-    'home' | 'category' | 'track' | 'orders' | 'history' | 'profile' | 'about' | 'contact' | 'faq' | 'wishlist'
+    'home' | 'category' | 'track' | 'orders' | 'history' | 'profile' | 'addresses' | 'about' | 'contact' | 'faq' | 'wishlist'
   >('home');
   const [selectedCategorySlug, setSelectedCategorySlug] = useState<string>('all');
   const [selectedSubcategorySlug, setSelectedSubcategorySlug] = useState<string>('all');
@@ -374,6 +375,8 @@ export default function Home() {
         setStoreSubView('orders');
       } else if (view === 'profile') {
         setStoreSubView('profile');
+      } else if (view === 'addresses') {
+        setStoreSubView('addresses');
       } else if (view === 'about' || view === 'contact' || view === 'faq') {
         setStoreSubView(view as any);
       } else if (view === 'admin') {
@@ -472,6 +475,13 @@ export default function Home() {
 
     if (view === 'profile') {
       setStoreSubView('profile');
+      setActiveView('storefront');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+
+    if (view === 'addresses') {
+      setStoreSubView('addresses');
       setActiveView('storefront');
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
@@ -805,6 +815,8 @@ export default function Home() {
               />
             ) : storeSubView === 'profile' ? (
               <ProfileView onNavigate={handleNavigate} />
+            ) : storeSubView === 'addresses' ? (
+              <AddressBookView onNavigate={handleNavigate} />
             ) : storeSubView === 'about' ? (
               <AboutView />
             ) : storeSubView === 'contact' ? (

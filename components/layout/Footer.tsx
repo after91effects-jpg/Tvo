@@ -245,6 +245,11 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
                 </button>
               </li>
               <li>
+                <button onClick={() => onNavigate('addresses')} className="hover:text-[var(--primary)] transition-colors cursor-pointer text-left">
+                  My Addresses
+                </button>
+              </li>
+              <li>
                 <button onClick={() => onNavigate('orders')} className="hover:text-[var(--primary)] transition-colors cursor-pointer text-left">
                   My Order History
                 </button>

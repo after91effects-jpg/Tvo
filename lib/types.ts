@@ -332,6 +332,35 @@ export interface UserProfile {
   createdAt?: string;
 }
 
+export type AddressLabel = 'home' | 'work' | 'other';
+
+export interface CustomerAddress {
+  id: string;
+  label: AddressLabel;
+  fullName: string;
+  phone: string;
+  line1: string;
+  line2?: string;
+  city: string;
+  state: string;
+  pincode: string;
+  isDefault: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CustomerAddressInput {
+  label: AddressLabel;
+  fullName: string;
+  phone: string;
+  line1: string;
+  line2?: string;
+  city: string;
+  state: string;
+  pincode: string;
+  isDefault: boolean;
+}
+
 export interface AdminUser {
   uid: string;
   name: string;
