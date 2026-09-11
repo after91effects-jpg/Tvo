@@ -17,20 +17,21 @@ const PASSWORD_MIN = 6;
 type Mode = 'login' | 'register';
 
 // Safe, generic messages. Never echo provider internals or user records.
-function toSafeLoginError(message: string): string {
-  const m = message || '';
-  if (m.includes('invalid-email')) return 'Please enter a valid email address.';
-  if (m.includes('too-many-requests')) return 'Too many attempts. Please wait a moment and try again.';
-  if (m.includes('network-request-failed')) return 'A network error occurred. Please check your connection and try again.';
+function toSafeLoginError(code: string, message: string): string {
+  if (code === 'auth/invalid-email') return 'Please enter a valid email address.';
+  if (code === 'auth/too-many-requests') return 'Too many attempts. Please wait a moment and try again.';
+  if (code === 'auth/network-request-failed') return 'A network error occurred. Please check your connection and try again.';
+  if (code === 'auth/user-not-found' || code === 'auth/wrong-password' || code === 'auth/invalid-credential') return 'Invalid email or password. Please try again.';
+  if (message) return message;
   return 'Invalid email or password. Please try again.';
 }
 
-function toSafeRegisterError(message: string): string {
-  const m = message || '';
-  if (m.includes('email-already-in-use')) return 'An account with this email already exists. Please sign in instead.';
-  if (m.includes('weak-password')) return 'Password must be at least 6 characters.';
-  if (m.includes('invalid-email')) return 'Please enter a valid email address.';
-  if (m.includes('network-request-failed')) return 'A network error occurred. Please check your connection and try again.';
+function toSafeRegisterError(code: string, message: string): string {
+  if (code === 'auth/email-already-in-use') return 'An account with this email already exists. Please sign in instead.';
+  if (code === 'auth/weak-password') return 'Password must be at least 6 characters.';
+  if (code === 'auth/invalid-email') return 'Please enter a valid email address.';
+  if (code === 'auth/network-request-failed') return 'A network error occurred. Please check your connection and try again.';
+  if (message) return message;
   return 'Registration failed. Please try again.';
 }
 
@@ -115,7 +116,11 @@ export const LoginRegisterModal: React.FC<LoginRegisterModalProps> = ({ isOpen, 
         ? await loginWithEmail(trimmedEmail, password)
         : await registerCustomer(name.trim(), trimmedEmail, password);
     if (!res.success) {
-      setError(mode === 'login' ? toSafeLoginError(res.error || '') : toSafeRegisterError(res.error || ''));
+      setError(
+        mode === 'login'
+          ? toSafeLoginError(res.code || '', res.error || '')
+          : toSafeRegisterError(res.code || '', res.error || '')
+      );
     }
     // On success the user effect above closes the modal.
     setIsLoading(false);

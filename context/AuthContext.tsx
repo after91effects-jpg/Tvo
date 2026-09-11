@@ -29,9 +29,9 @@ export interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   isAuthReady: boolean;
-  loginWithEmail: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
-  login: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
-  registerCustomer: (name: string, email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
+  loginWithEmail: (email: string, pass: string) => Promise<{ success: boolean; error?: string; code?: string }>;
+  login: (email: string, pass: string) => Promise<{ success: boolean; error?: string; code?: string }>;
+  registerCustomer: (name: string, email: string, pass: string) => Promise<{ success: boolean; error?: string; code?: string }>;
   updateCustomerProfile: (name: string, phone?: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   inactivityWarning: boolean;
@@ -251,47 +251,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setIsLoading(true);
       const res = await signInWithEmailAndPassword(auth, email, pass);
-      const userDoc = await getDoc(doc(db, COLLECTIONS.ADMIN_USERS, res.user.uid));
-      let role: UserRole = 'customer';
-      let name = res.user.displayName || email.split('@')[0];
+      const uid = res.user.uid;
+      const fbEmail = res.user.email || email;
+      const displayName = res.user.displayName || email.split('@')[0];
 
-      if (userDoc.exists()) {
-        const data = userDoc.data();
-        role = data.role || 'staff';
-        name = data.name || name;
+      let role: UserRole = 'customer';
+      let name = displayName;
+      let customerData: { name?: string; phone?: string; createdAt?: string } | null = null;
+
+      try {
+        const userDoc = await getDoc(doc(db, COLLECTIONS.ADMIN_USERS, uid));
+        if (userDoc.exists()) {
+          const data = userDoc.data();
+          role = data.role || 'staff';
+          name = data.name || name;
+        } else {
+          customerData = await readCustomerProfile(res.user);
+        }
+      } catch (e) {
+        console.warn('Could not fetch user profile from Firestore:', e);
       }
 
       const profile: UserProfile = {
-        uid: res.user.uid,
+        uid,
         name,
-        email: res.user.email || email,
+        email: fbEmail,
         role,
         lastLogin: new Date().toISOString(),
+        ...(customerData?.phone ? { phone: customerData.phone } : {}),
+        ...(customerData?.createdAt ? { createdAt: customerData.createdAt } : {}),
       };
 
-      if (profile.role === 'customer') {
-        const customerData = await readCustomerProfile(res.user);
-        if (customerData) {
-          profile.name = customerData.name || profile.name;
-          profile.phone = customerData.phone;
-          profile.createdAt = customerData.createdAt || new Date().toISOString();
-        } else {
-          await writeCustomerProfile(res.user, {
-            name: profile.name,
-            email: profile.email,
-            phone: '',
-            createdAt: new Date().toISOString(),
-          });
-        }
-      }
       setUser(profile);
       if (typeof window !== 'undefined') {
         localStorage.setItem('confetto_active_user', JSON.stringify(profile));
       }
 
-      // Best-effort server session sync using the credentials the user supplied.
-      // Only succeeds for accounts present in the SQLite users table; never uses
-      // hardcoded/admin credentials. Failure is non-fatal.
       if (typeof window !== 'undefined') {
         try {
           await fetch('/api/auth', {
@@ -316,7 +311,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       return { success: true };
     } catch (err: any) {
-      return { success: false, error: err.message || 'Invalid email or password' };
+      const code = err?.code || '';
+      return { success: false, error: err.message || 'Invalid email or password', code };
     } finally {
       setIsLoading(false);
     }
@@ -334,19 +330,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         lastLogin: new Date().toISOString(),
         createdAt: new Date().toISOString(),
       };
-      await writeCustomerProfile(res.user, {
-        name: profile.name,
-        email: profile.email,
-        phone: '',
-        createdAt: profile.createdAt,
-      });
+
+      try {
+        await writeCustomerProfile(res.user, {
+          name: profile.name,
+          email: profile.email,
+          phone: '',
+          createdAt: profile.createdAt,
+        });
+      } catch (e) {
+        console.warn('Could not persist customer profile:', e);
+      }
+
       setUser(profile);
       if (typeof window !== 'undefined') {
         localStorage.setItem('confetto_active_user', JSON.stringify(profile));
       }
       return { success: true };
     } catch (err: any) {
-      return { success: false, error: err.message || 'Registration failed' };
+      const code = err?.code || '';
+      return { success: false, error: err.message || 'Registration failed', code };
     } finally {
       setIsLoading(false);
     }
