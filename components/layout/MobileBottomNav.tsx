@@ -170,7 +170,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
             id="mobile-nav-account-btn"
             type="button"
             onClick={() => {
-              onNavigate('orders');
+              onNavigate('profile');
             }}
             className={`flex flex-col items-center justify-center py-1 rounded-xl transition-all cursor-pointer relative text-[var(--text-muted)] hover:text-[var(--text-main)]`}
           >

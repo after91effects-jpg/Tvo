@@ -27,6 +27,7 @@ import {
   sendPasswordResetEmail,
   verifyPasswordResetCode,
   confirmPasswordReset,
+  updateProfile as fbUpdateProfile,
   User,
   Auth,
   ActionCodeSettings
@@ -86,6 +87,7 @@ export {
   verifyPasswordResetCode,
   confirmPasswordReset,
   signOut,
-  onAuthStateChanged
+  onAuthStateChanged,
+  fbUpdateProfile as updateProfile
 };
 export type { User, ActionCodeSettings };

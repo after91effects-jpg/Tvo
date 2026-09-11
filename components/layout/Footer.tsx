@@ -240,7 +240,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
             </h4>
             <ul className="space-y-2 text-xs text-[var(--text-muted)]">
               <li>
-                <button onClick={() => onNavigate('orders')} className="hover:text-[var(--primary)] transition-colors cursor-pointer text-left">
+                <button onClick={() => onNavigate('profile')} className="hover:text-[var(--primary)] transition-colors cursor-pointer text-left">
                   My Profile
                 </button>
               </li>
@@ -430,7 +430,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
               <div className="px-3.5 pb-3.5 pt-1 space-y-2 border-t border-[var(--border)]/50 text-xs text-[var(--text-muted)] animate-in slide-in-from-top-1 duration-150">
                 <button
                   type="button"
-                  onClick={() => onNavigate('orders')}
+                  onClick={() => onNavigate('profile')}
                   className="block w-full text-left py-1 hover:text-[var(--primary)] transition-colors"
                 >
                   My Profile

@@ -292,6 +292,18 @@ export const Header: React.FC<HeaderProps> = ({
                       <div className="py-1">
                         <button
                           onClick={() => {
+                            onNavigate('profile');
+                            setIsUserMenuOpen(false);
+                          }}
+                          className="w-full text-left px-3 py-2 text-xs font-semibold text-[var(--text-main)] hover:bg-[var(--bg-subtle)] rounded-lg transition-colors flex items-center justify-between"
+                        >
+                          <div className="flex items-center gap-2">
+                            <UserIcon className="w-3.5 h-3.5 text-[var(--primary)]" />
+                            <span>My Profile</span>
+                          </div>
+                        </button>
+                        <button
+                          onClick={() => {
                             onNavigate('wishlist');
                             setIsUserMenuOpen(false);
                           }}

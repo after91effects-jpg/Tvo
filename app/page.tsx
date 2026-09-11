@@ -51,6 +51,7 @@ import { AdminLoginModal } from '../components/storefront/AdminLoginModal';
 import { ForgotPasswordModal } from '../components/storefront/ForgotPasswordModal';
 import { ResetPasswordModal } from '../components/storefront/ResetPasswordModal';
 import { CustomerOrderHistoryView } from '../components/storefront/CustomerOrderHistoryView';
+import { ProfileView } from '../components/storefront/ProfileView';
 import { OrderNotificationToasts } from '../components/common/OrderNotificationToasts';
 import { useNotifications } from '../context/NotificationContext';
 
@@ -371,6 +372,8 @@ export default function Home() {
         setStoreSubView('wishlist');
       } else if (view === 'orders' || view === 'history') {
         setStoreSubView('orders');
+      } else if (view === 'profile') {
+        setStoreSubView('profile');
       } else if (view === 'about' || view === 'contact' || view === 'faq') {
         setStoreSubView(view as any);
       } else if (view === 'admin') {
@@ -462,6 +465,13 @@ export default function Home() {
 
     if (view === 'orders' || view === 'history' || view === 'order-history') {
       setStoreSubView('orders');
+      setActiveView('storefront');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+
+    if (view === 'profile') {
+      setStoreSubView('profile');
       setActiveView('storefront');
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
@@ -793,6 +803,8 @@ export default function Home() {
                 onSelectProduct={handleOpenProduct}
                 onForgotPassword={() => setIsForgotPasswordOpen(true)}
               />
+            ) : storeSubView === 'profile' ? (
+              <ProfileView onNavigate={handleNavigate} />
             ) : storeSubView === 'about' ? (
               <AboutView />
             ) : storeSubView === 'contact' ? (

@@ -10,6 +10,7 @@ import {
   createUserWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
+  updateProfile,
   User,
   COLLECTIONS,
 } from '../lib/firebase';
@@ -28,6 +29,7 @@ export interface AuthContextType {
   loginWithEmail: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
   login: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
   registerCustomer: (name: string, email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
+  updateCustomerProfile: (name: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   inactivityWarning: boolean;
   extendSession: () => void;
@@ -44,6 +46,7 @@ const AuthContext = createContext<AuthContextType>({
   loginWithEmail: async () => ({ success: false }),
   login: async () => ({ success: false }),
   registerCustomer: async () => ({ success: false }),
+  updateCustomerProfile: async () => ({ success: false }),
   logout: async () => {},
   inactivityWarning: false,
   extendSession: () => {},
@@ -259,6 +262,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const updateCustomerProfile = async (name: string) => {
+    if (!user || !firebaseUser) {
+      return { success: false, error: 'You must be signed in to update your profile.' };
+    }
+    const trimmed = name.trim();
+    if (trimmed.length < 2 || trimmed.length > 100) {
+      return { success: false, error: 'Name must be between 2 and 100 characters.' };
+    }
+    if (trimmed === user.name) {
+      return { success: true };
+    }
+    try {
+      await updateProfile(firebaseUser, { displayName: trimmed });
+      const updated: UserProfile = { ...user, name: trimmed };
+      setUser(updated);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('confetto_active_user', JSON.stringify(updated));
+      }
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Failed to update profile.' };
+    }
+  };
+
   const role: UserRole = user?.role || 'customer';
   const isAdmin = role === 'admin';
   const isStaff = role === 'staff' || role === 'admin';
@@ -277,6 +304,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loginWithEmail,
         login: loginWithEmail,
         registerCustomer,
+        updateCustomerProfile,
         logout,
         inactivityWarning,
         extendSession,
