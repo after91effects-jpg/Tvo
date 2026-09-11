@@ -186,7 +186,7 @@ export default function Home() {
   // Root View State
   const [activeView, setActiveView] = useState<'storefront' | 'admin'>('storefront');
   const [storeSubView, setStoreSubView] = useState<
-    'home' | 'category' | 'track' | 'orders' | 'history' | 'about' | 'contact' | 'faq' | 'wishlist'
+    'home' | 'category' | 'track' | 'orders' | 'history' | 'profile' | 'about' | 'contact' | 'faq' | 'wishlist'
   >('home');
   const [selectedCategorySlug, setSelectedCategorySlug] = useState<string>('all');
   const [selectedSubcategorySlug, setSelectedSubcategorySlug] = useState<string>('all');

@@ -28,6 +28,7 @@ export interface AuthContextType {
   isStaff: boolean;
   isAuthenticated: boolean;
   isLoading: boolean;
+  isAuthReady: boolean;
   loginWithEmail: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
   login: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
   registerCustomer: (name: string, email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
@@ -45,6 +46,7 @@ const AuthContext = createContext<AuthContextType>({
   isStaff: false,
   isAuthenticated: false,
   isLoading: false,
+  isAuthReady: false,
   loginWithEmail: async () => ({ success: false }),
   login: async () => ({ success: false }),
   registerCustomer: async () => ({ success: false }),
@@ -103,6 +105,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useLocalStorageJSON<UserProfile | null>('confetto_active_user', null);
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isAuthReady, setIsAuthReady] = useState<boolean>(false);
   const [inactivityWarning, setInactivityWarning] = useState<boolean>(false);
   const lastActivityRef = useRef<number>(0);
 
@@ -167,6 +170,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
       setFirebaseUser(fbUser);
+      setIsAuthReady(true);
       if (fbUser) {
         try {
           const userDoc = await getDoc(doc(db, COLLECTIONS.ADMIN_USERS, fbUser.uid));
@@ -382,6 +386,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (typeof window !== 'undefined') {
         localStorage.setItem('confetto_active_user', JSON.stringify(updated));
       }
+      if (typeof window !== 'undefined') {
+        try {
+          await logAuditEvent({
+            actorUid: firebaseUser.uid,
+            actorName: trimmedName,
+            actorEmail: firebaseUser.email || user.email,
+            role: user.role,
+            action: 'USER_UPDATE_PROFILE',
+            targetType: 'Auth',
+            details: 'Customer updated their profile',
+          });
+        } catch (e) {
+          // ignore
+        }
+      }
       return { success: true };
     } catch (err: any) {
       return { success: false, error: err.message || 'Failed to update profile.' };
@@ -403,6 +422,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isStaff,
         isAuthenticated,
         isLoading,
+        isAuthReady,
         loginWithEmail,
         login: loginWithEmail,
         registerCustomer,

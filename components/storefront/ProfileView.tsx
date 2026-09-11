@@ -20,7 +20,7 @@ interface ProfileViewProps {
 }
 
 export const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate }) => {
-  const { user, updateCustomerProfile } = useAuth();
+  const { user, isAuthReady, updateCustomerProfile } = useAuth();
 
   const [displayName, setDisplayName] = useState<string>('');
   const [phone, setPhone] = useState<string>('');
@@ -43,6 +43,22 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate }) => {
         : false
     );
   }, [displayName, phone, user]);
+
+  if (!isAuthReady) {
+    // Loading state — auth session is still being restored (no sign-in flash).
+    return (
+      <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 py-8 sm:py-12 space-y-8 animate-in fade-in duration-200">
+        <div className="flex flex-col items-center justify-center text-center px-4 py-16 sm:py-24 rounded-3xl bg-[var(--bg-surface)] border border-[var(--border)] shadow-sm">
+          <div className="w-12 h-12 rounded-2xl bg-[var(--primary-light)] text-[var(--primary)] flex items-center justify-center mb-5 shadow-inner">
+            <Loader2 className="w-6 h-6 animate-spin" />
+          </div>
+          <h1 className="text-lg sm:text-xl font-bold font-display text-[var(--text-main)]">
+            Loading your profile...
+          </h1>
+        </div>
+      </div>
+    );
+  }
 
   if (!user) {
     // Authentication required state — only the signed-in customer can view
