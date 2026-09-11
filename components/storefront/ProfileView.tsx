@@ -23,20 +23,26 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate }) => {
   const { user, updateCustomerProfile } = useAuth();
 
   const [displayName, setDisplayName] = useState<string>('');
+  const [phone, setPhone] = useState<string>('');
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [hasChanges, setHasChanges] = useState<boolean>(false);
 
-  // Sync the editable name whenever the authenticated profile changes.
+  // Sync the editable fields whenever the authenticated profile changes.
   useEffect(() => {
     if (user) {
       setDisplayName(user.name || '');
+      setPhone(user.phone || '');
     }
-  }, [user?.uid, user?.name]);
+  }, [user?.uid, user?.name, user?.phone]);
 
   useEffect(() => {
-    setHasChanges(user ? displayName.trim() !== (user.name || '') : false);
-  }, [displayName, user]);
+    setHasChanges(
+      user
+        ? displayName.trim() !== (user.name || '') || phone.trim() !== (user.phone || '')
+        : false
+    );
+  }, [displayName, phone, user]);
 
   if (!user) {
     // Authentication required state — only the signed-in customer can view
@@ -70,7 +76,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate }) => {
   const handleSave = async () => {
     setIsSaving(true);
     setSaveMessage(null);
-    const res = await updateCustomerProfile(displayName);
+    const res = await updateCustomerProfile(displayName, phone);
     setIsSaving(false);
     if (res.success) {
       setSaveMessage({ type: 'success', text: 'Profile updated successfully.' });
@@ -131,14 +137,14 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate }) => {
       {/* Profile Form */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-          {/* Name — editable */}
+          {/* Name & Phone — editable */}
           <div className="p-5 sm:p-6 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border)] shadow-xs">
             <h3 className="text-sm font-bold text-[var(--text-main)] flex items-center gap-2 mb-1">
               <UserIcon className="w-4 h-4 text-[var(--primary)]" />
-              Your Name
+              Your Details
             </h3>
             <p className="text-xs text-[var(--text-muted)] mb-4">
-              Shown on your orders and invoices. Used to personalise your delivery experience.
+              Shown on your orders, invoices and delivery confirmations.
             </p>
             <label htmlFor="profile-name-input" className="block text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)] mb-1.5">
               Full Name
@@ -152,6 +158,21 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate }) => {
               placeholder="Enter your full name"
               className="w-full px-4 py-3 rounded-xl border border-[var(--border)] bg-[var(--bg-subtle)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] focus:border-transparent text-sm text-[var(--text-main)] placeholder:text-[var(--text-subtle)] transition-all"
             />
+            <label htmlFor="profile-phone-input" className="block text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)] mt-4 mb-1.5">
+              Phone Number
+            </label>
+            <input
+              id="profile-phone-input"
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              maxLength={20}
+              placeholder="e.g. +91 98765 43210"
+              className="w-full px-4 py-3 rounded-xl border border-[var(--border)] bg-[var(--bg-subtle)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] focus:border-transparent text-sm text-[var(--text-main)] placeholder:text-[var(--text-subtle)] transition-all"
+            />
+            <p className="text-[11px] text-[var(--text-subtle)] mt-1.5">
+              Your number is pre-filled at checkout so our baker can reach you for delivery confirmations.
+            </p>
 
             {saveMessage && (
               <div
@@ -253,8 +274,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate }) => {
           </dl>
           <div className="mt-5 pt-4 border-t border-[var(--border)]">
             <p className="text-[11px] leading-relaxed text-[var(--text-muted)]">
-              Need to update your phone number? Add the latest contact details on your next order so
-              our baker can reach you for delivery confirmations.
+              Your profile details are stored securely in your account and synced across your
+              devices, so checkouts stay quick and order updates reach you reliably.
             </p>
           </div>
         </div>

@@ -63,6 +63,7 @@ export const COLLECTIONS = {
   SETTINGS: 'settings',
   ADMIN_USERS: 'adminUsers',
   SEARCH_HISTORY: 'searchHistory',
+  CUSTOMER_PROFILES: 'customerProfiles',
 } as const;
 
 export {
