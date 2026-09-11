@@ -10,6 +10,7 @@ import { Footer } from '../../../components/layout/Footer';
 import { CartDrawer } from '../../../components/cart/CartDrawer';
 import { MobileBottomNav } from '../../../components/layout/MobileBottomNav';
 import { CheckoutModal } from '../../../components/storefront/CheckoutModal';
+import { LoginRegisterModal } from '../../../components/storefront/LoginRegisterModal';
 import { ProductCard } from '../../../components/storefront/ProductCard';
 import { normalizeImageUrl, DEFAULT_BANNER_FALLBACK } from '../../../lib/imageUrl';
 import { getSiteUrl } from '../../../lib/siteUrl';
@@ -55,6 +56,7 @@ export default function OccasionPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+  const [isLoginOpen, setIsLoginOpen] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -124,7 +126,7 @@ export default function OccasionPage() {
   if (isLoading) {
     return (
       <div className="min-h-dvh bg-[var(--bg-app)]">
-        <Header products={allProducts} onNavigate={handleNavigate} />
+        <Header products={allProducts} onNavigate={handleNavigate} onOpenLogin={() => setIsLoginOpen(true)} />
         <div className="flex items-center justify-center py-40">
           <div className="flex flex-col items-center gap-3">
             <div className="w-10 h-10 border-4 border-[var(--primary)] border-t-transparent rounded-full animate-spin" />
@@ -132,6 +134,7 @@ export default function OccasionPage() {
           </div>
         </div>
         <Footer onNavigate={handleNavigate} />
+        <LoginRegisterModal isOpen={isLoginOpen} onClose={() => setIsLoginOpen(false)} />
       </div>
     );
   }
@@ -139,7 +142,7 @@ export default function OccasionPage() {
   if (notFound || !occasion) {
     return (
       <div className="min-h-dvh bg-[var(--bg-app)]">
-        <Header products={allProducts} onNavigate={handleNavigate} />
+        <Header products={allProducts} onNavigate={handleNavigate} onOpenLogin={() => setIsLoginOpen(true)} />
         <div className="max-w-lg mx-auto px-4 py-24 text-center">
           <Package className="w-14 h-14 text-[var(--text-subtle)] mx-auto mb-4" />
           <h1 className="text-2xl font-bold font-display text-[var(--text-main)] mb-2">Occasion Not Found</h1>
@@ -155,6 +158,7 @@ export default function OccasionPage() {
           </button>
         </div>
         <Footer onNavigate={handleNavigate} />
+        <LoginRegisterModal isOpen={isLoginOpen} onClose={() => setIsLoginOpen(false)} />
       </div>
     );
   }
@@ -192,7 +196,7 @@ export default function OccasionPage() {
           />
         )}
       </Head>
-      <Header products={allProducts} onNavigate={handleNavigate} />
+      <Header products={allProducts} onNavigate={handleNavigate} onOpenLogin={() => setIsLoginOpen(true)} />
 
       <main className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6">
         <button
@@ -282,6 +286,8 @@ export default function OccasionPage() {
         }}
         occasionSlug={occasion?.slug || undefined}
       />
+
+      <LoginRegisterModal isOpen={isLoginOpen} onClose={() => setIsLoginOpen(false)} />
     </div>
   );
 }

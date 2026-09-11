@@ -35,6 +35,7 @@ import { logAuditEvent } from '../../lib/audit';
 
 interface AddressBookViewProps {
   onNavigate: (view: string, param?: string) => void;
+  onOpenLogin?: () => void;
 }
 
 const EMPTY_FORM: CustomerAddressInput = {
@@ -55,7 +56,7 @@ const LABEL_ICON: Record<AddressLabel, React.ComponentType<{ className?: string 
   other: Package,
 };
 
-export const AddressBookView: React.FC<AddressBookViewProps> = ({ onNavigate }) => {
+export const AddressBookView: React.FC<AddressBookViewProps> = ({ onNavigate, onOpenLogin }) => {
   const { user, isAuthReady } = useAuth();
 
   const [addresses, setAddresses] = useState<CustomerAddress[]>([]);
@@ -131,7 +132,7 @@ export const AddressBookView: React.FC<AddressBookViewProps> = ({ onNavigate }) 
           </p>
           <button
             type="button"
-            onClick={() => onNavigate('orders')}
+            onClick={() => (onOpenLogin ? onOpenLogin() : onNavigate('orders'))}
             className="mt-6 px-6 py-3 rounded-xl bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white text-xs font-bold flex items-center gap-2 shadow-md active:scale-95 transition-all cursor-pointer"
           >
             <MapPin className="w-4 h-4" />

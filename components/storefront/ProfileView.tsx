@@ -17,9 +17,10 @@ import { useAuth } from '../../context/AuthContext';
 
 interface ProfileViewProps {
   onNavigate: (view: string, param?: string) => void;
+  onOpenLogin?: () => void;
 }
 
-export const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate }) => {
+export const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate, onOpenLogin }) => {
   const { user, isAuthReady, updateCustomerProfile } = useAuth();
 
   const [displayName, setDisplayName] = useState<string>('');
@@ -78,7 +79,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate }) => {
           </p>
           <button
             type="button"
-            onClick={() => onNavigate('orders')}
+            onClick={() => (onOpenLogin ? onOpenLogin() : onNavigate('orders'))}
             className="mt-6 px-6 py-3 rounded-xl bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white text-xs font-bold flex items-center gap-2 shadow-md active:scale-95 transition-all cursor-pointer"
           >
             <UserIcon className="w-4 h-4" />

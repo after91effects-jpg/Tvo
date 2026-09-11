@@ -49,6 +49,7 @@ import { RecentlyViewed } from '../components/storefront/RecentlyViewed';
 import { OccasionSection } from '../components/storefront/OccasionSection';
 import { AdminLoginModal } from '../components/storefront/AdminLoginModal';
 import { ForgotPasswordModal } from '../components/storefront/ForgotPasswordModal';
+import { LoginRegisterModal } from '../components/storefront/LoginRegisterModal';
 import { ResetPasswordModal } from '../components/storefront/ResetPasswordModal';
 import { CustomerOrderHistoryView } from '../components/storefront/CustomerOrderHistoryView';
 import { ProfileView } from '../components/storefront/ProfileView';
@@ -206,6 +207,7 @@ export default function Home() {
   const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
   const [isResetPasswordOpen, setIsResetPasswordOpen] = useState(false);
   const [resetOobCode, setResetOobCode] = useState<string>('');
+  const [isLoginOpen, setIsLoginOpen] = useState(false);
 
   // Admin Tab State
   const [adminTab, setAdminTab] = useState<AdminTab>('dashboard');
@@ -797,6 +799,7 @@ export default function Home() {
             onNavigate={handleNavigate}
             activeView={storeSubView}
             onForgotPassword={() => setIsForgotPasswordOpen(true)}
+            onOpenLogin={() => setIsLoginOpen(true)}
           />
 
           {/* Sub-view Content */}
@@ -814,9 +817,9 @@ export default function Home() {
                 onForgotPassword={() => setIsForgotPasswordOpen(true)}
               />
             ) : storeSubView === 'profile' ? (
-              <ProfileView onNavigate={handleNavigate} />
+              <ProfileView onNavigate={handleNavigate} onOpenLogin={() => setIsLoginOpen(true)} />
             ) : storeSubView === 'addresses' ? (
-              <AddressBookView onNavigate={handleNavigate} />
+              <AddressBookView onNavigate={handleNavigate} onOpenLogin={() => setIsLoginOpen(true)} />
             ) : storeSubView === 'about' ? (
               <AboutView />
             ) : storeSubView === 'contact' ? (
@@ -1067,6 +1070,16 @@ export default function Home() {
           <ForgotPasswordModal
             isOpen={isForgotPasswordOpen}
             onClose={() => setIsForgotPasswordOpen(false)}
+          />
+
+          {/* Login / Register Modal */}
+          <LoginRegisterModal
+            isOpen={isLoginOpen}
+            onClose={() => setIsLoginOpen(false)}
+            onForgotPassword={() => {
+              setIsLoginOpen(false);
+              setIsForgotPasswordOpen(true);
+            }}
           />
 
           {/* Reset Password Modal (opened from the secure reset email link) */}

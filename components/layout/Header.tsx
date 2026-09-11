@@ -48,6 +48,7 @@ interface HeaderProps {
   onSelectProduct?: (productId: string) => void;
   onSelectCategory?: (slug: string) => void;
   onForgotPassword?: () => void;
+  onOpenLogin?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -59,6 +60,7 @@ export const Header: React.FC<HeaderProps> = ({
   onSelectProduct,
   onSelectCategory,
   onForgotPassword,
+  onOpenLogin,
 }) => {
   const { itemCount, setIsCartOpen, deliveryCity, setDeliveryCity } = useCart();
   const { user, isAdmin, isStaff, logout } = useAuth();
@@ -371,7 +373,7 @@ export const Header: React.FC<HeaderProps> = ({
                       <button
                         onClick={() => {
                           setIsUserMenuOpen(false);
-                          onNavigate('orders');
+                          onOpenLogin?.();
                         }}
                         className="w-full py-2 bg-[#FF2B6D] hover:bg-[#FF1A5B] text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center justify-center gap-1.5"
                       >
@@ -822,7 +824,7 @@ export const Header: React.FC<HeaderProps> = ({
                   type="button"
                   onClick={() => {
                     setIsMobileNavOpen(false);
-                    onNavigate('orders');
+                    onOpenLogin?.();
                   }}
                   className="px-3.5 py-1.5 rounded-xl bg-[#FF2B6D] text-white text-xs font-bold shadow-xs cursor-pointer"
                 >
