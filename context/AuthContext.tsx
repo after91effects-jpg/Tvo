@@ -5,7 +5,6 @@ import { UserProfile, UserRole } from '../lib/types';
 import { logAuditEvent } from '../lib/audit';
 import { useLocalStorageJSON } from '../lib/useLocalStorage';
 import {
-  verifyLocalUser,
   createLocalUser,
   updateLocalUserProfile,
   getLocalAdminUser,
@@ -17,7 +16,7 @@ import {
   type LocalAuthUser,
 } from '../lib/localAuth';
 import { getLocalCustomerProfile, setLocalCustomerProfile } from '../lib/localCustomerProfiles';
-import { auth } from '../lib/firebase';
+import { auth, firebaseCreateUser, firebaseSignIn, firebaseSignOut, firebaseUpdateProfile } from '../lib/firebase';
 import { sendPasswordResetEmail } from 'firebase/auth';
 
 export interface AuthContextType {
@@ -84,6 +83,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (typeof window !== 'undefined') {
         try {
           await fetch('/api/auth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'logout' }) });
+        } catch (e) {
+        }
+        // Sign out from Firebase Auth
+        try {
+          await firebaseSignOut();
         } catch (e) {
         }
       }
@@ -156,33 +160,63 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loginWithEmail = async (email: string, pass: string) => {
     try {
       setIsLoading(true);
-      const result = verifyLocalUser(email, pass);
-      if (!result.success || !result.user) {
-        return { success: false, error: result.error || 'Invalid email or password', code: 'auth/invalid-credential' };
+      
+      // Use Firebase Auth for login
+      let firebaseUser: any;
+      try {
+        const result = await firebaseSignIn(email, pass);
+        firebaseUser = result.user;
+      } catch (err: any) {
+        const code = err?.code || '';
+        if (code === 'auth/invalid-email') {
+          return { success: false, error: 'Please enter a valid email address.', code };
+        }
+        if (code === 'auth/user-not-found' || code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
+          return { success: false, error: 'Invalid email or password. Please try again.', code };
+        }
+        if (code === 'auth/too-many-requests') {
+          return { success: false, error: 'Too many attempts. Please wait a moment and try again.', code };
+        }
+        if (code === 'auth/network-request-failed') {
+          return { success: false, error: 'A network error occurred. Please check your connection and try again.', code };
+        }
+        return { success: false, error: err?.message || 'Invalid email or password', code };
       }
 
-      const localUser = result.user as any;
-      const adminUser = getLocalAdminUser(localUser.uid);
+      const uid = firebaseUser.uid;
+      const fbEmail = firebaseUser.email || email;
+      const displayName = firebaseUser.displayName || email.split('@')[0];
 
+      // Check if admin/staff user in localStorage
       let role: UserRole = 'customer';
-      let name = localUser.name;
+      let name = displayName;
 
+      const adminUser = getLocalAdminUser(uid);
       if (adminUser) {
         role = adminUser.role;
         name = adminUser.name;
       }
 
+      // Get customer profile from localStorage if exists
+      let phone: string | undefined;
+      let createdAt: string | undefined;
+      const customerProfile = getLocalCustomerProfile(uid);
+      if (customerProfile) {
+        phone = customerProfile.phone;
+        createdAt = customerProfile.createdAt;
+      }
+
       const profile: UserProfile = {
-        uid: localUser.uid,
+        uid,
         name,
-        email: localUser.email,
+        email: fbEmail,
         role,
         lastLogin: new Date().toISOString(),
-        phone: localUser.phone,
-        createdAt: localUser.createdAt,
+        phone,
+        createdAt,
       };
 
-      setLocalAuthSession(profile, localUser.uid);
+      setLocalAuthSession(profile, uid);
       setUser(profile);
 
       if (typeof window !== 'undefined') {
@@ -217,29 +251,53 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const registerCustomer = async (name: string, email: string, pass: string) => {
     try {
       setIsLoading(true);
-      const result = createLocalUser(name, email, pass, 'customer');
-      if (!result.success || !result.user) {
-        return { success: false, error: result.error || 'Registration failed', code: 'auth/email-already-in-use' };
+      
+      // Use Firebase Auth for registration
+      let firebaseUser: any;
+      try {
+        const result = await firebaseCreateUser(email, pass);
+        firebaseUser = result.user;
+        
+        // Update the Firebase user's display name
+        await firebaseUpdateProfile(firebaseUser, { displayName: name });
+      } catch (err: any) {
+        const code = err?.code || '';
+        if (code === 'auth/email-already-in-use') {
+          return { success: false, error: 'An account with this email already exists. Please sign in instead.', code };
+        }
+        if (code === 'auth/weak-password') {
+          return { success: false, error: 'Password must be at least 6 characters.', code };
+        }
+        if (code === 'auth/invalid-email') {
+          return { success: false, error: 'Please enter a valid email address.', code };
+        }
+        if (code === 'auth/network-request-failed') {
+          return { success: false, error: 'A network error occurred. Please check your connection and try again.', code };
+        }
+        return { success: false, error: err?.message || 'Registration failed', code };
       }
 
-      const localUser = result.user as any;
+      const uid = firebaseUser.uid;
+      const fbEmail = firebaseUser.email || email;
+
       const profile: UserProfile = {
-        uid: localUser.uid,
-        name: localUser.name,
-        email: localUser.email,
+        uid,
+        name,
+        email: fbEmail,
         role: 'customer',
         lastLogin: new Date().toISOString(),
-        createdAt: localUser.createdAt,
+        createdAt: new Date().toISOString(),
       };
 
-      setLocalCustomerProfile(localUser.uid, {
+      // Create local customer profile for additional data (phone, etc.)
+      setLocalCustomerProfile(uid, {
         name: profile.name,
         email: profile.email,
         phone: '',
         createdAt: profile.createdAt,
       });
 
-      setLocalAuthSession(profile, localUser.uid);
+      setLocalAuthSession(profile, uid);
       setUser(profile);
 
       return { success: true };

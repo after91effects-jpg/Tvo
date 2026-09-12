@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
-import { getAuth, type Auth } from 'firebase/auth';
+import { getAuth, type Auth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile } from 'firebase/auth';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -28,7 +28,7 @@ function getFirebaseApp(): FirebaseApp {
   return app;
 }
 
-export function getAuthInstance(): Auth {
+function getAuthInstance(): Auth {
   if (!authInstance) {
     authInstance = getAuth(getFirebaseApp());
   }
@@ -42,6 +42,22 @@ export const auth = new Proxy({} as Auth, {
     return (instance as any)[prop];
   },
 });
+
+// Export Firebase Auth functions for use in components
+export const firebaseCreateUser = (email: string, password: string) => 
+  createUserWithEmailAndPassword(getAuthInstance(), email, password);
+
+export const firebaseSignIn = (email: string, password: string) => 
+  signInWithEmailAndPassword(getAuthInstance(), email, password);
+
+export const firebaseSignOut = () => 
+  signOut(getAuthInstance());
+
+export const firebaseOnAuthStateChanged = (callback: (user: any) => void) => 
+  onAuthStateChanged(getAuthInstance(), callback);
+
+export const firebaseUpdateProfile = (user: any, data: { displayName?: string; photoURL?: string }) => 
+  updateProfile(user, data);
 
 export { firebaseConfig };
 export default app;
