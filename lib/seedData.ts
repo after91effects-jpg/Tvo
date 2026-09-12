@@ -1,5 +1,4 @@
 import { Category, Product, PromoCode, StoreSettings, HamperSettings } from './types';
-import { db, collection, doc, setDoc, getDocs, COLLECTIONS } from './firebase';
 import { ALL_FLAT_CATEGORIES } from './masterCatalogHierarchy';
 import { RESTRUCTURED_MASTER_PRODUCTS } from './productOrganizer';
 
@@ -125,33 +124,21 @@ export const DEFAULT_HAMPER_SETTINGS: HamperSettings = {
   minItemsRequired: 1,
 };
 
-// Helper to seed Firestore if empty or force update
+// Helper to seed database via API if empty or force update
 export async function seedFirestoreDatabase(force: boolean = false): Promise<{ success: boolean; message: string }> {
   try {
-    const productsSnap = await getDocs(collection(db, COLLECTIONS.PRODUCTS));
-    if (!force && !productsSnap.empty) {
-      return { success: true, message: 'Database already populated with products.' };
+    const res = await fetch('/api/admin/csv/seed', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ force }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || 'Seeding failed');
     }
 
-    // Seed Categories
-    for (const cat of INITIAL_CATEGORIES) {
-      await setDoc(doc(db, COLLECTIONS.CATEGORIES, cat.id), cat);
-    }
-
-    // Seed Products
-    for (const prod of INITIAL_PRODUCTS) {
-      await setDoc(doc(db, COLLECTIONS.PRODUCTS, prod.id), prod);
-    }
-
-    // Seed Promo Codes
-    for (const promo of DEFAULT_PROMO_CODES) {
-      await setDoc(doc(db, COLLECTIONS.PROMO_CODES, promo.code), promo);
-    }
-
-    // Seed Store Settings
-    await setDoc(doc(db, COLLECTIONS.SETTINGS, 'general'), DEFAULT_STORE_SETTINGS);
-
-    return { success: true, message: 'TVO Flavours database successfully seeded with all CSV products and categories!' };
+    return data.data;
   } catch (error: any) {
     console.error('Seeding error:', error);
     return { success: false, message: error?.message || 'Failed to seed database.' };

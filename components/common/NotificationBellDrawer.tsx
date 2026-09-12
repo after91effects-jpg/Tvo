@@ -128,7 +128,7 @@ export const NotificationBellDrawer: React.FC<NotificationBellDrawerProps> = ({
                   Live Order Alerts
                 </h4>
                 <p className="text-[10px] text-[var(--text-muted)]">
-                  Real-time Firebase Kitchen & Delivery Updates
+                  Real-time Kitchen & Delivery Updates
                 </p>
               </div>
             </div>
@@ -328,7 +328,7 @@ export const NotificationBellDrawer: React.FC<NotificationBellDrawerProps> = ({
 
           {/* Footer Status */}
           <div className="p-2.5 bg-[var(--bg-card)] border-t border-[var(--border)] text-center text-[10px] text-[var(--text-subtle)]">
-            Powered by Firebase Firestore real-time snapshot sync
+            Real-time order polling
           </div>
         </div>
       )}

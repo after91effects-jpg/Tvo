@@ -1,95 +1,47 @@
-import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
-import {
-  getFirestore,
-  collection,
-  doc,
-  getDocs,
-  getDoc,
-  setDoc,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  writeBatch,
-  query,
-  where,
-  orderBy,
-  limit,
-  onSnapshot,
-  Firestore,
-  serverTimestamp
-} from 'firebase/firestore';
-import {
-  getAuth,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged,
-  sendPasswordResetEmail,
-  verifyPasswordResetCode,
-  confirmPasswordReset,
-  updateProfile as fbUpdateProfile,
-  User,
-  Auth,
-  ActionCodeSettings
-} from 'firebase/auth';
-import firebaseConfigData from '../firebase-applet-config.json';
+import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
+import { getAuth, type Auth } from 'firebase/auth';
 
-// Initialize Firebase App
-let app: FirebaseApp;
-if (!getApps().length) {
-  app = initializeApp(firebaseConfigData);
-} else {
-  app = getApp();
+const firebaseConfig = {
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
+};
+
+let app: FirebaseApp | null = null;
+let authInstance: Auth | null = null;
+
+function getFirebaseApp(): FirebaseApp {
+  if (typeof window === 'undefined') {
+    throw new Error('Firebase can only be initialized on the client side');
+  }
+  if (!app) {
+    if (!getApps().length) {
+      app = initializeApp(firebaseConfig);
+    } else {
+      app = getApp();
+    }
+  }
+  return app;
 }
 
-// Initialize Firestore with the provisioned database ID if present
-export const db: Firestore = (firebaseConfigData as any).firestoreDatabaseId
-  ? getFirestore(app, (firebaseConfigData as any).firestoreDatabaseId)
-  : getFirestore(app);
+export function getAuthInstance(): Auth {
+  if (!authInstance) {
+    authInstance = getAuth(getFirebaseApp());
+  }
+  return authInstance;
+}
 
-export const auth: Auth = getAuth(app);
+// Lazy getter for auth - only initializes when accessed
+export const auth = new Proxy({} as Auth, {
+  get(target, prop) {
+    const instance = getAuthInstance();
+    return (instance as any)[prop];
+  },
+});
 
-// Firestore Collection Names
-export const COLLECTIONS = {
-  PRODUCTS: 'products',
-  CATEGORIES: 'categories',
-  ORDERS: 'orders',
-  MEDIA_ASSETS: 'mediaAssets',
-  PROMO_CODES: 'promoCodes',
-  SUBSCRIBERS: 'subscribers',
-  INQUIRIES: 'inquiries',
-  AUDIT_LOGS: 'auditLogs',
-  IMPORT_JOBS: 'importJobs',
-  SETTINGS: 'settings',
-  ADMIN_USERS: 'adminUsers',
-  SEARCH_HISTORY: 'searchHistory',
-  CUSTOMER_PROFILES: 'customerProfiles',
-  CUSTOMER_ADDRESSES: 'customerAddresses',
-} as const;
-
-export {
-  collection,
-  doc,
-  getDocs,
-  getDoc,
-  setDoc,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  writeBatch,
-  query,
-  where,
-  orderBy,
-  limit,
-  onSnapshot,
-  serverTimestamp,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  sendPasswordResetEmail,
-  verifyPasswordResetCode,
-  confirmPasswordReset,
-  signOut,
-  onAuthStateChanged,
-  fbUpdateProfile as updateProfile
-};
-export type { User, ActionCodeSettings };
+export { firebaseConfig };
+export default app;

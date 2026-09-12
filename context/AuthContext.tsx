@@ -1,28 +1,27 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
-import {
-  auth,
-  db,
-  doc,
-  getDoc,
-  setDoc,
-  serverTimestamp,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged,
-  updateProfile,
-  User,
-  COLLECTIONS,
-} from '../lib/firebase';
 import { UserProfile, UserRole } from '../lib/types';
 import { logAuditEvent } from '../lib/audit';
 import { useLocalStorageJSON } from '../lib/useLocalStorage';
+import {
+  verifyLocalUser,
+  createLocalUser,
+  updateLocalUserProfile,
+  getLocalAdminUser,
+  initializeDefaultUsers,
+  getLocalAuthSession,
+  clearLocalAuthSession,
+  setLocalAuthSession,
+  isLocalAuthenticated,
+  type LocalAuthUser,
+} from '../lib/localAuth';
+import { getLocalCustomerProfile, setLocalCustomerProfile } from '../lib/localCustomerProfiles';
+import { auth } from '../lib/firebase';
+import { sendPasswordResetEmail } from 'firebase/auth';
 
 export interface AuthContextType {
   user: UserProfile | null;
-  firebaseUser: User | null;
   role: UserRole;
   isAdmin: boolean;
   isStaff: boolean;
@@ -34,13 +33,13 @@ export interface AuthContextType {
   registerCustomer: (name: string, email: string, pass: string) => Promise<{ success: boolean; error?: string; code?: string }>;
   updateCustomerProfile: (name: string, phone?: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
+  sendPasswordReset: (email: string) => Promise<{ success: boolean; error?: string }>;
   inactivityWarning: boolean;
   extendSession: () => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
-  firebaseUser: null,
   role: 'customer',
   isAdmin: false,
   isStaff: false,
@@ -52,79 +51,20 @@ const AuthContext = createContext<AuthContextType>({
   registerCustomer: async () => ({ success: false }),
   updateCustomerProfile: async () => ({ success: false }),
   logout: async () => {},
+  sendPasswordReset: async () => ({ success: false }),
   inactivityWarning: false,
   extendSession: () => {},
 });
 
-const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
-const WARNING_BEFORE_MS = 2 * 60 * 1000; // Warn 2 min before timeout
-
-// Persistent customer profile store (Firestore `customerProfiles/{uid}`). Unlike
-// the stale-able localStorage blob, this survives browser clears and works across
-// devices, and it is the source of truth for the customer's display name & phone.
-async function readCustomerProfile(fbUser: User): Promise<{ name?: string; phone?: string; createdAt?: string } | null> {
-  try {
-    const snap = await getDoc(doc(db, COLLECTIONS.CUSTOMER_PROFILES, fbUser.uid));
-    if (!snap.exists()) return null;
-    const d = snap.data();
-    const createdAt =
-      d.createdAt && typeof (d.createdAt as any).toDate === 'function'
-        ? (d.createdAt as any).toDate().toISOString()
-        : d.createdAt
-        ? String(d.createdAt)
-        : undefined;
-    return { name: d.name || undefined, phone: d.phone || undefined, createdAt };
-  } catch (e) {
-    console.warn('Could not read customer profile:', e);
-    return null;
-  }
-}
-
-async function writeCustomerProfile(
-  fbUser: User,
-  data: { name: string; email: string; phone?: string; createdAt?: string }
-) {
-  try {
-    await setDoc(
-      doc(db, COLLECTIONS.CUSTOMER_PROFILES, fbUser.uid),
-      {
-        name: data.name,
-        email: data.email,
-        phone: data.phone || '',
-        ...(data.createdAt ? { createdAt: data.createdAt } : {}),
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true }
-    );
-  } catch (e) {
-    console.warn('Could not persist customer profile:', e);
-  }
-}
+const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
+const WARNING_BEFORE_MS = 2 * 60 * 1000;
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useLocalStorageJSON<UserProfile | null>('confetto_active_user', null);
-  const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [user, setUser] = useState<UserProfile | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isAuthReady, setIsAuthReady] = useState<boolean>(false);
   const [inactivityWarning, setInactivityWarning] = useState<boolean>(false);
   const lastActivityRef = useRef<number>(0);
-
-  // localStorage is never a privilege source: a stored admin/staff profile may
-  // be stale, forged, or a legacy demo session, so a privileged role is only
-  // trusted when an active Firebase user backs it. When no Firebase session is
-  // present, clear any stored admin/staff profile on mount.
-  useEffect(() => {
-    if (firebaseUser) return;
-    if (!user || user.role === 'customer') return;
-    setUser(null);
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.removeItem('confetto_active_user');
-      } catch (e) {
-        // ignore
-      }
-    }
-  }, [user, firebaseUser, setUser]);
 
   const logout = useCallback(async () => {
     try {
@@ -139,24 +79,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           details: 'User logged out of TVO Flavours session',
         });
       }
-      await signOut(auth);
     } catch (e) {
-      // ignore
     } finally {
       if (typeof window !== 'undefined') {
         try {
           await fetch('/api/auth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'logout' }) });
         } catch (e) {
-          // ignore
         }
       }
+      clearLocalAuthSession();
       setUser(null);
-      setFirebaseUser(null);
       setInactivityWarning(false);
     }
-  }, [user, setUser]);
+  }, [user]);
 
-  // Track Inactivity for Admin/Staff
   const extendSession = useCallback(() => {
     lastActivityRef.current = Date.now();
     setInactivityWarning(false);
@@ -166,55 +102,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     lastActivityRef.current = Date.now();
   }, []);
 
-  // Listen to Firebase Auth state
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
-      setFirebaseUser(fbUser);
-      setIsAuthReady(true);
-      if (fbUser) {
-        try {
-          const userDoc = await getDoc(doc(db, COLLECTIONS.ADMIN_USERS, fbUser.uid));
-          if (userDoc.exists()) {
-            const data = userDoc.data();
-            const profile: UserProfile = {
-              uid: fbUser.uid,
-              name: data.name || fbUser.displayName || 'Chef Staff',
-              email: fbUser.email || '',
-              role: data.role || 'staff',
-              lastLogin: new Date().toISOString(),
-            };
-            setUser(profile);
-            if (typeof window !== 'undefined') {
-              localStorage.setItem('confetto_active_user', JSON.stringify(profile));
-            }
-          } else {
-            // Customer: restore a persisted profile so a session survives the
-            // localStorage blob being cleared without forcing a full re-login.
-            const customerData = await readCustomerProfile(fbUser);
-            if (customerData) {
-              const profile: UserProfile = {
-                uid: fbUser.uid,
-                name: customerData.name || fbUser.displayName || fbUser.email?.split('@')[0] || 'Customer',
-                email: fbUser.email || '',
-                role: 'customer',
-                phone: customerData.phone || undefined,
-                createdAt: customerData.createdAt,
-                lastLogin: new Date().toISOString(),
-              };
-              setUser(profile);
-              if (typeof window !== 'undefined') {
-                localStorage.setItem('confetto_active_user', JSON.stringify(profile));
-              }
-            }
-          }
-        } catch (e) {
-          console.warn('Could not fetch user profile from Firestore:', e);
-        }
-      }
-    });
+    initializeDefaultUsers();
 
-    return () => unsubscribe();
-  }, [setUser]);
+    const checkAuth = () => {
+      const session = getLocalAuthSession();
+      if (session && session.user) {
+        setUser(session.user);
+      }
+      setIsAuthReady(true);
+      setIsLoading(false);
+    };
+
+    checkAuth();
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('storage', checkAuth);
+      return () => window.removeEventListener('storage', checkAuth);
+    }
+  }, []);
 
   useEffect(() => {
     if (!user || user.role === 'customer') return;
@@ -250,42 +156,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loginWithEmail = async (email: string, pass: string) => {
     try {
       setIsLoading(true);
-      const res = await signInWithEmailAndPassword(auth, email, pass);
-      const uid = res.user.uid;
-      const fbEmail = res.user.email || email;
-      const displayName = res.user.displayName || email.split('@')[0];
+      const result = verifyLocalUser(email, pass);
+      if (!result.success || !result.user) {
+        return { success: false, error: result.error || 'Invalid email or password', code: 'auth/invalid-credential' };
+      }
+
+      const localUser = result.user as any;
+      const adminUser = getLocalAdminUser(localUser.uid);
 
       let role: UserRole = 'customer';
-      let name = displayName;
-      let customerData: { name?: string; phone?: string; createdAt?: string } | null = null;
+      let name = localUser.name;
 
-      try {
-        const userDoc = await getDoc(doc(db, COLLECTIONS.ADMIN_USERS, uid));
-        if (userDoc.exists()) {
-          const data = userDoc.data();
-          role = data.role || 'staff';
-          name = data.name || name;
-        } else {
-          customerData = await readCustomerProfile(res.user);
-        }
-      } catch (e) {
-        console.warn('Could not fetch user profile from Firestore:', e);
+      if (adminUser) {
+        role = adminUser.role;
+        name = adminUser.name;
       }
 
       const profile: UserProfile = {
-        uid,
+        uid: localUser.uid,
         name,
-        email: fbEmail,
+        email: localUser.email,
         role,
         lastLogin: new Date().toISOString(),
-        ...(customerData?.phone ? { phone: customerData.phone } : {}),
-        ...(customerData?.createdAt ? { createdAt: customerData.createdAt } : {}),
+        phone: localUser.phone,
+        createdAt: localUser.createdAt,
       };
 
+      setLocalAuthSession(profile, localUser.uid);
       setUser(profile);
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('confetto_active_user', JSON.stringify(profile));
-      }
 
       if (typeof window !== 'undefined') {
         try {
@@ -295,7 +193,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             body: JSON.stringify({ action: 'login', email, password: pass }),
           });
         } catch (e) {
-          // ignore
         }
       }
 
@@ -311,8 +208,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       return { success: true };
     } catch (err: any) {
-      const code = err?.code || '';
-      return { success: false, error: err.message || 'Invalid email or password', code };
+      return { success: false, error: err?.message || 'Invalid email or password', code: 'auth/invalid-credential' };
     } finally {
       setIsLoading(false);
     }
@@ -321,42 +217,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const registerCustomer = async (name: string, email: string, pass: string) => {
     try {
       setIsLoading(true);
-      const res = await createUserWithEmailAndPassword(auth, email, pass);
+      const result = createLocalUser(name, email, pass, 'customer');
+      if (!result.success || !result.user) {
+        return { success: false, error: result.error || 'Registration failed', code: 'auth/email-already-in-use' };
+      }
+
+      const localUser = result.user as any;
       const profile: UserProfile = {
-        uid: res.user.uid,
-        name,
-        email: res.user.email || email,
+        uid: localUser.uid,
+        name: localUser.name,
+        email: localUser.email,
         role: 'customer',
         lastLogin: new Date().toISOString(),
-        createdAt: new Date().toISOString(),
+        createdAt: localUser.createdAt,
       };
 
-      try {
-        await writeCustomerProfile(res.user, {
-          name: profile.name,
-          email: profile.email,
-          phone: '',
-          createdAt: profile.createdAt,
-        });
-      } catch (e) {
-        console.warn('Could not persist customer profile:', e);
-      }
+      setLocalCustomerProfile(localUser.uid, {
+        name: profile.name,
+        email: profile.email,
+        phone: '',
+        createdAt: profile.createdAt,
+      });
 
+      setLocalAuthSession(profile, localUser.uid);
       setUser(profile);
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('confetto_active_user', JSON.stringify(profile));
-      }
+
       return { success: true };
     } catch (err: any) {
-      const code = err?.code || '';
-      return { success: false, error: err.message || 'Registration failed', code };
+      return { success: false, error: err?.message || 'Registration failed', code: 'auth/email-already-in-use' };
     } finally {
       setIsLoading(false);
     }
   };
 
   const updateCustomerProfile = async (name: string, phone?: string) => {
-    if (!user || !firebaseUser) {
+    if (!user) {
       return { success: false, error: 'You must be signed in to update your profile.' };
     }
     const trimmedName = name.trim();
@@ -372,13 +267,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: true };
     }
     try {
-      await updateProfile(firebaseUser, { displayName: trimmedName });
-      await writeCustomerProfile(firebaseUser, {
-        name: trimmedName,
-        email: user.email,
-        phone: trimmedPhone,
-        createdAt: user.createdAt || new Date().toISOString(),
-      });
+      const result = updateLocalUserProfile(user.uid, trimmedName, trimmedPhone);
+      if (!result.success) return result;
+
       const updated: UserProfile = {
         ...user,
         name: trimmedName,
@@ -386,27 +277,60 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         createdAt: user.createdAt || new Date().toISOString(),
       };
       setUser(updated);
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('confetto_active_user', JSON.stringify(updated));
-      }
+      setLocalAuthSession(updated, user.uid);
+
       if (typeof window !== 'undefined') {
         try {
           await logAuditEvent({
-            actorUid: firebaseUser.uid,
+            actorUid: user.uid,
             actorName: trimmedName,
-            actorEmail: firebaseUser.email || user.email,
+            actorEmail: user.email,
             role: user.role,
             action: 'USER_UPDATE_PROFILE',
             targetType: 'Auth',
             details: 'Customer updated their profile',
           });
         } catch (e) {
-          // ignore
         }
       }
       return { success: true };
     } catch (err: any) {
-      return { success: false, error: err.message || 'Failed to update profile.' };
+      return { success: false, error: err?.message || 'Failed to update profile.' };
+    }
+  };
+
+  const sendPasswordReset = async (email: string) => {
+    try {
+      const trimmedEmail = email.trim().toLowerCase();
+      if (!trimmedEmail) {
+        return { success: false, error: 'Please enter your email address.' };
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+        return { success: false, error: 'Please enter a valid email address.' };
+      }
+
+      // Use Firebase Auth for password reset email
+      const actionCodeSettings = {
+        url: typeof window !== 'undefined' ? `${window.location.origin}/?view=reset` : '/?view=reset',
+        handleCodeInApp: true,
+      };
+
+      await sendPasswordResetEmail(auth, trimmedEmail, actionCodeSettings);
+
+      return { success: true };
+    } catch (err: any) {
+      const code = err?.code || '';
+      if (code === 'auth/invalid-email') {
+        return { success: false, error: 'Please enter a valid email address.' };
+      }
+      if (code === 'auth/user-not-found') {
+        // Don't reveal whether user exists - generic success
+        return { success: true };
+      }
+      if (code === 'auth/too-many-requests' || code === 'auth/network-request-failed') {
+        return { success: false, error: 'Too many requests. Please try again later.' };
+      }
+      return { success: false, error: 'Failed to send reset email. Please try again.' };
     }
   };
 
@@ -419,7 +343,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <AuthContext.Provider
       value={{
         user,
-        firebaseUser,
         role,
         isAdmin,
         isStaff,
@@ -431,6 +354,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         registerCustomer,
         updateCustomerProfile,
         logout,
+        sendPasswordReset,
         inactivityWarning,
         extendSession,
       }}

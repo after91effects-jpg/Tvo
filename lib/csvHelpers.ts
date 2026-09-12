@@ -1,6 +1,5 @@
 import Papa from 'papaparse';
 import { Product, WeightOption, DuplicateStrategy, ImportSummary } from './types';
-import { db, collection, getDocs, doc, setDoc, COLLECTIONS } from './firebase';
 
 // The canonical fields for TVO Flavours that can be mapped from CSV
 export const CONFETTO_PRODUCT_FIELDS = [
@@ -283,87 +282,35 @@ export async function parseWooCommerceCSV(file: File): Promise<Record<string, an
 }
 
 /**
- * Imports products from parsed WooCommerce CSV rows into Firestore
+ * Imports products from parsed WooCommerce CSV rows via API
  */
 export async function importProductsFromWooCommerce(
   rows: Record<string, any>[],
   duplicateStrategy: DuplicateStrategy,
   userName: string = 'Chef Administrator'
 ): Promise<ImportSummary> {
-  const summary: ImportSummary = {
-    created: 0,
-    updated: 0,
-    skipped: 0,
-    failed: 0,
-    errors: [],
-  };
+  try {
+    const res = await fetch('/api/admin/csv/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rows, duplicateStrategy }),
+    });
 
-  if (!rows || rows.length === 0) {
-    return summary;
-  }
-
-  // Get existing products to check for duplicates by SKU or Name
-  const snap = await getDocs(collection(db, COLLECTIONS.PRODUCTS));
-  const existingMap = new Map<string, Product>();
-  snap.docs.forEach((d) => {
-    const data = { id: d.id, ...(d.data() as Omit<Product, 'id'>) };
-    if (data.sku) existingMap.set(data.sku.trim().toLowerCase(), data);
-    if (data.name) existingMap.set(data.name.trim().toLowerCase(), data);
-  });
-
-  const headers = Object.keys(rows[0] || {});
-  const mapping = autoSuggestColumnMapping(headers);
-
-  for (let index = 0; index < rows.length; index++) {
-    const row = rows[index];
-    const rowNum = index + 1;
-
-    try {
-      // Find SKU or Name
-      const skuVal = (row[mapping['sku']] || row['SKU'] || row['sku'] || '').toString().trim();
-      const nameVal = (row[mapping['name']] || row['Name'] || row['name'] || '').toString().trim();
-
-      if (!nameVal && !skuVal) {
-        summary.skipped++;
-        continue;
-      }
-
-      const existing = (skuVal && existingMap.get(skuVal.toLowerCase())) ||
-        (nameVal && existingMap.get(nameVal.toLowerCase()));
-
-      if (existing) {
-        if (duplicateStrategy === 'skip') {
-          summary.skipped++;
-          continue;
-        } else if (duplicateStrategy === 'create_new') {
-          const transformed = transformCSVRowToProduct(row, mapping);
-          transformed.product.createdBy = userName;
-          await setDoc(doc(db, COLLECTIONS.PRODUCTS, transformed.product.id), transformed.product);
-          summary.created++;
-        } else {
-          // 'update'
-          const transformed = transformCSVRowToProduct(row, mapping, existing);
-          transformed.product.id = existing.id;
-          transformed.product.updatedAt = new Date().toISOString();
-          await setDoc(doc(db, COLLECTIONS.PRODUCTS, existing.id), transformed.product);
-          summary.updated++;
-        }
-      } else {
-        const transformed = transformCSVRowToProduct(row, mapping);
-        transformed.product.createdBy = userName;
-        await setDoc(doc(db, COLLECTIONS.PRODUCTS, transformed.product.id), transformed.product);
-        summary.created++;
-      }
-    } catch (err: any) {
-      summary.failed++;
-      summary.errors.push({
-        row: rowNum,
-        reason: err?.message || 'Error processing row',
-        data: row,
-      });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || 'Import failed');
     }
+
+    return data.data;
+  } catch (err: any) {
+    console.error('CSV Import error:', err);
+    // Return a failed summary with the error
+    return {
+      created: 0,
+      updated: 0,
+      skipped: 0,
+      failed: rows.length,
+      errors: [{ row: 0, reason: err?.message || 'Import failed', data: null }],
+    };
   }
-
-  return summary;
 }
-

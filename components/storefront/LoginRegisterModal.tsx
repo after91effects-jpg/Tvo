@@ -1,14 +1,13 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Mail, Lock, UserIcon, Eye, EyeOff, KeyRound, Loader2, LogIn, UserPlus, ArrowLeft, AlertCircle } from 'lucide-react';
+import { Mail, Lock, UserIcon, Eye, EyeOff, Loader2, LogIn, UserPlus, ArrowLeft, AlertCircle, KeyRound } from 'lucide-react';
 import { Modal } from '../common/Modal';
 import { useAuth } from '../../context/AuthContext';
 
 interface LoginRegisterModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onForgotPassword?: () => void;
 }
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -35,8 +34,8 @@ function toSafeRegisterError(code: string, message: string): string {
   return 'Registration failed. Please try again.';
 }
 
-export const LoginRegisterModal: React.FC<LoginRegisterModalProps> = ({ isOpen, onClose, onForgotPassword }) => {
-  const { user, loginWithEmail, registerCustomer } = useAuth();
+export const LoginRegisterModal: React.FC<LoginRegisterModalProps> = ({ isOpen, onClose }) => {
+  const { user, loginWithEmail, registerCustomer, sendPasswordReset } = useAuth();
 
   const [mode, setMode] = useState<Mode>('login');
   const [name, setName] = useState('');
@@ -71,10 +70,24 @@ export const LoginRegisterModal: React.FC<LoginRegisterModalProps> = ({ isOpen, 
     setError('');
   };
 
-  const handleForgotPassword = () => {
-    if (!onForgotPassword) return;
-    onClose();
-    onForgotPassword();
+  const handleForgotPassword = async () => {
+    setError('');
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
+      setError('Please enter your email address first.');
+      return;
+    }
+    if (!EMAIL_REGEX.test(trimmedEmail)) {
+      setError('Please enter a valid email address.');
+      return;
+    }
+
+    const res = await sendPasswordReset(trimmedEmail);
+    if (res.success) {
+      setError('If an account exists for this email, you will receive a password reset link.');
+    } else {
+      setError(res.error || 'Failed to send reset email. Please try again.');
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -258,7 +271,7 @@ export const LoginRegisterModal: React.FC<LoginRegisterModalProps> = ({ isOpen, 
         </button>
 
         <div className="flex items-center justify-between pt-1">
-          {onForgotPassword && mode === 'login' ? (
+          {mode === 'login' ? (
             <button
               type="button"
               onClick={handleForgotPassword}

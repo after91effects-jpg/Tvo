@@ -48,9 +48,7 @@ import { WishlistView } from '../components/storefront/WishlistView';
 import { RecentlyViewed } from '../components/storefront/RecentlyViewed';
 import { OccasionSection } from '../components/storefront/OccasionSection';
 import { AdminLoginModal } from '../components/storefront/AdminLoginModal';
-import { ForgotPasswordModal } from '../components/storefront/ForgotPasswordModal';
 import { LoginRegisterModal } from '../components/storefront/LoginRegisterModal';
-import { ResetPasswordModal } from '../components/storefront/ResetPasswordModal';
 import { CustomerOrderHistoryView } from '../components/storefront/CustomerOrderHistoryView';
 import { ProfileView } from '../components/storefront/ProfileView';
 import { AddressBookView } from '../components/storefront/AddressBookView';
@@ -204,9 +202,6 @@ export default function Home() {
   const [isAdminLoginOpen, setIsAdminLoginOpen] = useState(false);
   const [isAddProductModalOpen, setIsAddProductModalOpen] = useState(false);
   const [trackingOrderNumber, setTrackingOrderNumber] = useState<string>('');
-  const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
-  const [isResetPasswordOpen, setIsResetPasswordOpen] = useState(false);
-  const [resetOobCode, setResetOobCode] = useState<string>('');
   const [isLoginOpen, setIsLoginOpen] = useState(false);
 
   // Admin Tab State
@@ -361,13 +356,10 @@ export default function Home() {
       const order = sp.get('order');
 
       if (view === 'reset') {
-        const code = sp.get('oobCode') || '';
-        if (code) {
-          setResetOobCode(code);
-          setIsResetPasswordOpen(true);
-        }
+        // Password reset handled by Firebase Auth - the reset link will open the login modal with reset flow
+        setIsLoginOpen(true);
       } else if (view === 'forgot') {
-        setIsForgotPasswordOpen(true);
+        setIsLoginOpen(true);
       } else if (view === 'track') {
         if (order) setTrackingOrderNumber(order);
         setStoreSubView('track');
@@ -798,7 +790,6 @@ export default function Home() {
             onSelectCategory={(slug) => handleNavigate('category', slug)}
             onNavigate={handleNavigate}
             activeView={storeSubView}
-            onForgotPassword={() => setIsForgotPasswordOpen(true)}
             onOpenLogin={() => setIsLoginOpen(true)}
           />
 
@@ -814,7 +805,6 @@ export default function Home() {
                 products={products}
                 onNavigate={handleNavigate}
                 onSelectProduct={handleOpenProduct}
-                onForgotPassword={() => setIsForgotPasswordOpen(true)}
               />
             ) : storeSubView === 'profile' ? (
               <ProfileView onNavigate={handleNavigate} onOpenLogin={() => setIsLoginOpen(true)} />
@@ -1066,27 +1056,10 @@ export default function Home() {
             onSuccess={() => setActiveView('admin')}
           />
 
-          {/* Forgot Password Modal */}
-          <ForgotPasswordModal
-            isOpen={isForgotPasswordOpen}
-            onClose={() => setIsForgotPasswordOpen(false)}
-          />
-
           {/* Login / Register Modal */}
           <LoginRegisterModal
             isOpen={isLoginOpen}
             onClose={() => setIsLoginOpen(false)}
-            onForgotPassword={() => {
-              setIsLoginOpen(false);
-              setIsForgotPasswordOpen(true);
-            }}
-          />
-
-          {/* Reset Password Modal (opened from the secure reset email link) */}
-          <ResetPasswordModal
-            isOpen={isResetPasswordOpen}
-            oobCode={resetOobCode}
-            onClose={() => setIsResetPasswordOpen(false)}
           />
         </div>
       )}

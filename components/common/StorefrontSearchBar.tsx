@@ -21,7 +21,7 @@ import {
   deleteSearchQueryItem,
   clearUserSearchHistory,
   POPULAR_STORE_SEARCHES,
-} from '../../lib/searchHistory';
+} from '../../lib/localSearchHistory';
 import { resolveProductImage, handleImageFallback, DEFAULT_FALLBACK_IMAGE } from '../../lib/imageUrl';
 
 interface StorefrontSearchBarProps {

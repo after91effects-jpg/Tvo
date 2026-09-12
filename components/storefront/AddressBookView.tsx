@@ -30,7 +30,7 @@ import {
   CustomerAddress,
   CustomerAddressInput,
   AddressLabel,
-} from '../../lib/customerAddresses';
+} from '../../lib/localCustomerAddresses';
 import { logAuditEvent } from '../../lib/audit';
 
 interface AddressBookViewProps {

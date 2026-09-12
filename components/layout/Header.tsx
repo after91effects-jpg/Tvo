@@ -47,7 +47,6 @@ interface HeaderProps {
   onNavigate: (view: string, param?: string) => void;
   onSelectProduct?: (productId: string) => void;
   onSelectCategory?: (slug: string) => void;
-  onForgotPassword?: () => void;
   onOpenLogin?: () => void;
 }
 
@@ -59,7 +58,6 @@ export const Header: React.FC<HeaderProps> = ({
   onNavigate,
   onSelectProduct,
   onSelectCategory,
-  onForgotPassword,
   onOpenLogin,
 }) => {
   const { itemCount, setIsCartOpen, deliveryCity, setDeliveryCity } = useCart();
@@ -370,28 +368,17 @@ export const Header: React.FC<HeaderProps> = ({
                       <div className="text-xs text-[var(--text-muted)]">
                         Sign in for express checkout & order tracking
                       </div>
-                      <button
-                        onClick={() => {
-                          setIsUserMenuOpen(false);
-                          onOpenLogin?.();
-                        }}
-                        className="w-full py-2 bg-[#FF2B6D] hover:bg-[#FF1A5B] text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center justify-center gap-1.5"
-                      >
-                        <LogIn className="w-3.5 h-3.5" />
-                        <span>Sign In / Register</span>
-                      </button>
-                      {onForgotPassword && (
-                        <button
+<button
                           onClick={() => {
                             setIsUserMenuOpen(false);
-                            onForgotPassword();
+                            onOpenLogin?.();
                           }}
-                          className="w-full py-1.5 text-[11px] font-semibold text-[var(--text-muted)] hover:text-[var(--primary)] transition-colors cursor-pointer"
+                          className="w-full py-2 bg-[#FF2B6D] hover:bg-[#FF1A5B] text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center justify-center gap-1.5"
                         >
-                          Forgot Password?
+                          <LogIn className="w-3.5 h-3.5" />
+                          <span>Sign In / Register</span>
                         </button>
-                      )}
-                    </div>
+                      </div>
                   )}
                 </div>
               )}
