@@ -1,14 +1,9 @@
-import { ok, err, getCurrentUser, isAdminRole } from '../../../../../lib/server/api';
+import { ok, err, requireAdmin } from '../../../../../lib/server/api';
 import { upsertProduct } from '../../../../../lib/server/admin-catalog';
 import { db } from '../../../../../lib/server/db';
+import { logError } from '../../../../../lib/server/logger';
 
 export const runtime = 'nodejs';
-
-function requireAdmin(req: Request) {
-  const user = getCurrentUser(req);
-  if (!user || !isAdminRole(user.role)) return null;
-  return user;
-}
 
 export async function POST(req: Request) {
   const user = requireAdmin(req);
@@ -106,7 +101,7 @@ export async function POST(req: Request) {
 
     return ok({ success: true, message: 'TVO Flavours database successfully seeded with all CSV products and categories!' });
   } catch (e: any) {
-    console.error('Seeding error:', e);
+    logError('csv_seed_error', e?.message || e);
     return err(e.message || 'Failed to seed database', 500);
   }
 }

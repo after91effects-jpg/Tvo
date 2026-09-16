@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { Product, WeightOption, CartItem, CartItemAddon, PromoCode } from '../lib/types';
+import { Product, WeightOption, CartItem, CartItemAddon, PromoCode, FlavourOption } from '../lib/types';
 import { DEFAULT_PROMO_CODES, DEFAULT_STORE_SETTINGS } from '../lib/seedData';
 import { useLocalStorageJSON, useLocalStorageString } from '../lib/useLocalStorage';
 
@@ -22,9 +22,13 @@ interface CartContextType {
     product: Product,
     selectedWeight: WeightOption,
     selectedFlavour: string,
-    messageOnCake?: string,
+    flavourPriceOrMessage?: number | string,
+    messageOrAddons?: string | CartItemAddon[],
+    customDesignImageOrQuantity?: string | number,
+    customDesignDescription?: string,
     addons?: CartItemAddon[],
-    quantity?: number
+    quantity?: number,
+    customInstructions?: string
   ) => void;
   updateQuantity: (itemId: string, quantity: number) => void;
   removeFromCart: (itemId: string) => void;
@@ -79,12 +83,43 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     product: Product,
     selectedWeight: WeightOption,
     selectedFlavour: string,
-    messageOnCake?: string,
-    addons: CartItemAddon[] = [],
-    quantity: number = 1
+    flavourPriceOrMessage?: number | string,
+    messageOrAddons?: string | CartItemAddon[],
+    customDesignImageOrQuantity?: string | number,
+    customDesignDescription?: string,
+    addonsParam: CartItemAddon[] = [],
+    quantityParam: number = 1,
+    customInstructions?: string
   ) => {
+    let flavourPrice = 0;
+    let messageOnCake = "";
+    let customDesignImage = "";
+    let description = customDesignDescription || "";
+    let instructions = customInstructions || "";
+    let addons: CartItemAddon[] = [];
+    let quantity = 1;
+
+    if (typeof flavourPriceOrMessage === "string") {
+      // Legacy call: (product, weight, flavour, messageOnCake, addons, quantity)
+      messageOnCake = flavourPriceOrMessage;
+      addons = Array.isArray(messageOrAddons) ? messageOrAddons : [];
+      quantity = typeof customDesignImageOrQuantity === "number" ? customDesignImageOrQuantity : 1;
+    } else {
+      flavourPrice = Number(flavourPriceOrMessage) || 0;
+      messageOnCake = typeof messageOrAddons === "string" ? messageOrAddons : "";
+      if (Array.isArray(customDesignImageOrQuantity)) {
+        // Call: (product, weight, flavour, price, message, addons, qty)
+        addons = customDesignImageOrQuantity;
+        quantity = typeof customDesignDescription === "number" ? customDesignDescription : 1;
+      } else {
+        customDesignImage = typeof customDesignImageOrQuantity === "string" ? customDesignImageOrQuantity : "";
+        addons = Array.isArray(addonsParam) ? addonsParam : [];
+        quantity = Number(quantityParam) || 1;
+      }
+    }
+
     const addonsTotal = addons.reduce((sum, a) => sum + a.price, 0);
-    const unitPrice = selectedWeight.price + addonsTotal;
+    const unitPrice = selectedWeight.price + flavourPrice + addonsTotal;
 
     setItems((prev) => {
       const existingIndex = prev.findIndex(
@@ -92,7 +127,11 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
           item.productId === product.id &&
           item.selectedWeight.label === selectedWeight.label &&
           item.selectedFlavour === selectedFlavour &&
-          (item.messageOnCake || '') === (messageOnCake || '') &&
+          (item.flavourPrice || 0) === flavourPrice &&
+          (item.messageOnCake || "") === (messageOnCake || "") &&
+          (item.customInstructions || "") === (instructions || "") &&
+          (item.customDesignImage || "") === (customDesignImage || "") &&
+          (item.customDesignDescription || "") === (description || "") &&
           item.addons.length === addons.length &&
           item.addons.every((a) => addons.some((oa) => oa.id === a.id))
       );
@@ -109,7 +148,11 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
           product,
           selectedWeight,
           selectedFlavour,
-          messageOnCake: messageOnCake?.trim(),
+          flavourPrice,
+          messageOnCake: messageOnCake?.trim() || undefined,
+          customInstructions: instructions?.trim() || undefined,
+          customDesignImage: customDesignImage || undefined,
+          customDesignDescription: description?.trim() || undefined,
           addons,
           quantity,
           unitPrice,

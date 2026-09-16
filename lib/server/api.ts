@@ -14,8 +14,30 @@ export function ok(data: unknown, status = 200) {
   return NextResponse.json(data, { status });
 }
 
+export function withRequestId(res: NextResponse, id: string): NextResponse {
+  res.headers.set('X-Request-ID', id);
+  return res;
+}
+
 export function err(message: string, status = 400) {
+  if (status >= 500) {
+    return NextResponse.json({ error: 'Internal server error' }, { status });
+  }
   return NextResponse.json({ error: message }, { status });
+}
+
+export function sanitizeError(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  return String(e);
+}
+
+export function requestId(): string {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
 }
 
 export function authUser(req: Request) {

@@ -1,4 +1,4 @@
-import { ok, err, getCurrentUser, isAdminRole } from '../../../../lib/server/api';
+import { ok, err, requireAdmin } from '../../../../lib/server/api';
 import {
   getAllTaxonomy, saveCategory, deleteCategory, saveTag, deleteTag,
   saveBrand, deleteBrand, saveAttribute, deleteAttribute,
@@ -7,14 +7,8 @@ import {
 
 export const runtime = 'nodejs';
 
-function requireAdminLocal(req: Request) {
-  const user = getCurrentUser(req);
-  if (!user || !isAdminRole(user.role)) return null;
-  return user;
-}
-
 export async function GET(req: Request) {
-  const user = requireAdminLocal(req);
+  const user = requireAdmin(req);
   if (!user) return err('Admin access required', 403);
   const url = new URL(req.url);
   const type = url.searchParams.get('type') || 'all';
@@ -23,7 +17,7 @@ export async function GET(req: Request) {
     try { return ok({ delivery: getDeliveryConfig(id) }); } catch (e: any) { return err(e.message, 404); }
   }
   try {
-    const data = getAllTaxonomy();
+    const data = getAllTaxonomy() as Record<string, any>;
     if (type !== 'all') return ok({ [type]: data[type] ?? {} });
     return ok(data);
   } catch (e: any) {
@@ -32,7 +26,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const user = requireAdminLocal(req);
+  const user = requireAdmin(req);
   if (!user) return err('Admin access required', 403);
   const body = await req.json().catch(() => ({}));
   const type = body.type;

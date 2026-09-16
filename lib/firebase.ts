@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
-import { getAuth, type Auth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile } from 'firebase/auth';
+import { getAuth, type Auth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile, getIdToken } from 'firebase/auth';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -58,6 +58,12 @@ export const firebaseOnAuthStateChanged = (callback: (user: any) => void) =>
 
 export const firebaseUpdateProfile = (user: any, data: { displayName?: string; photoURL?: string }) => 
   updateProfile(user, data);
+
+export const firebaseGetIdToken = (forceRefresh?: boolean) => {
+  const currentUser = getAuthInstance().currentUser;
+  if (!currentUser) return Promise.resolve(null);
+  return getIdToken(currentUser, forceRefresh);
+};
 
 export { firebaseConfig };
 export default app;

@@ -7,7 +7,6 @@ import { useLocalStorageJSON } from '../lib/useLocalStorage';
 import {
   createLocalUser,
   updateLocalUserProfile,
-  getLocalAdminUser,
   initializeDefaultUsers,
   getLocalAuthSession,
   clearLocalAuthSession,
@@ -16,18 +15,22 @@ import {
   type LocalAuthUser,
 } from '../lib/localAuth';
 import { getLocalCustomerProfile, setLocalCustomerProfile } from '../lib/localCustomerProfiles';
-import { auth, firebaseCreateUser, firebaseSignIn, firebaseSignOut, firebaseUpdateProfile } from '../lib/firebase';
+import { auth, firebaseCreateUser, firebaseSignIn, firebaseSignOut, firebaseUpdateProfile, firebaseGetIdToken } from '../lib/firebase';
 import { sendPasswordResetEmail } from 'firebase/auth';
+import { ADMIN_ROLES, getPermissionsForRole, type Role } from '../lib/server/permissions';
 
 export interface AuthContextType {
   user: UserProfile | null;
   role: UserRole;
   isAdmin: boolean;
+  isSuperAdmin: boolean;
   isStaff: boolean;
   isAuthenticated: boolean;
   isLoading: boolean;
   isAuthReady: boolean;
+  permissions: string[];
   loginWithEmail: (email: string, pass: string) => Promise<{ success: boolean; error?: string; code?: string }>;
+  loginAdmin: (email: string, pass: string) => Promise<{ success: boolean; error?: string; code?: string }>;
   login: (email: string, pass: string) => Promise<{ success: boolean; error?: string; code?: string }>;
   registerCustomer: (name: string, email: string, pass: string) => Promise<{ success: boolean; error?: string; code?: string }>;
   updateCustomerProfile: (name: string, phone?: string) => Promise<{ success: boolean; error?: string }>;
@@ -41,11 +44,14 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   role: 'customer',
   isAdmin: false,
+  isSuperAdmin: false,
   isStaff: false,
   isAuthenticated: false,
   isLoading: false,
   isAuthReady: false,
+  permissions: [],
   loginWithEmail: async () => ({ success: false }),
+  loginAdmin: async () => ({ success: false }),
   login: async () => ({ success: false }),
   registerCustomer: async () => ({ success: false }),
   updateCustomerProfile: async () => ({ success: false }),
@@ -121,6 +127,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     checkAuth();
 
     if (typeof window !== 'undefined') {
+      // Validate admin staff sessions against the server-side httpOnly cookie.
+      // The client localStorage session is only a convenience mirror; the
+      // server cookie is the source of truth for admin authorization. On a
+      // stale/expired/invalid cookie the admin session is cleared so the UI
+      // cannot show an admin panel that would fail server authorization.
+      const syncServerSession = async () => {
+        try {
+          const res = await fetch('/api/auth');
+          const data = await res.json().catch(() => null);
+          const serverUser = data?.user || null;
+          const local = getLocalAuthSession();
+          const localIsStaff =
+            !!local?.user &&
+            ADMIN_ROLES.includes(local.user.role as Role);
+          const isStaffRole = (r: string) => ADMIN_ROLES.includes(r as Role);
+
+          if (serverUser) {
+            if (isStaffRole(serverUser.role) && local?.user) {
+              const synced: UserProfile = {
+                ...local.user,
+                name: serverUser.name,
+                email: serverUser.email,
+                role: serverUser.role as UserRole,
+                lastLogin: new Date().toISOString(),
+              };
+              setUser(synced);
+              setLocalAuthSession(synced, local.token || '');
+            }
+          } else if (localIsStaff) {
+            clearLocalAuthSession();
+            setUser(null);
+          }
+        } catch (e) {
+          // Network failure: keep the local session as-is.
+        }
+      };
+
+      syncServerSession();
       window.addEventListener('storage', checkAuth);
       return () => window.removeEventListener('storage', checkAuth);
     }
@@ -187,16 +231,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const fbEmail = firebaseUser.email || email;
       const displayName = firebaseUser.displayName || email.split('@')[0];
 
-      // Check if admin/staff user in localStorage
-      let role: UserRole = 'customer';
-      let name = displayName;
-
-      const adminUser = getLocalAdminUser(uid);
-      if (adminUser) {
-        role = adminUser.role;
-        name = adminUser.name;
-      }
-
       // Get customer profile from localStorage if exists
       let phone: string | undefined;
       let createdAt: string | undefined;
@@ -208,9 +242,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const profile: UserProfile = {
         uid,
-        name,
+        name: displayName,
         email: fbEmail,
-        role,
+        role: 'customer',
         lastLogin: new Date().toISOString(),
         phone,
         createdAt,
@@ -237,12 +271,89 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         role: profile.role,
         action: 'USER_LOGIN',
         targetType: 'Auth',
-        details: `User signed in with role: ${role}`,
+        details: `User signed in with role: ${profile.role}`,
       });
 
       return { success: true };
     } catch (err: any) {
       return { success: false, error: err?.message || 'Invalid email or password', code: 'auth/invalid-credential' };
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loginAdmin = async (email: string, pass: string) => {
+    try {
+      setIsLoading(true);
+      
+      // Use Firebase Auth for login
+      let firebaseUser: any;
+      try {
+        const result = await firebaseSignIn(email, pass);
+        firebaseUser = result.user;
+      } catch (err: any) {
+        const code = err?.code || '';
+        if (code === 'auth/invalid-email') {
+          return { success: false, error: 'Please enter a valid email address.', code };
+        }
+        if (code === 'auth/user-not-found' || code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
+          return { success: false, error: 'Invalid email or password. Please try again.', code };
+        }
+        if (code === 'auth/too-many-requests') {
+          return { success: false, error: 'Too many attempts. Please wait a moment and try again.', code };
+        }
+        if (code === 'auth/network-request-failed') {
+          return { success: false, error: 'A network error occurred. Please check your connection and try again.', code };
+        }
+        return { success: false, error: err?.message || 'Invalid email or password', code };
+      }
+
+      // Get Firebase ID token
+      const idToken = await firebaseGetIdToken();
+      if (!idToken) {
+        return { success: false, error: 'Failed to get authentication token', code: 'auth/token-error' };
+      }
+
+      // Call server adminLogin endpoint
+      const response = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'adminLogin', idToken }),
+      });
+      const data = await response.json();
+      
+      if (!response.ok || !data.admin) {
+        const errorMsg = data.error || 'Admin access denied. This account is not authorized for admin access.';
+        return { success: false, error: errorMsg, code: 'auth/admin-denied' };
+      }
+
+      const uid = firebaseUser.uid;
+      const fbEmail = firebaseUser.email || email;
+      
+      const profile: UserProfile = {
+        uid,
+        name: data.user.name,
+        email: fbEmail,
+        role: data.user.role as UserRole,
+        lastLogin: new Date().toISOString(),
+      };
+
+      setLocalAuthSession(profile, uid);
+      setUser(profile);
+
+      await logAuditEvent({
+        actorUid: profile.uid,
+        actorName: profile.name,
+        actorEmail: profile.email,
+        role: profile.role,
+        action: 'ADMIN_LOGIN',
+        targetType: 'Auth',
+        details: `Admin signed in with role: ${profile.role}`,
+      });
+
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'Admin login failed', code: 'auth/admin-error' };
     } finally {
       setIsLoading(false);
     }
@@ -393,9 +504,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const role: UserRole = user?.role || 'customer';
-  const isAdmin = role === 'admin';
-  const isStaff = role === 'staff' || role === 'admin';
+  const isAdmin = ADMIN_ROLES.includes(role as Role);
+  const isSuperAdmin = role === 'super_admin';
+  const isStaff = ADMIN_ROLES.includes(role as Role);
   const isAuthenticated = !!user;
+  const permissions = isAdmin ? (() => {
+    const p = getPermissionsForRole(role as Role);
+    return p.length === 1 && p[0] === '*' ? ['*'] : p as string[];
+  })() : [];
 
   return (
     <AuthContext.Provider
@@ -403,11 +519,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user,
         role,
         isAdmin,
+        isSuperAdmin,
         isStaff,
         isAuthenticated,
         isLoading,
         isAuthReady,
+        permissions,
         loginWithEmail,
+        loginAdmin,
         login: loginWithEmail,
         registerCustomer,
         updateCustomerProfile,

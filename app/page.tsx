@@ -25,6 +25,7 @@ import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
 import { useLocalStorageJSON } from '../lib/useLocalStorage';
 import { normalizeImageUrl } from '../lib/imageUrl';
+import { normalizeOrders } from '../lib/orderNormalizer';
 import { occasionAnalytics } from '../lib/analytics';
 
 // Layout & Storefront Components
@@ -48,6 +49,7 @@ import { WishlistView } from '../components/storefront/WishlistView';
 import { RecentlyViewed } from '../components/storefront/RecentlyViewed';
 import { OccasionSection } from '../components/storefront/OccasionSection';
 import { AdminLoginModal } from '../components/storefront/AdminLoginModal';
+import { useIsMobile } from '../hooks/use-mobile';
 import { LoginRegisterModal } from '../components/storefront/LoginRegisterModal';
 import { CustomerOrderHistoryView } from '../components/storefront/CustomerOrderHistoryView';
 import { ProfileView } from '../components/storefront/ProfileView';
@@ -61,12 +63,14 @@ import { AdminSidebar, AdminTab } from '../components/admin/AdminSidebar';
 import { DashboardView } from '../components/admin/DashboardView';
 import { ProductsCatalogView } from '../components/admin/ProductsCatalogView';
 import { CategoryManagerView } from '../components/admin/CategoryManagerView';
+import { AdminUsersView } from '../components/admin/AdminUsersView';
 import { MediaUploadsView } from '../components/admin/MediaUploadsView';
 import { CustomerOrdersView } from '../components/admin/CustomerOrdersView';
 import { WooCommerceHubView } from '../components/admin/WooCommerceHubView';
 import { SecurityAuditLogsView } from '../components/admin/SecurityAuditLogsView';
 import { HamperSettingsView } from '../components/admin/HamperSettingsView';
 import { FestivalManagerView } from '../components/admin/FestivalManagerView';
+import { SystemHealthView } from '../components/admin/SystemHealthView';
 
 function normalizeProductRecord(p: any): Product {
   const categorySlug = p.category || p.category_slug || '';
@@ -178,7 +182,7 @@ export interface ActiveOccasionMeta {
 
 export default function Home() {
   const router = useRouter();
-  const { user, isAuthenticated, isAdmin } = useAuth();
+  const { user, isAuthenticated, isAdmin, isAuthReady } = useAuth();
   const { isCartOpen, setIsCartOpen } = useCart();
   const { isInWishlist } = useWishlist();
   const { activeTrackingOrderNumber, setActiveTrackingOrderNumber } = useNotifications();
@@ -207,8 +211,42 @@ export default function Home() {
   // Admin Tab State
   const [adminTab, setAdminTab] = useState<AdminTab>('dashboard');
 
+  // Mobile sidebar state
+  const isMobile = useIsMobile();
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  // Restore admin view on refresh when server session is valid
+  useEffect(() => {
+    if (isAuthReady) {
+      if (isAdmin) {
+        setActiveView('admin');
+      } else {
+        setActiveView('storefront');
+      }
+    }
+  }, [isAuthReady, isAdmin]);
+
+  // Load server-persisted hamper settings once admin session is ready
+  useEffect(() => {
+    if (!isAuthReady || !isAdmin) return;
+    (async () => {
+      try {
+        const res = await fetch('/api/admin?type=hamper_settings');
+        if (!res.ok) return;
+        const data = await res.json();
+        const serverSettings = data?.settings;
+        if (serverSettings && typeof serverSettings === 'object' && !Array.isArray(serverSettings)) {
+          setHamperSettings(serverSettings);
+        }
+      } catch {
+        /* fall back to stored settings */
+      }
+    })();
+  }, [isAuthReady, isAdmin, setHamperSettings]);
+
   // Live Firestore Data State
   const [products, setProducts] = useState<Product[]>(() => INITIAL_PRODUCTS.map(normalizeProductRecord));
+  const [adminProducts, setAdminProducts] = useState<Product[]>(() => INITIAL_PRODUCTS.map(normalizeProductRecord));
   const [categories, setCategories] = useState<Category[]>(INITIAL_CATEGORIES);
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -281,15 +319,28 @@ export default function Home() {
         setProducts(INITIAL_PRODUCTS.map(normalizeProductRecord));
       }
 
+      // Fetch ALL products for the Admin panel (published + drafts).
+      // Only reachable for an authenticated admin: the endpoint ignores the
+      // include_drafts flag for non-admin sessions.
+      if (isAdmin) {
+        try {
+          const adminProdRes = await fetch('/api/products?limit=1000&include_drafts=1');
+          const adminProdData = await adminProdRes.json();
+          if (adminProdData.products && adminProdData.products.length > 0) {
+            setAdminProducts(adminProdData.products.map(normalizeProductRecord));
+          } else {
+            setAdminProducts([]);
+          }
+        } catch {
+          setAdminProducts([]);
+        }
+      }
+
       // Fetch Orders
       try {
         const ordRes = await fetch('/api/orders');
         const ordData = await ordRes.json();
-        if (ordData.orders && ordData.orders.length > 0) {
-          setOrders(ordData.orders);
-        } else {
-          setOrders([]);
-        }
+        setOrders(ordData.orders && ordData.orders.length > 0 ? normalizeOrders(ordData.orders) : []);
       } catch {
         setOrders([]);
       }
@@ -320,7 +371,7 @@ export default function Home() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [isAdmin]);
 
   const handleSeed = async () => {
     try {
@@ -344,6 +395,12 @@ export default function Home() {
       active = false;
     };
   }, [fetchData]);
+
+  // When an admin session becomes available, refresh so the Admin panel
+  // receives the full product list (published + drafts).
+  useEffect(() => {
+    if (isAdmin) fetchData(false);
+  }, [isAdmin, fetchData]);
 
   // Support direct deep links or returns from /product/[slug]
   useEffect(() => {
@@ -374,7 +431,7 @@ export default function Home() {
       } else if (view === 'about' || view === 'contact' || view === 'faq') {
         setStoreSubView(view as any);
       } else if (view === 'admin') {
-        if (isAuthenticated) setActiveView('admin');
+        if (isAdmin) setActiveView('admin');
         else setIsAdminLoginOpen(true);
       }
 
@@ -392,12 +449,12 @@ export default function Home() {
     } catch {
       // ignore
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, isAdmin]);
 
   // Navigation Handler
   const handleNavigate = (view: string, param?: string) => {
     if (view === 'admin') {
-      if (isAuthenticated) {
+      if (isAdmin) {
         setActiveView('admin');
       } else {
         setIsAdminLoginOpen(true);
@@ -721,16 +778,25 @@ export default function Home() {
       {activeView === 'admin' ? (
         // ==================== CHEF ADMINISTRATOR DASHBOARD ====================
         <div className="min-h-screen flex flex-col bg-[var(--bg-main)]">
-          <AdminHeader onNavigateToStore={() => setActiveView('storefront')} />
+          <AdminHeader
+            onNavigateToStore={() => setActiveView('storefront')}
+            onToggleSidebar={() => setIsSidebarOpen((v) => !v)}
+            isSidebarOpen={isSidebarOpen}
+          />
 
-          <div className="flex-1 flex overflow-hidden">
-            <AdminSidebar
-              activeTab={adminTab}
-              onSelectTab={(t) => setAdminTab(t)}
-              pendingOrdersCount={pendingOrdersCount}
-            />
+          <div className="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0">
+            <div className={isSidebarOpen || !isMobile ? '' : 'hidden'}>
+              <AdminSidebar
+                activeTab={adminTab}
+                onSelectTab={(t) => {
+                  setAdminTab(t);
+                  if (isMobile) setIsSidebarOpen(false);
+                }}
+                pendingOrdersCount={pendingOrdersCount}
+              />
+            </div>
 
-            <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto w-full">
+            <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 overflow-auto w-full">
               {adminTab === 'dashboard' && (
                 <DashboardView
                   products={products}
@@ -747,7 +813,7 @@ export default function Home() {
 
               {adminTab === 'products' && (
                 <ProductsCatalogView
-                  products={products}
+                  products={adminProducts}
                   onRefresh={fetchData}
                   isAddModalOpen={isAddProductModalOpen}
                   setIsAddModalOpen={setIsAddProductModalOpen}
@@ -771,11 +837,20 @@ export default function Home() {
               {adminTab === 'hamper' && (
                 <HamperSettingsView
                   settings={hamperSettings}
-                  onSave={(s) => setHamperSettings(s)}
+                  onSave={(s) => {
+                    setHamperSettings(s);
+                    fetch('/api/admin', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ type: 'hamper_settings', action: 'save', settings: s }),
+                    }).catch(() => {});
+                  }}
                 />
               )}
 
               {adminTab === 'festival' && <FestivalManagerView />}
+              {adminTab === 'staff' && <AdminUsersView />}
+              {adminTab === 'health' && <SystemHealthView />}
             </main>
           </div>
         </div>

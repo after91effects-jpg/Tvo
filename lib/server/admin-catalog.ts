@@ -1,12 +1,29 @@
 import { db } from './db';
 import { logAudit, slugify, jsonParseSafe } from './api';
 import { normalizeImageUrl, mediumImageUrl } from '../imageUrl';
+import { listActiveVariants, getVariantStockStatus } from './product-variants';
 
 // ============================================================================
 // Shared helpers
 // ============================================================================
 export function serializeAdminProduct(row: any) {
   if (!row) return null;
+  const stock = row.stock ?? 0;
+  const threshold = row.low_stock_threshold ?? 5;
+  const stockStatus = row.stock_status || (stock <= 0 ? 'out_of_stock' : (stock <= threshold ? 'low_stock' : 'in_stock'));
+  let variantCount = 0;
+  let activeVariantCount = 0;
+  let lowStockIndicator = false;
+  try {
+    variantCount = (db.prepare('SELECT COUNT(*) as c FROM product_variants WHERE product_id=?').get(row.id) as { c: number } | undefined)?.c || 0;
+    activeVariantCount = (db.prepare("SELECT COUNT(*) as c FROM product_variants WHERE product_id=? AND status='active'").get(row.id) as { c: number } | undefined)?.c || 0;
+    if (variantCount > 0) {
+      const vs = getVariantStockStatus(row.id);
+      lowStockIndicator = vs !== 'in_stock';
+    } else {
+      lowStockIndicator = stockStatus !== 'in_stock';
+    }
+  } catch { variantCount = 0; activeVariantCount = 0; lowStockIndicator = stockStatus !== 'in_stock'; }
   return {
     ...row,
     id: String(row.id),
@@ -18,6 +35,7 @@ export function serializeAdminProduct(row: any) {
     }).filter((i: any) => i?.url),
     variations: jsonParseSafe(row.variations_json, []),
     flavours: jsonParseSafe(row.flavours, []),
+    flavourOptions: jsonParseSafe(row.flavour_options_json, []),
     badges: jsonParseSafe(row.badges, []),
     tags: jsonParseSafe(row.tags, []),
     attributes: jsonParseSafe(row.attributes_json, []),
@@ -31,6 +49,25 @@ export function serializeAdminProduct(row: any) {
     brandName: row.brand_name || '',
     reviewCount: row.review_count || 0,
     rating: row.avg_rating || 0,
+    variantCount,
+    activeVariantCount,
+    lowStockIndicator,
+    stockStatus,
+    availableStock: stock,
+    customizationFee: Number(row.customization_fee) || 0,
+    allowCustomMessage: row.allow_custom_message !== 0,
+    allowCustomDesign: row.allow_custom_design === 1,
+    showGallery: row.show_gallery !== 0,
+    showVideo: row.show_video === 1,
+    showFlavour: row.show_flavour !== 0,
+    showCustomize: row.show_customize !== 0,
+    showCustomization: row.show_customize !== 0,
+    showDesignUpload: row.show_design_upload === 1,
+    showCustomerDesignUpload: row.show_design_upload === 1,
+    showAddons: row.show_addons !== 0,
+    showDietary: row.show_dietary !== 0,
+    showDelivery: row.show_delivery !== 0,
+    showSpecialInstructions: row.show_special_instructions !== 0,
   };
 }
 
@@ -93,7 +130,9 @@ export function listProducts(opts: any) {
     name: 'p.name ASC',
     price: 'COALESCE(p.sale_price,p.regular_price) ASC',
     'price-desc': 'COALESCE(p.sale_price,p.regular_price) DESC',
-  }[opts.sort || 'newest'] || 'p.updated_at DESC';
+  } as Record<string, string>;
+  const sortKey = (opts.sort || 'newest') as string;
+  const sortField = orderBy[sortKey] || 'p.updated_at DESC';
   const rows = db.prepare(`${LIST_BASE} ${where} ORDER BY ${orderBy} LIMIT ? OFFSET ?`).all(...p, per, (page - 1) * per);
   const countFrom = `products p LEFT JOIN categories c ON p.category_id=c.id LEFT JOIN brands b ON p.brand_id=b.id`;
   const totalRow = db.prepare(`SELECT COUNT(*) AS c FROM ${countFrom} ${where}`).get(...p) as any;
@@ -189,14 +228,28 @@ function buildProductPayload(body: any, existing: any, user: any) {
   }
 
   // JSON fields
-  for (const jf of ['flavours', 'badges', 'tags', 'images_json', 'variations_json', 'attributes_json', 'related_products', 'upsells', 'cross_sells', 'customization_json']) {
+  for (const jf of ['flavours', 'badges', 'tags', 'images_json', 'variations_json', 'attributes_json', 'related_products', 'upsells', 'cross_sells', 'customization_json', 'flavour_options_json']) {
     if (body[jf] !== undefined) {
       if (typeof body[jf] === 'string') payload[jf] = body[jf];
       else payload[jf] = JSON.stringify(body[jf]);
     }
   }
 
-  // stock handling + stock history
+  // Boolean feature toggles
+  for (const bf of ['show_gallery', 'show_video', 'show_flavour', 'show_customize', 'show_design_upload', 'show_addons', 'show_dietary', 'show_delivery', 'show_special_instructions']) {
+    if (body[bf] !== undefined) payload[bf] = body[bf] ? 1 : 0;
+  }
+
+  // Customization fields
+  if (body.customization_fee !== undefined) {
+    payload.customization_fee = toPrice(body.customization_fee);
+  }
+  if (body.allow_custom_message !== undefined) {
+    payload.allow_custom_message = body.allow_custom_message ? 1 : 0;
+  }
+  if (body.allow_custom_design !== undefined) {
+    payload.allow_custom_design = body.allow_custom_design ? 1 : 0;
+  }
   if (body.stock !== undefined) {
     const newStock = toStock(body.stock);
     const oldStock = existing?.stock ?? 0;
@@ -418,4 +471,60 @@ export function getAllAttributes() {
 }
 export function getAllAddons() {
   return db.prepare(`SELECT a.*, (SELECT COUNT(*) FROM product_addons pa WHERE pa.addon_id=a.id) AS product_count FROM addons a ORDER BY name`).all();
+}
+
+export function getCategoryTree() {
+  const all = db.prepare('SELECT id, name, slug, parent_id, description FROM categories ORDER BY id').all() as Array<{ id: number; name: string; slug: string; parent_id: number | null; description: string | null }>;
+  const byId: Record<number, any> = {};
+  for (const c of all) byId[c.id] = { ...c, children: [] };
+  const roots: any[] = [];
+  for (const c of all) {
+    if (c.parent_id === null || c.parent_id === undefined) {
+      roots.push(byId[c.id]);
+    } else if (byId[c.parent_id]) {
+      byId[c.parent_id].children.push(byId[c.id]);
+    }
+  }
+  return roots;
+}
+
+export function getLowStockProducts(limit = 20) {
+  const rows = db.prepare(`
+    SELECT p.*, c.name AS category_name, c.slug AS category_slug
+    FROM products p LEFT JOIN categories c ON p.category_id = c.id
+    WHERE p.deleted_at IS NULL AND (p.stock <= p.low_stock_threshold OR p.stock = 0) AND p.published = 1
+    ORDER BY p.stock ASC LIMIT ?
+  `).all(limit);
+  return rows.map(serializeAdminProduct);
+}
+
+export function adjustProductStock(productId: number, delta: number, reason: string, user: any) {
+  const product = db.prepare('SELECT * FROM products WHERE id=?').get(productId) as { stock: number; low_stock_threshold: number };
+  if (!product) throw new Error('Product not found');
+  const previousStock = product.stock || 0;
+  const newStock = Math.max(0, previousStock + delta);
+  const threshold = product.low_stock_threshold ?? 5;
+  const stockStatus = newStock <= 0 ? 'out_of_stock' : (newStock <= threshold ? 'low_stock' : 'in_stock');
+  const now = new Date().toISOString();
+  db.prepare(`INSERT INTO stock_history (product_id, change_amount, type, note, user_id, user_name) VALUES (?,?,?,?,?,?)`)
+    .run(productId, delta, 'manual', reason, user?.id ?? null, user?.name ?? null);
+  db.prepare(`UPDATE products SET stock=?, stock_status=?, updated_at=? WHERE id=?`)
+    .run(newStock, stockStatus, now, productId);
+  auditProduct(user, productId, 'stock_adjusted', 'stock', previousStock, newStock);
+  return { productId, previousStock, adjustment: delta, resultingStock: newStock, stockStatus, reason, timestamp: now };
+}
+
+export function getProductWithVariants(id: number) {
+  const product = getProduct(id);
+  if (!product) return null;
+  let variants = [];
+  let variantAdjustments = [];
+  try {
+    const { listActiveVariants, listVariants, getVariantAdjustments } = require('./product-variants');
+    variants = listActiveVariants(id);
+    for (const v of variants) {
+      variantAdjustments.push({ variantId: v.id, adjustments: getVariantAdjustments(v.id) });
+    }
+  } catch { /* variants table may not have data yet */ }
+  return { ...product, variants, variantAdjustments };
 }

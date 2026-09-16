@@ -1,6 +1,7 @@
 import { Category, Product, PromoCode, StoreSettings, HamperSettings } from './types';
 import { ALL_FLAT_CATEGORIES } from './masterCatalogHierarchy';
 import { RESTRUCTURED_MASTER_PRODUCTS } from './productOrganizer';
+import { logError } from './server/logger';
 
 export const INITIAL_CATEGORIES: Category[] = ALL_FLAT_CATEGORIES;
 export const INITIAL_PRODUCTS: Product[] = RESTRUCTURED_MASTER_PRODUCTS;
@@ -140,7 +141,7 @@ export async function seedFirestoreDatabase(force: boolean = false): Promise<{ s
 
     return data.data;
   } catch (error: any) {
-    console.error('Seeding error:', error);
+    logError('seed_error', error?.message || error);
     return { success: false, message: error?.message || 'Failed to seed database.' };
   }
 }

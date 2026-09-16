@@ -1,17 +1,13 @@
 import crypto from 'crypto';
 import { db, initDb } from './db';
+import { hasPermission, ROLES, CANONICAL_ROLES, isValidRole, Permission, Role, ADMIN_ROLES } from './permissions';
+import { logError } from './logger';
+import type { UserProfile } from '../types';
 
-// The JWT signing secret MUST be supplied via the environment at runtime.
-// There is deliberately NO hardcoded or default fallback: if JWT_SECRET is
-// missing the server fails safely (no tokens are signed, token verification
-// returns null) rather than publishing tokens with a known value.
 function getJwtSecret(): string {
   const secret = (process.env.JWT_SECRET || '').trim();
   if (!secret) {
-    console.error(
-      '[auth] Server configuration error: JWT_SECRET is not set. ' +
-      'Refusing to sign/verify tokens. Set JWT_SECRET in the server environment before starting.'
-    );
+    logError('server_config', 'JWT_SECRET is not set. Refusing to sign/verify tokens. Set JWT_SECRET in the server environment before starting.');
     throw new Error('Server configuration error: JWT_SECRET is not set.');
   }
   return secret;
@@ -65,7 +61,6 @@ export function verifyToken(token: string): Record<string, unknown> | null {
       return null;
     }
 
-    // Check if token has been revoked
     const tokenHash = hashToken(token);
     const revoked = db.prepare('SELECT id FROM revoked_tokens WHERE token_hash=?').get(tokenHash) as any;
     if (revoked) return null;
@@ -89,21 +84,33 @@ export function revokeToken(token: string): void {
       }
     } catch {}
     db.prepare('INSERT OR IGNORE INTO revoked_tokens (token_hash, expires_at) VALUES (?,?)').run(tokenHash, exp);
-    // Lazily purge expired tokens
     db.prepare('DELETE FROM revoked_tokens WHERE expires_at < ?').run(now);
   } catch {}
 }
 
 export function isAdminRole(role: string | undefined): boolean {
-  return role === 'super_admin' || role === 'admin';
+  if (!role) return false;
+  return isValidRole(role as Role) && ADMIN_ROLES.includes(role as Role);
+}
+
+export function isSuperAdmin(role: string | undefined): boolean {
+  return role === 'super_admin';
+}
+
+export function isStaffRole(role: string | undefined): boolean {
+  if (!role) return false;
+  return role === 'staff' || isAdminRole(role);
 }
 
 export function can(role: string | undefined, permission: string): boolean {
-  if (isAdminRole(role)) return true;
-  const row = db.prepare('SELECT permissions FROM roles WHERE name=?').get(role) as any;
-  if (!row) return true; // customers can't hit admin routes anyway
-  const perms: string[] = JSON.parse(row.permissions || '[]');
-  return perms.includes(permission) || perms.includes('*');
+  if (!isValidRole(role as Role)) return false;
+  if (isAdminRole(role)) {
+    if (permission === 'manage_roles' || permission === 'run_migration' || permission === 'restore_backup' || permission === 'manage_system_settings' || permission === 'create_backup') {
+      return role === 'super_admin';
+    }
+    return true;
+  }
+  return hasPermission(role as Role, permission as Permission);
 }
 
 export function currentCookie(req: Request): string | null {

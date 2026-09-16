@@ -1,19 +1,13 @@
-import { ok, err, getCurrentUser, isAdminRole, slugify } from '../../../../lib/server/api';
+import { ok, err, requireAdmin, slugify } from '../../../../lib/server/api';
 import {
   listProducts, getProduct, upsertProduct, quickEdit, duplicateProduct,
-  setStatus, deletePermanently, bulkAction,
+  setStatus, deletePermanently, bulkAction, getProductWithVariants, adjustProductStock, getLowStockProducts, getCategoryTree,
 } from '../../../../lib/server/admin-catalog';
 
 export const runtime = 'nodejs';
 
-function requireAdminLocal(req: Request) {
-  const user = getCurrentUser(req);
-  if (!user || !isAdminRole(user.role)) return null;
-  return user;
-}
-
 export async function GET(req: Request) {
-  const user = requireAdminLocal(req);
+  const user = requireAdmin(req);
   if (!user) return err('Admin access required', 403);
   const url = new URL(req.url);
   const params = Object.fromEntries(url.searchParams.entries());
@@ -25,6 +19,24 @@ export async function GET(req: Request) {
   }
 
   try {
+    if (params.type === 'low-stock') return ok({ products: getLowStockProducts(Number(params.limit) || 20) });
+    if (params.type === 'categories') return ok({ categories: getCategoryTree() });
+    if (params.type === 'detail') {
+      const id = Number(params.id);
+      if (!id) return err('Product id required', 400);
+      return ok({ product: getProductWithVariants(id) });
+    }
+    if (params.type === 'stock-adjust') {
+      const productId = Number(params.productId);
+      const delta = Number(params.delta);
+      const reason = params.reason || 'Manual adjustment';
+      if (!productId || isNaN(delta)) return err('productId and delta required', 400);
+      return ok({ adjustment: adjustProductStock(productId, delta, reason, user) });
+    }
+    const id = params.id ? Number(params.id) : null;
+    if (id) {
+      if (params.fetch === 'one') return ok({ product: getProduct(id) });
+    }
     const data = listProducts(params);
     return ok(data);
   } catch (e: any) {
@@ -59,7 +71,7 @@ function asLegacyAction(body: any, user: any): boolean {
 }
 
 export async function POST(req: Request) {
-  const user = requireAdminLocal(req);
+  const user = requireAdmin(req);
   if (!user) return err('Admin access required', 403);
   const body = await req.json().catch(() => ({}));
 
@@ -87,6 +99,12 @@ export async function POST(req: Request) {
       }
       case 'bulk': {
         const r = bulkAction({ ...body, subaction: body.bulkAction || body.action2 }, user);
+        return ok(r);
+      }
+      case 'adjust_stock': {
+        const { productId, delta, reason } = body;
+        if (!productId || delta === undefined) return err('productId and delta required', 400);
+        const r = adjustProductStock(productId, Number(delta), reason || 'Manual adjustment', user);
         return ok(r);
       }
       case 'delete_permanently': {

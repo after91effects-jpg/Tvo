@@ -40,6 +40,8 @@ type OccasionRow = {
   homepage_section_title: string | null;
   homepage_section_subtitle: string | null;
   banner_image: string | null;
+  cta_label: string | null;
+  cta_destination: string | null;
   seo_title: string | null;
   seo_description: string | null;
   canonical_url: string | null;
@@ -187,11 +189,22 @@ export const FestivalManagerView: React.FC = () => {
 
   const handleRefresh = () => {
     setIsRefreshing(true);
+    const endpoint = activeFilter === 'active'
+      ? '/api/admin?type=occasions'
+      : '/api/admin?type=occasions_all';
     Promise.all([
-      fetch('/api/admin?type=occasions')
+      fetch(endpoint)
         .then((res) => res.json())
         .then((data) => {
-          setOccasions(data.occasions || []);
+          if (data.error) {
+            setError(data.error || 'Refresh failed');
+            return;
+          }
+          let list: OccasionRow[] = data.occasions || [];
+          if (activeFilter === 'archived') {
+            list = list.filter((o) => o.deleted_at);
+          }
+          setOccasions(list);
           setError(null);
         })
         .catch((e) => setError(e?.message || 'Refresh failed')),
@@ -424,7 +437,10 @@ export const FestivalManagerView: React.FC = () => {
       cta_label: formCtaLabel || null,
       cta_destination: formCtaDestination || null,
     };
-    if (editingOccasion) payload.id = editingOccasion.id;
+    if (editingOccasion) {
+      payload.id = editingOccasion.id;
+      payload.banner_image = editingOccasion.banner_image || null;
+    }
 
     try {
       const res = await fetch('/api/admin', {
@@ -440,6 +456,7 @@ export const FestivalManagerView: React.FC = () => {
         setEditingOccasion(null);
         setTimeout(() => setFormSuccess(null), 5000);
         fetchOccasions();
+        fetchPreview();
       } else {
         setFormError(data.error || data.message || 'Failed to save occasion');
       }
@@ -461,6 +478,7 @@ export const FestivalManagerView: React.FC = () => {
       const data = await res.json();
       if (res.ok && !data.error) {
         fetchOccasions();
+        fetchPreview();
       } else {
         setError(data.error || 'Failed to archive occasion');
       }
@@ -706,10 +724,12 @@ export const FestivalManagerView: React.FC = () => {
   };
 
   const filteredProducts = searchQuery.trim()
-    ? allProducts.filter((p) =>
-        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.sku.toLowerCase().includes(searchQuery.toLowerCase())
-      )
+    ? allProducts.filter((p) => {
+        const q = searchQuery.toLowerCase();
+        const name = (p.name || '').toLowerCase();
+        const sku = (p.sku || '').toLowerCase();
+        return name.includes(q) || sku.includes(q);
+      })
     : allProducts;
 
   const isProductMapped = (productId: number) =>
@@ -1002,7 +1022,7 @@ export const FestivalManagerView: React.FC = () => {
               <thead className="sticky top-0 bg-[var(--bg-subtle)] z-10">
                 <tr className="border-b border-[var(--border)] text-[var(--text-subtle)] font-bold uppercase text-[10px]">
                   <th className="p-3 w-8">#</th>
-                  <th className="p-3 min-w-[160px]">Name</th>
+                  <th className="p-3">Name</th>
                   <th className="p-3">Type</th>
                   <th className="p-3">Recurrence</th>
                   <th className="p-3">Status</th>
@@ -1627,7 +1647,7 @@ export const FestivalManagerView: React.FC = () => {
                 <table className="w-full text-left text-xs border-collapse">
                   <thead className="bg-[var(--bg-subtle)] sticky top-0">
                     <tr className="text-[var(--text-subtle)] font-bold uppercase text-[10px]">
-                      <th className="p-2 min-w-[180px]">Product</th>
+                      <th className="p-2">Product</th>
                       <th className="p-2">SKU</th>
                       <th className="p-2">Price</th>
                       <th className="p-2 w-[60px] text-center">Map</th>
@@ -1694,7 +1714,7 @@ export const FestivalManagerView: React.FC = () => {
                 <table className="w-full text-left text-xs border-collapse">
                   <thead className="bg-[var(--bg-subtle)]">
                     <tr className="text-[var(--text-subtle)] font-bold uppercase text-[10px]">
-                      <th className="p-2 min-w-[160px]">Product</th>
+                      <th className="p-2">Product</th>
                       <th className="p-2">SKU</th>
                       <th className="p-2">Stock</th>
                       <th className="p-2 w-[80px]">Priority</th>

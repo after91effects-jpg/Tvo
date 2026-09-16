@@ -29,8 +29,14 @@ import {
   Calendar,
   BadgeCheck,
   Zap,
+  Upload,
+  Trash2,
+  RefreshCw,
+  AlertCircle,
 } from 'lucide-react';
-import { Product, WeightOption, AddOn } from '../../lib/types';
+import { validateImageFile } from '../../lib/uploadValidation';
+import { optimizeImageFile } from '../../lib/imageOptimizer';
+import { Product, WeightOption, AddOn, FlavourOption } from '../../lib/types';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 import { StarRating } from '../common/StarRating';
@@ -91,8 +97,18 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   const [selectedFlavour, setSelectedFlavour] = useState<string>(
     product?.flavours?.[0] || 'Original'
   );
+  const [selectedFlavourPrice, setSelectedFlavourPrice] = useState<number>(0);
   const [messageOnCake, setMessageOnCake] = useState<string>('');
   const [selectedAddOns, setSelectedAddOns] = useState<AddOn[]>([]);
+  const [isCustomizeOpen, setIsCustomizeOpen] = useState<boolean>(false);
+  const [customerInstructions, setCustomerInstructions] = useState<string>('');
+  const [customDesignImage, setCustomDesignImage] = useState<string>('');
+  const [customDesignPreview, setCustomDesignPreview] = useState<string>('');
+  const [designFileName, setDesignFileName] = useState<string>('');
+  const [customDesignDescription, setCustomDesignDescription] = useState<string>('');
+  const [uploadError, setUploadError] = useState<string>('');
+  const [isUploadingDesign, setIsUploadingDesign] = useState<boolean>(false);
+  const designFileInputRef = useRef<HTMLInputElement | null>(null);
   const [quantity, setQuantity] = useState<number>(1);
   const [activeTab, setActiveTab] = useState<'details' | 'delivery' | 'description' | 'reviews'>('details');
   const [activeImageIndex, setActiveImageIndex] = useState<number>(0);
@@ -146,6 +162,12 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
     isSwipingRef.current = false;
   };
 
+  const minDeliveryDate = React.useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 2);
+    return d.toISOString().split('T')[0];
+  }, []);
+
   // Sync state whenever the active product changes
   React.useEffect(() => {
     if (!product) return;
@@ -155,16 +177,24 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
         ? { label: '1 piece', weightKg: 0, price: product.price || 699, mrp: product.regularPrice || 0 }
         : { label: '0.5 kg', weightKg: 0.5, price: product.price || 699, mrp: product.regularPrice || 849 });
     setSelectedWeight(initialWeight);
-    setSelectedFlavour(product.flavours?.[0] || 'Original');
+    // Use flavourOptions with pricing if available, fallback to simple flavours
+    const defaultFlavour = product.flavourOptions?.find(f => f.isDefault && f.isActive) || product.flavourOptions?.[0];
+    setSelectedFlavour(defaultFlavour?.name || product.flavours?.[0] || 'Original');
+    setSelectedFlavourPrice(defaultFlavour?.additionalPrice || 0);
     setMessageOnCake('');
+    setCustomerInstructions('');
+    setCustomDesignImage('');
+    setCustomDesignPreview('');
+    setDesignFileName('');
+    setCustomDesignDescription('');
+    setUploadError('');
+    setIsCustomizeOpen(false);
     setSelectedAddOns([]);
     setQuantity(1);
     setActiveImageIndex(0);
     setActiveTab('details');
-    const today = new Date();
-    const minDeliveryDate = new Date(today.setDate(today.getDate() + 2)).toISOString().split('T')[0];
     setDeliveryDate(minDeliveryDate);
-  }, [product?.id]);
+  }, [product?.id, minDeliveryDate]);
 
   const isEmbedded = variant === 'embedded';
 
@@ -207,19 +237,105 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   const addOnsTotal = selectedAddOns.reduce((sum, a) => sum + a.price, 0);
   const deliveryCharge = DELIVERY_SLOTS[selectedDeliverySlot]?.price || 0;
   const giftWrapPrice = giftWrap ? 149 : 0;
-  const itemUnitPrice = selectedWeight.price + addOnsTotal + deliveryCharge + giftWrapPrice;
+  const itemUnitPrice = selectedWeight.price + selectedFlavourPrice + addOnsTotal + deliveryCharge + giftWrapPrice;
 
   // Maximum order quantity: bounded by available inventory
   const qtyMax = Math.max(1, Math.min(10, product.stock ?? 10));
 
+  // Feature toggles for customization and design upload
+  const isCustomizationAllowed = product.showCustomization !== false && product.showCustomize !== false;
+  const isDesignUploadAllowed = isCustomizationAllowed && product.showCustomerDesignUpload !== false && product.showDesignUpload !== false;
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadError('');
+    setIsUploadingDesign(true);
+
+    try {
+      // 1. Client-side file validation (extensions, MIME, size, magic bytes)
+      const validation = await validateImageFile(file);
+      if (!validation.valid) {
+        setUploadError(validation.error || 'Invalid file format. Please upload a valid JPG, PNG, or WEBP image.');
+        setIsUploadingDesign(false);
+        if (designFileInputRef.current) designFileInputRef.current.value = '';
+        return;
+      }
+
+      // 2. Client-side canvas compression/optimization to WebP (stripping EXIF metadata)
+      const optimized = await optimizeImageFile(file, { maxWidth: 1200, maxHeight: 1200, quality: 0.85 });
+
+      // Immediate local preview
+      setCustomDesignPreview(optimized.webpDataUrl);
+      setDesignFileName(file.name);
+
+      // 3. Upload to server endpoint /api/upload
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileDataUrl: optimized.webpDataUrl,
+          fileName: optimized.fileName,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error || 'Server upload failed.');
+      }
+
+      // Store server reference URL
+      setCustomDesignImage(data.url);
+    } catch (err: any) {
+      setUploadError(err.message || 'Failed to process image. Please try another file.');
+      setCustomDesignPreview('');
+      setCustomDesignImage('');
+      setDesignFileName('');
+    } finally {
+      setIsUploadingDesign(false);
+      if (designFileInputRef.current) designFileInputRef.current.value = '';
+    }
+  };
+
+  const handleRemoveDesignImage = () => {
+    setCustomDesignImage('');
+    setCustomDesignPreview('');
+    setDesignFileName('');
+    setUploadError('');
+    if (designFileInputRef.current) designFileInputRef.current.value = '';
+  };
+
   const handleAddToCart = () => {
-    addToCart(product, selectedWeight, selectedFlavour, messageOnCake, selectedAddOns, quantity);
+    addToCart(
+      product,
+      selectedWeight,
+      selectedFlavour,
+      selectedFlavourPrice,
+      messageOnCake,
+      customDesignImage,
+      customDesignDescription,
+      selectedAddOns,
+      quantity,
+      customerInstructions
+    );
     setIsAdded(true);
     setTimeout(() => setIsAdded(false), 2000);
   };
 
   const handleBuyNow = () => {
-    addToCart(product, selectedWeight, selectedFlavour, messageOnCake, selectedAddOns, quantity);
+    addToCart(
+      product,
+      selectedWeight,
+      selectedFlavour,
+      selectedFlavourPrice,
+      messageOnCake,
+      customDesignImage,
+      customDesignDescription,
+      selectedAddOns,
+      quantity,
+      customerInstructions
+    );
     onClose();
     if (onOpenCheckout) {
       onOpenCheckout();
@@ -240,13 +356,15 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
       <div className={`grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8 ${isEmbedded ? '' : 'max-h-[85vh] overflow-y-auto pr-1'}`}>
         {/* Left: Image Gallery & Trust Badges */}
         <div className="lg:col-span-5 space-y-4">
-          {/* Main Image with Touch Swipe */}
-          <div
-            className="relative aspect-square rounded-2xl overflow-hidden bg-[var(--bg-subtle)] border border-[var(--border)] group touch-pan-y select-none"
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
-          >
+          {product.showGallery !== false && (
+            <>
+              {/* Main Image with Touch Swipe */}
+              <div
+                className="relative aspect-square rounded-2xl overflow-hidden bg-[var(--bg-subtle)] border border-[var(--border)] group touch-pan-y select-none"
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
+              >
             <img
               key={activeImageIndex}
               src={images[activeImageIndex]?.url || images[0]?.url || DEFAULT_FALLBACK_IMAGE}
@@ -387,6 +505,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
               ))}
             </div>
           )}
+        </>)}
 
           {/* Trust Badges */}
           <div className="grid grid-cols-2 gap-2">
@@ -465,7 +584,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
             <div className="mt-3 p-3 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border)]">
               <div className="flex items-baseline gap-3">
                 <span className="text-2xl sm:text-3xl font-bold font-display text-[var(--text-main)]">
-                  ₹{selectedWeight.price * quantity}
+                  ₹{(selectedWeight.price + selectedFlavourPrice) * quantity}
                 </span>
                 {selectedWeight.mrp && selectedWeight.mrp > selectedWeight.price && savings > 0 && (
                   <>
@@ -581,53 +700,250 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                 )}
 
                 {/* Flavours */}
-                {product.flavours && product.flavours.length > 1 && (
-                  <div>
-                    <label className="block text-xs font-bold text-[var(--text-main)] uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                      Choose Flavour Profile
-                    </label>
-                    <div className="flex flex-wrap gap-2">
-                      {product.flavours.map((f) => (
-                        <button
-                          key={f}
-                          type="button"
-                          onClick={() => setSelectedFlavour(f)}
-                          className={`px-4 py-2 rounded-xl text-xs font-semibold border-2 transition-all cursor-pointer ${
-                            selectedFlavour === f
-                              ? 'bg-[var(--primary)] text-white border-[var(--primary)] shadow-md'
-                              : 'bg-[var(--bg-surface)] text-[var(--text-main)] border-[var(--border)] hover:border-[var(--primary)]/50'
-                          }`}
-                        >
-                          {f}
-                        </button>
-                      ))}
+                {(product.flavourOptions && product.flavourOptions.length > 0 && product.showFlavour)
+                  ? (
+                    <div>
+                      <label className="block text-xs font-bold text-[var(--text-main)] uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                        Choose Flavour Profile
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        {product.flavourOptions
+                          .filter((fo: FlavourOption) => fo.isActive)
+                          .map((fo: FlavourOption) => (
+                            <button
+                              key={fo.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedFlavour(fo.name);
+                                setSelectedFlavourPrice(fo.additionalPrice);
+                              }}
+                              className={`px-4 py-2 rounded-xl text-xs font-semibold border-2 transition-all cursor-pointer ${
+                                selectedFlavour === fo.name
+                                  ? 'bg-[var(--primary)] text-white border-[var(--primary)] shadow-md'
+                                  : 'bg-[var(--bg-surface)] text-[var(--text-main)] border-[var(--border)] hover:border-[var(--primary)]/50'
+                              }`}
+                            >
+                              {fo.name}
+                              {fo.additionalPrice > 0 && (
+                                <span className="ml-1.5 text-[10px] font-medium opacity-90">+₹{fo.additionalPrice}</span>
+                              )}
+                            </button>
+                          ))}
+                      </div>
                     </div>
+                  )
+                  : product.flavours && product.flavours.length > 1 && product.showFlavour ? (
+                    <div>
+                      <label className="block text-xs font-bold text-[var(--text-main)] uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                        Choose Flavour Profile
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        {product.flavours.map((f) => (
+                          <button
+                            key={f}
+                            type="button"
+                            onClick={() => setSelectedFlavour(f)}
+                            className={`px-4 py-2 rounded-xl text-xs font-semibold border-2 transition-all cursor-pointer ${
+                              selectedFlavour === f
+                                ? 'bg-[var(--primary)] text-white border-[var(--primary)] shadow-md'
+                                : 'bg-[var(--bg-surface)] text-[var(--text-main)] border-[var(--border)] hover:border-[var(--primary)]/50'
+                            }`}
+                          >
+                            {f}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                  : null}
+
+                {/* Customize Cake Accordion */}
+                {isCustomizationAllowed && (
+                  <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg-surface)] overflow-hidden transition-all shadow-xs">
+                    <button
+                      type="button"
+                      id="customize-cake-toggle"
+                      aria-expanded={isCustomizeOpen}
+                      aria-controls="customize-cake-content"
+                      onClick={() => setIsCustomizeOpen(!isCustomizeOpen)}
+                      className="w-full px-4 py-3 flex items-center justify-between bg-[var(--bg-subtle)]/50 hover:bg-[var(--bg-subtle)] transition-colors cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/30"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-base" role="img" aria-label="cake">🎂</span>
+                        <span className="text-xs font-bold text-[var(--text-main)] uppercase tracking-wider">
+                          Customize Your Cake
+                        </span>
+                        {(messageOnCake || customDesignImage || customerInstructions || customDesignDescription) && (
+                          <span className="w-2 h-2 rounded-full bg-[var(--primary)] inline-block ml-1" title="Customization added" />
+                        )}
+                      </div>
+                      <ChevronDown
+                        className={`w-4 h-4 text-[var(--text-muted)] transition-transform duration-200 ${
+                          isCustomizeOpen ? 'rotate-180' : ''
+                        }`}
+                      />
+                    </button>
+
+                    {isCustomizeOpen && (
+                      <div id="customize-cake-content" className="p-4 space-y-4 border-t border-[var(--border)]">
+                        {/* Cake Message */}
+                        <div>
+                          <label htmlFor="cake-message-input" className="block text-xs font-bold text-[var(--text-main)] uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                            <MessageSquare className="w-3.5 h-3.5 text-[var(--primary)]" />
+                            Cake Message
+                            <span className="text-[10px] font-normal text-[var(--text-muted)] normal-case">(Free)</span>
+                          </label>
+                          <div className="relative">
+                            <input
+                              id="cake-message-input"
+                              type="text"
+                              maxLength={35}
+                              value={messageOnCake}
+                              onChange={(e) => setMessageOnCake(e.target.value)}
+                              placeholder="Happy Birthday!"
+                              className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--primary)] transition-all"
+                            />
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-[var(--text-muted)]">
+                              {messageOnCake.length}/35
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-[var(--text-muted)] mt-1">✨ Hand-piped by our pastry chef with chocolate ganache</p>
+                        </div>
+
+                        {/* Customer Instructions */}
+                        <div>
+                          <label htmlFor="customer-instructions-input" className="block text-xs font-bold text-[var(--text-main)] uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                            <span>Customer Instructions</span>
+                            <span className="text-[10px] font-normal text-[var(--text-muted)] normal-case">Optional</span>
+                          </label>
+                          <textarea
+                            id="customer-instructions-input"
+                            rows={2}
+                            maxLength={200}
+                            value={customerInstructions}
+                            onChange={(e) => setCustomerInstructions(e.target.value)}
+                            placeholder="Describe what you want..."
+                            className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--primary)] resize-none transition-all"
+                          />
+                        </div>
+
+                        {/* Customer Design Upload */}
+                        {isDesignUploadAllowed && (
+                          <div className="pt-2 border-t border-[var(--border)]/70 space-y-3">
+                            <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--text-main)] uppercase tracking-wider">
+                              <span role="img" aria-label="palette">🎨</span>
+                              Upload Your Cake Design
+                            </div>
+
+                            {/* Hidden accessible file input */}
+                            <input
+                              ref={designFileInputRef}
+                              id="customer-design-file-input"
+                              type="file"
+                              accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+                              onChange={handleFileChange}
+                              disabled={isUploadingDesign}
+                              className="sr-only"
+                              aria-describedby="design-upload-help"
+                            />
+
+                            {/* Validation error display */}
+                            {uploadError && (
+                              <div className="flex items-start gap-2 p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs" role="alert">
+                                <AlertCircle className="w-4 h-4 flex-shrink-0 text-rose-600 mt-0.5" />
+                                <div className="flex-1 text-[11px]">{uploadError}</div>
+                              </div>
+                            )}
+
+                            {/* Upload states: Loading, Preview, or Picker */}
+                            {isUploadingDesign ? (
+                              <div className="flex items-center justify-center gap-2 p-4 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border)] text-xs text-[var(--text-muted)]">
+                                <RefreshCw className="w-4 h-4 animate-spin text-[var(--primary)]" />
+                                <span>Verifying, optimizing & uploading design...</span>
+                              </div>
+                            ) : customDesignPreview || customDesignImage ? (
+                              <div className="p-3 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border)] space-y-2.5">
+                                <div className="flex items-center gap-3">
+                                  <img
+                                    src={customDesignPreview || customDesignImage}
+                                    alt="Uploaded cake design reference preview"
+                                    className="w-16 h-16 sm:w-20 sm:h-20 rounded-lg object-cover border border-[var(--border)] flex-shrink-0 bg-white"
+                                  />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-semibold text-[var(--text-main)] truncate">
+                                      {designFileName || 'Design reference attached'}
+                                    </p>
+                                    <p className="text-[10px] text-[var(--success)] flex items-center gap-1 mt-0.5">
+                                      <Check className="w-3 h-3" /> Ready for pastry chef
+                                    </p>
+                                    <div className="flex items-center gap-2 mt-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => designFileInputRef.current?.click()}
+                                        className="px-2.5 py-1 text-[10px] font-semibold rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--text-main)] hover:border-[var(--primary)] cursor-pointer focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
+                                      >
+                                        Replace
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={handleRemoveDesignImage}
+                                        aria-label="Remove uploaded cake design"
+                                        className="px-2.5 py-1 text-[10px] font-semibold rounded-lg text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 transition-colors cursor-pointer focus:outline-none focus:ring-1 focus:ring-rose-500"
+                                      >
+                                        Remove
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            ) : (
+                              <div>
+                                <label
+                                  htmlFor="customer-design-file-input"
+                                  className="w-full border-2 border-dashed border-[var(--border)] hover:border-[var(--primary)]/60 rounded-xl p-3 sm:p-4 flex flex-col items-center justify-center gap-1.5 cursor-pointer text-center bg-[var(--bg-surface)] hover:bg-[var(--bg-subtle)] transition-colors focus-within:ring-2 focus-within:ring-[var(--primary)]"
+                                  tabIndex={0}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter' || e.key === ' ') {
+                                      e.preventDefault();
+                                      designFileInputRef.current?.click();
+                                    }
+                                  }}
+                                >
+                                  <Upload className="w-4 h-4 sm:w-5 sm:h-5 text-[var(--primary)]" />
+                                  <span className="text-xs font-semibold text-[var(--text-main)]">
+                                    Click or tap to upload reference image
+                                  </span>
+                                  <span id="design-upload-help" className="text-[10px] text-[var(--text-muted)]">
+                                    JPG, JPEG, PNG, or WEBP (Max 10MB)
+                                  </span>
+                                </label>
+                              </div>
+                            )}
+
+                            {/* Describe Your Design */}
+                            <div>
+                              <label htmlFor="design-description-input" className="block text-xs font-bold text-[var(--text-main)] uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                                <span>Describe Your Design</span>
+                                <span className="text-[10px] font-normal text-[var(--text-muted)] normal-case">Optional</span>
+                              </label>
+                              <textarea
+                                id="design-description-input"
+                                rows={2}
+                                maxLength={200}
+                                value={customDesignDescription}
+                                onChange={(e) => setCustomDesignDescription(e.target.value)}
+                                placeholder="Please make the cake similar to this design..."
+                                className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--primary)] resize-none transition-all"
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
-
-                {/* Message on Cake */}
-                <div>
-                  <label className="block text-xs font-bold text-[var(--text-main)] uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                    <MessageSquare className="w-3.5 h-3.5 text-[var(--primary)]" />
-                    Custom Message on Cake
-                    <span className="text-[10px] font-normal text-[var(--text-muted)] normal-case">(Free)</span>
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      maxLength={35}
-                      value={messageOnCake}
-                      onChange={(e) => setMessageOnCake(e.target.value)}
-                      placeholder="e.g. Happy 30th Birthday Priya! 🎂"
-                      className="w-full px-4 py-3 text-sm rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--primary)] transition-all"
-                    />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-[var(--text-muted)]">
-                      {messageOnCake.length}/35
-                    </span>
-                  </div>
-                  <p className="text-[10px] text-[var(--text-muted)] mt-1">✨ Hand-piped by our pastry chef with premium chocolate ganache</p>
-                </div>
 
                 {/* Add-ons */}
                 <div>
@@ -935,13 +1251,19 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
           </div>
 
           {/* Action Buttons */}
-          <div className="pt-4 border-t border-[var(--border)] space-y-3">
+          <div className="pt-4 border-t border-[var(--border)] space-y-3 pb-[env(safe-area-inset-bottom,0px)]">
             {/* Price Summary */}
             <div className="p-3 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border)] space-y-1.5">
               <div className="flex justify-between text-xs text-[var(--text-muted)]">
                 <span>Base Price ({product.sellingUnit === 'piece' ? selectedWeight.label : `${selectedWeight.weightKg} kg`})</span>
                 <span>₹{selectedWeight.price}</span>
               </div>
+              {selectedFlavourPrice > 0 && (
+                <div className="flex justify-between text-xs text-[var(--text-muted)]">
+                  <span>Flavour Profile ({selectedFlavour})</span>
+                  <span>+₹{selectedFlavourPrice}</span>
+                </div>
+              )}
               {addOnsTotal > 0 && (
                 <div className="flex justify-between text-xs text-[var(--text-muted)]">
                   <span>Add-ons ({selectedAddOns.length} items)</span>

@@ -10,6 +10,54 @@ export interface ImportSummary {
   errors: { row: number; reason: string; data?: any }[];
 }
 
+export interface VariantStockAdjustment {
+  id: number;
+  variantId: number;
+  productId: number;
+  previousQuantity: number;
+  adjustmentQuantity: number;
+  resultingQuantity: number;
+  reason: string;
+  userId: number | null;
+  userName: string | null;
+  createdAt: string;
+}
+
+export interface ProductVariant {
+  id: number;
+  productId: number;
+  sku: string;
+  label: string;
+  mrp: number | null;
+  price: number;
+  stock: number;
+  lowStockThreshold: number;
+  stockStatus: 'in_stock' | 'low_stock' | 'out_of_stock';
+  weightKg: number | null;
+  status: 'active' | 'inactive';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CategoryTreeNode {
+  id: number;
+  name: string;
+  slug: string;
+  parentId: number | null;
+  description: string | null;
+  children: CategoryTreeNode[];
+}
+
+export interface FlavourOption {
+  id: string;
+  name: string;
+  additionalPrice: number;
+  isDefault?: boolean;
+  displayOrder: number;
+  isActive: boolean;
+  showOnStorefront: boolean;
+}
+
 export interface WeightOption {
   label: string; // e.g. "0.5 kg", "1.0 kg", "1.5 kg", "2.0 kg"
   weightKg: number;
@@ -50,6 +98,7 @@ export interface Product {
   subcategories?: string[];
   tags: string[];
   flavours: string[];
+  flavourOptions?: FlavourOption[];
   eggless: boolean;
   sellingUnit?: 'piece' | 'weight';
   weightOptions: WeightOption[];
@@ -71,14 +120,25 @@ export interface Product {
   newArrival?: boolean;
   deal?: boolean;
   featured?: boolean;
-  addons?: any[];
-  flavourOptions?: string[];
+  addons?: AddOn[];
   weight?: string;
   seoTitle?: string;
   seoDescription?: string;
   createdAt: string;
   updatedAt: string;
   createdBy?: string;
+  // Customization
+  customizationFee?: number;
+  allowCustomMessage?: boolean;
+  allowCustomDesign?: boolean;
+  // Feature toggles for product page sections
+  showGallery?: boolean;
+  showVideo?: boolean;
+  showFlavour?: boolean;
+  showCustomize?: boolean;
+  showCustomization?: boolean;
+  showDesignUpload?: boolean;
+  showCustomerDesignUpload?: boolean;
 }
 
 export interface AddOn {
@@ -87,6 +147,11 @@ export interface AddOn {
   price: number;
   category?: string;
   icon?: string;
+  description?: string;
+  isActive?: boolean;
+  displayOrder?: number;
+  showOnStorefront?: boolean;
+  productIds?: string[]; // which products this addon applies to
 }
 
 export interface CartItemAddon {
@@ -101,7 +166,11 @@ export interface CartItem {
   product: Product;
   selectedWeight: WeightOption;
   selectedFlavour: string;
+  flavourPrice?: number; // additional price for selected flavour
   messageOnCake?: string;
+  customInstructions?: string;
+  customDesignImage?: string; // base64 or URL of uploaded design
+  customDesignDescription?: string; // text description of design
   addons: CartItemAddon[];
   quantity: number;
   unitPrice: number;
@@ -146,8 +215,12 @@ export interface Order {
     qty: number;
     weight: string;
     flavour: string;
+    flavourPrice?: number;
     messageOnCake?: string;
-    addons?: string[];
+    customInstructions?: string;
+    customDesignImage?: string;
+    customDesignDescription?: string;
+    addons?: any[];
     unitPrice: number;
     totalPrice: number;
     imageUrl?: string;
@@ -182,8 +255,10 @@ export interface Category {
   id: string;
   name: string;
   slug: string;
+  parentSlug?: string;
   description: string;
   image: string;
+  displayOrder?: number;
   itemCount?: number;
   featured?: boolean;
   subcategories?: SubCategory[];
@@ -228,7 +303,7 @@ export interface AuditLog {
   actorUid: string;
   actorName: string;
   actorEmail: string;
-  role: 'admin' | 'staff' | 'system' | 'customer';
+  role: UserRole;
   action: string; // e.g. "PRODUCT_CREATE", "ORDER_STATUS_UPDATE", "CSV_IMPORT", "LOGIN_SUCCESS"
   targetType: 'Product' | 'Order' | 'Media' | 'Settings' | 'Security' | 'Auth' | 'Catalog' | string;
   targetId?: string;
@@ -320,7 +395,7 @@ export interface HamperSettings {
   minItemsRequired: number;
 }
 
-export type UserRole = 'admin' | 'staff' | 'customer';
+export type UserRole = 'super_admin' | 'admin' | 'catalog_manager' | 'seo_manager' | 'kitchen_manager' | 'delivery_manager' | 'marketing_manager' | 'festival_manager' | 'customer_support' | 'media_manager' | 'finance_manager' | 'read_only' | 'staff' | 'customer';
 
 export interface UserProfile {
   uid: string;

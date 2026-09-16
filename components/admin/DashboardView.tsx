@@ -62,7 +62,7 @@ const CustomChartTooltip: React.FC<any> = ({ active, payload }) => {
   if (active && payload && payload.length) {
     const data: DailyOrderStat = payload[0].payload;
     return (
-      <div className="bg-[var(--bg-surface)] border border-[var(--border)] p-3 rounded-xl shadow-lg text-xs space-y-1.5 min-w-[170px]">
+      <div className="bg-[var(--bg-surface)] border border-[var(--border)] p-3 rounded-xl shadow-lg text-xs space-y-1.5 min-w-[170px] w-full sm:min-w-[170px] min-w-0">
         <div className="font-bold text-[var(--text-main)] flex items-center justify-between border-b border-[var(--border)] pb-1.5">
           <span>{data.fullDate}</span>
           {data.isToday && (
@@ -77,7 +77,7 @@ const CustomChartTooltip: React.FC<any> = ({ active, payload }) => {
         </div>
         <div className="flex items-center justify-between">
           <span className="text-[var(--text-muted)]">Day Revenue:</span>
-          <span className="font-bold text-emerald-600 font-mono">₹{data.revenue.toLocaleString('en-IN')}</span>
+          <span className="font-bold text-emerald-600 font-mono">₹{(data.revenue || 0).toLocaleString('en-IN')}</span>
         </div>
         {data.orders > 0 && (
           <div className="pt-1 border-t border-[var(--border)] flex items-center justify-between text-[10px] text-[var(--text-subtle)]">
@@ -104,7 +104,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const isMounted = useMounted();
 
   // Metrics computation from real live state
-  const totalSalesVolume = orders.reduce((sum, ord) => sum + (ord.total || 0), 0);
+  const totalSalesVolume = orders
+    .filter((o) => o.status !== 'Cancelled')
+    .reduce((sum, ord) => sum + (Number(ord.total) || 0), 0);
   const activeRecipesCount = products.filter((p) => p.published).length;
   const activeOrders = orders.filter((o) => o.status !== 'Delivered' && o.status !== 'Cancelled');
 
@@ -161,7 +163,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         if (dayIdx >= 0 && dayIdx < daysInMonth) {
           const stat = dailyStats[dayIdx];
           stat.orders += 1;
-          stat.revenue += order.total || 0;
+          if (order.status !== 'Cancelled') stat.revenue += Number(order.total) || 0;
           if (order.status === 'Delivered') {
             stat.delivered += 1;
           } else if (order.status !== 'Cancelled') {
@@ -289,10 +291,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             onClick={onSeedDatabase}
             disabled={isSeeding}
             className="px-3.5 py-2 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--bg-surface)] border border-[var(--border)] text-xs font-semibold text-[var(--text-main)] flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
-            title="Seed sample artisan cakes and orders"
+            title="Refresh catalog and order data from the server"
           >
             <RefreshCw className={`w-3.5 h-3.5 text-[var(--primary)] ${isSeeding ? 'animate-spin' : ''}`} />
-            <span>{isSeeding ? 'Seeding...' : 'Seed Catalog'}</span>
+            <span>{isSeeding ? 'Refreshing...' : 'Refresh Data'}</span>
           </button>
         </div>
       </div>

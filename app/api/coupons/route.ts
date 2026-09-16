@@ -8,7 +8,7 @@ export async function GET(req: Request) {
   const code = (url.searchParams.get('code') || '').toUpperCase().trim();
   const subtotal = parseFloat(url.searchParams.get('subtotal') || '0');
   if (!code) return err('Code required');
-  const c = db.prepare('SELECT * FROM coupons WHERE code=?').get(code);
+  const c = db.prepare('SELECT * FROM coupons WHERE code=?').get(code) as any;
   if (!c) return ok({ valid: false, message: 'Invalid coupon code' });
   if (!c.active) return ok({ valid: false, message: 'This coupon is inactive' });
   if (c.max_uses && c.uses >= c.max_uses) return ok({ valid: false, message: 'This coupon has reached its usage limit' });

@@ -13,6 +13,7 @@ interface ModalProps {
   maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl' | '5xl' | '6xl' | 'full';
   showCloseButton?: boolean;
   embedded?: boolean;
+  safeArea?: boolean;
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -24,6 +25,7 @@ export const Modal: React.FC<ModalProps> = ({
   maxWidth = 'lg',
   showCloseButton = true,
   embedded = false,
+  safeArea = true,
 }) => {
   // Track whether THIS instance applied a lock so cleanup only undoes its own work.
   const didLockRef = useRef(false);
@@ -63,7 +65,7 @@ export const Modal: React.FC<ModalProps> = ({
     return <>{children}</>;
   }
 
-  const maxWidthClass = {
+const maxWidthClass = {
     sm: 'max-w-sm',
     md: 'max-w-md',
     lg: 'max-w-lg',
@@ -73,7 +75,7 @@ export const Modal: React.FC<ModalProps> = ({
     '4xl': 'max-w-4xl',
     '5xl': 'max-w-5xl',
     '6xl': 'max-w-6xl',
-    full: 'max-w-7xl',
+    full: 'max-w-[calc(100vw-2rem)]',
   }[maxWidth];
 
   return (
@@ -86,7 +88,7 @@ export const Modal: React.FC<ModalProps> = ({
     >
       <div
         id="modal-container"
-        className={`relative w-full ${maxWidthClass} bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-150`}
+        className={`relative w-full ${maxWidthClass} bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-150 ${safeArea ? 'pt-safe-top pb-safe-bottom' : ''}`}
       >
         {(title || showCloseButton) && (
           <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border)] bg-[var(--bg-subtle)]/50">

@@ -1,13 +1,7 @@
-import { ok, err, getCurrentUser, isAdminRole } from '../../../../../lib/server/api';
+import { ok, err, requireAdmin } from '../../../../../lib/server/api';
 import { upsertProduct } from '../../../../../lib/server/admin-catalog';
 
 export const runtime = 'nodejs';
-
-function requireAdmin(req: Request) {
-  const user = getCurrentUser(req);
-  if (!user || !isAdminRole(user.role)) return null;
-  return user;
-}
 
 export async function POST(req: Request) {
   const user = requireAdmin(req);
@@ -37,6 +31,7 @@ export async function POST(req: Request) {
       if (p.sku) existingMap.set(p.sku.trim().toLowerCase(), p);
       if (p.name) existingMap.set(p.name.trim().toLowerCase(), p);
     });
+    const inFileSeen = new Map<string, any>();
 
     const CONFETTO_PRODUCT_FIELDS = [
       { key: 'sku', aliases: ['sku', 'product_sku', 'code', 'item_code'] },
@@ -59,15 +54,29 @@ export async function POST(req: Request) {
       { key: 'seoDescription', aliases: ['seo description', 'meta_description', 'seo_description'] },
     ];
 
+    function toNum(val: any, fallback: number): number {
+      if (val === null || val === undefined || val === '') return fallback;
+      const cleaned = String(val).replace(/[^0-9.\-]/g, '');
+      if (cleaned === '' || cleaned === '.' || cleaned === '-') return fallback;
+      const n = parseFloat(cleaned);
+      return Number.isFinite(n) ? n : fallback;
+    }
+
     function autoSuggestColumnMapping(csvHeaders: string[]): Record<string, string> {
       const mapping: Record<string, string> = {};
+      const cleanHeaders = csvHeaders.map((h: string) => ({ raw: h, clean: h.trim().toLowerCase() }));
       CONFETTO_PRODUCT_FIELDS.forEach(field => {
-        const matchedHeader = csvHeaders.find(header => {
-          const clean = header.trim().toLowerCase();
-          return field.aliases.some(alias => clean === alias.toLowerCase() || clean.includes(alias.toLowerCase()));
-        });
-        if (matchedHeader) {
-          mapping[field.key] = matchedHeader;
+        const hasAlias = (clean: string, alias: string) => clean === alias.toLowerCase();
+        const hasWordBoundary = (clean: string, alias: string) => {
+          const escaped = alias.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`).test(clean);
+        };
+        // Exact match first, then word-boundary substring match
+        const exactMatch = cleanHeaders.find(({ clean }) => field.aliases.some((a) => hasAlias(clean, a)));
+        const boundMatch = cleanHeaders.find(({ clean }) => field.aliases.some((a) => hasWordBoundary(clean, a)));
+        const matchedHeader = exactMatch || boundMatch;
+        if (matchedHeader && !Object.values(mapping).includes(matchedHeader.raw)) {
+          mapping[field.key] = matchedHeader.raw;
         }
       });
       return mapping;
@@ -94,17 +103,19 @@ export async function POST(req: Request) {
         }
 
         const existing = (skuVal && existingMap.get(skuVal.toLowerCase())) ||
-          (nameVal && existingMap.get(nameVal.toLowerCase()));
+          (nameVal && existingMap.get(nameVal.toLowerCase())) ||
+          (skuVal && inFileSeen.get(skuVal.toLowerCase())) ||
+          (nameVal && inFileSeen.get(nameVal.toLowerCase()));
 
-        const regularPrice = parseFloat((row[mapping['regularPrice']] || row['Regular price'] || row['regular_price'] || 999).toString()) || 999;
-        const salePrice = parseFloat((row[mapping['salePrice']] || row['Sale price'] || row['sale_price'] || regularPrice).toString()) || regularPrice;
-        const rawCategory = (row[mapping['category']] || row['Categories'] || row['category'] || 'birthday').toString().trim();
+        const regularPrice = toNum(row[mapping['regularPrice']], 0);
+        const salePrice = toNum(row[mapping['salePrice']], regularPrice || 0);
+        const rawCategory = (row[mapping['category']] || '').toString().trim();
         const categorySlug = rawCategory.toLowerCase().replace(/\s+/g, '-');
-        const shortDesc = (row[mapping['shortDescription']] || row['Short description'] || row['short_description'] || 'Freshly baked artisan confection by TVO Flavours.').toString().trim();
-        const fullDesc = (row[mapping['description']] || row['Description'] || row['description'] || shortDesc).toString().trim();
-        const rawStock = parseInt((row[mapping['stock']] || row['Stock'] || row['stock'] || 20).toString(), 10);
-        const stock = isNaN(rawStock) ? 20 : rawStock;
-        const stockStatusVal = (row[mapping['stockStatus']] || row['In stock?'] || row['in_stock'] || '1').toString().toLowerCase();
+        const shortDesc = (row[mapping['shortDescription']] || '').toString().trim();
+        const fullDesc = (row[mapping['description']] || '').toString().trim();
+        const rawStock = toNum(row[mapping['stock']], 20);
+        const stock = Math.max(0, Math.round(rawStock));
+        const stockStatusVal = (row[mapping['stockStatus']] || '').toString().toLowerCase();
         const stockStatus = stockStatusVal.includes('out') || stockStatusVal === '0' || stock <= 0 ? 'out_of_stock' : 'in_stock';
         const rawEggless = (row[mapping['eggless']] || row['Eggless'] || row['eggless'] || '').toString().toLowerCase();
         const eggless = rawEggless === 'yes' || rawEggless === 'true' || rawEggless === '1' || rawEggless.includes('veg');
@@ -150,8 +161,8 @@ export async function POST(req: Request) {
           eggless,
           weightOptions,
           images,
-          rating: existing?.rating || 4.8,
-          reviewCount: existing?.reviewCount || 1,
+          rating: existing?.rating || 0,
+          reviewCount: existing?.reviewCount || 0,
           stock,
           stockStatus,
           badges,
@@ -168,15 +179,21 @@ export async function POST(req: Request) {
           } else if (duplicateStrategy === 'create_new') {
             delete productData.id;
             const r = upsertProduct(productData, user);
+            if (skuVal) inFileSeen.set(skuVal.toLowerCase(), { id: r?.id, sku: skuVal });
+            if (nameVal) inFileSeen.set(nameVal.toLowerCase(), { id: r?.id, name: nameVal });
             summary.created++;
           } else {
             // 'overwrite' / 'update'
-            const r = upsertProduct({ ...productData, id: existing.id }, user);
+            upsertProduct({ ...productData, id: existing.id }, user);
+            if (skuVal) inFileSeen.set(skuVal.toLowerCase(), existing);
+            if (nameVal) inFileSeen.set(nameVal.toLowerCase(), existing);
             summary.updated++;
           }
         } else {
           delete productData.id;
           const r = upsertProduct(productData, user);
+          if (skuVal) inFileSeen.set(skuVal.toLowerCase(), { id: r?.id, sku: skuVal });
+          if (nameVal) inFileSeen.set(nameVal.toLowerCase(), { id: r?.id, name: nameVal });
           summary.created++;
         }
       } catch (err: any) {

@@ -40,12 +40,13 @@ export const MediaUploadsView: React.FC = () => {
         if (data.media && data.media.length > 0) {
           const loaded: MediaAsset[] = data.media.map((m: any) => ({
             id: String(m.id),
-            name: m.filename || m.name,
-            url: m.path || m.url,
-            folder: m.folder,
-            size: m.size,
-            mimeType: m.mime_type,
+            fileName: m.file_name || m.name || '',
+            originalUrl: m.url || '',
+            folder: m.folder || 'General',
+            size: m.size_bytes || 0,
+            mimeType: 'image/webp',
             createdAt: m.created_at,
+            optimizedSizeBytes: m.size_bytes || 0,
           }));
           setAssets(loaded);
         }
@@ -96,11 +97,20 @@ export const MediaUploadsView: React.FC = () => {
       };
 
       try {
-        await fetch('/api/media', {
+        await fetch('/api/admin', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: file.name, url: newAsset.url, folder: 'uploads' }),
-        });
+          body: JSON.stringify({
+            type: 'media',
+            action: 'add',
+            file_name: file.name,
+            url: result.webpDataUrl,
+            alt_text: file.name,
+            folder: 'uploads',
+          }),
+        }).catch(() => {});
+        // Refresh to get server-assigned id/created_at
+        fetchAssets();
       } catch (e) {}
 
       await logAuditEvent({
@@ -122,8 +132,40 @@ export const MediaUploadsView: React.FC = () => {
     }
   };
 
+  const handleDeleteAsset = async (asset: MediaAsset) => {
+    if (!window.confirm(`Delete media asset "${asset.fileName}"? This cannot be undone.`)) return;
+    try {
+      const res = await fetch('/api/admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'media',
+          action: 'delete',
+          id: asset.id,
+        }),
+      });
+      if (!res.ok) throw new Error(`Could not delete asset (${res.status})`);
+      await logAuditEvent({
+        actorUid: user?.uid,
+        actorName: user?.name,
+        actorEmail: user?.email,
+        action: 'MEDIA_DELETE',
+        targetType: 'Media',
+        targetId: asset.id,
+        details: `Deleted media asset "${asset.fileName}"`,
+      });
+      setAssets((prev) => prev.filter((a) => a.id !== asset.id));
+    } catch (e: any) {
+      alert(e.message || 'Failed to delete asset.');
+    }
+  };
+
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!Number.isFinite(maxWidth) || !Number.isFinite(maxHeight) || !Number.isFinite(quality)) {
+      setSettingsMessage('Please enter valid numeric parameters.');
+      return;
+    }
     try {
       setIsSavingSettings(true);
       const updatedSettings = {
@@ -136,12 +178,20 @@ export const MediaUploadsView: React.FC = () => {
         },
       };
       try {
-        await fetch('/api/settings', {
+        const res = await fetch('/api/admin', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updatedSettings),
+          body: JSON.stringify({
+            type: 'settings',
+            settings: {
+              store_settings: JSON.stringify(updatedSettings),
+            },
+          }),
         });
-      } catch (e) {}
+        if (!res.ok) throw new Error(`Could not save settings (${res.status})`);
+      } catch (e) {
+        throw new Error('Could not save settings.');
+      }
 
       await logAuditEvent({
         actorUid: user?.uid,
@@ -155,7 +205,7 @@ export const MediaUploadsView: React.FC = () => {
       setSettingsMessage('Optimization settings saved successfully!');
       setTimeout(() => setSettingsMessage(''), 3000);
     } catch (e: any) {
-      setSettingsMessage('Failed to save settings.');
+      setSettingsMessage(e.message || 'Failed to save settings.');
     } finally {
       setIsSavingSettings(false);
     }
@@ -332,9 +382,18 @@ export const MediaUploadsView: React.FC = () => {
                 <div className="p-2.5 text-[10px]">
                   <div className="font-bold text-[var(--text-main)] truncate">{asset.fileName}</div>
                   <div className="text-[var(--text-subtle)] mt-0.5">
-                    {(asset.optimizedSizeBytes / 1024).toFixed(1)} KB • {asset.dimensions?.width}x{asset.dimensions?.height}
+                    {(asset.optimizedSizeBytes && asset.optimizedSizeBytes > 0)
+                      ? `${(asset.optimizedSizeBytes / 1024).toFixed(1)} KB${asset.dimensions?.width ? ` • ${asset.dimensions.width}x${asset.dimensions.height}` : ''}`
+                      : (asset.dimensions?.width ? `${asset.dimensions.width}x${asset.dimensions.height}` : '')}
                   </div>
                 </div>
+                <button
+                  onClick={() => handleDeleteAsset(asset)}
+                  className="absolute top-1.5 right-1.5 p-1.5 rounded-lg bg-black/50 text-white opacity-0 group-hover:opacity-100 hover:bg-red-600 transition-all cursor-pointer"
+                  title="Delete asset"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
               </div>
             ))}
           </div>

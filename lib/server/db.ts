@@ -2,16 +2,44 @@ import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
 
-// SQLite data file location. Kept outside the repo's public output.
 const DATA_DIR = path.join(process.cwd(), 'data');
 const DB_PATH = path.join(DATA_DIR, 'tvoflavours.db');
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
-export const db = new Database(DB_PATH);
-db.pragma('journal_mode = WAL');
-db.pragma('foreign_keys = ON');
-db.pragma('busy_timeout = 20000');;
+export let db: Database.Database;
+for (let attempt = 0; attempt < 3; attempt++) {
+  try {
+    db = new Database(DB_PATH);
+    db.pragma('journal_mode = WAL');
+    db.pragma('foreign_keys = ON');
+    db.pragma('busy_timeout = 20000');
+    break;
+  } catch (e) {
+    if (attempt === 2) throw e;
+    const delay = 100 * Math.pow(2, attempt);
+    const start = Date.now();
+    while (Date.now() - start < delay) { /* spin */ }
+  }
+}
+
+export function checkDbHealth(): { reachable: boolean; check: string } {
+  try {
+    const result = db.prepare('PRAGMA quick_check').get() as { quick_check: string };
+    return { reachable: result?.quick_check === 'ok', check: 'PRAGMA quick_check' };
+  } catch {
+    return { reachable: false, check: 'PRAGMA quick_check' };
+  }
+}
+
+export function checkDbReachable(): boolean {
+  try {
+    db.prepare('SELECT 1 as ok').get();
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS settings (
@@ -88,7 +116,7 @@ CREATE TABLE IF NOT EXISTS brands (
 
 CREATE TABLE IF NOT EXISTS tags (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT UNIQUE NOT NULL,
+  name TEXT NOT NULL,
   slug TEXT UNIQUE NOT NULL
 );
 
@@ -607,8 +635,41 @@ CREATE TABLE IF NOT EXISTS support_tickets (
 );
 
 CREATE TABLE IF NOT EXISTS testimonials_backup (id INTEGER);
-CREATE INDEX IF NOT EXISTS idx_products_slug ON products(slug);
-CREATE INDEX IF NOT EXISTS idx_products_cat ON products(category_id);
+CREATE TABLE IF NOT EXISTS product_variants (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  product_id INTEGER NOT NULL,
+  sku TEXT NOT NULL,
+  label TEXT,
+  mrp REAL,
+  price REAL NOT NULL DEFAULT 0,
+  stock INTEGER DEFAULT 0,
+  low_stock_threshold INTEGER DEFAULT 5,
+  stock_status TEXT DEFAULT 'in_stock',
+  weight_kg REAL,
+  status TEXT DEFAULT 'active',
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT,
+  FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+  UNIQUE(sku, product_id)
+);
+
+CREATE TABLE IF NOT EXISTS variant_stock_adjustments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  variant_id INTEGER NOT NULL,
+  product_id INTEGER NOT NULL,
+  previous_quantity INTEGER NOT NULL,
+  adjustment_quantity INTEGER NOT NULL,
+  resulting_quantity INTEGER NOT NULL,
+  reason TEXT,
+  user_id INTEGER,
+  user_name TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  FOREIGN KEY (variant_id) REFERENCES product_variants(id) ON DELETE CASCADE,
+  FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_variant_adjustments_variant ON variant_stock_adjustments(variant_id);
+CREATE INDEX IF NOT EXISTS idx_product_variants_product ON product_variants(product_id);
+CREATE INDEX IF NOT EXISTS idx_product_variants_sku ON product_variants(sku);
 CREATE INDEX IF NOT EXISTS idx_orders_number ON orders(order_number);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
 CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at);

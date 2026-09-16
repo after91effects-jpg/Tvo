@@ -137,7 +137,7 @@ function findPrimaryImage(productName: string, csvImages: string[]) {
   return null;
 }
 
-function buildImages(productName, csvImages, primary) {
+function buildImages(productName: string, csvImages: string[], primary: string | null) {
   const out = [];
   if (primary) {
     // primary public path -> find local variants
@@ -162,7 +162,7 @@ function buildImages(productName, csvImages, primary) {
     if (!seen.has(u)) { out.push({ url: u, type: 'gallery' }); seen.add(u); }
   }
   if (out.length === 0 && csvImages.length) {
-    csvImages.forEach((u, i) => out.push({ url: u, type: i === 0 ? 'primary' : 'gallery' }));
+    csvImages.forEach((u: string, i: number) => out.push({ url: u, type: i === 0 ? 'primary' : 'gallery' }));
   }
   return out;
 }
@@ -291,13 +291,13 @@ export function importCatalog() {
 
       // eggless/flavours/badges/tags
       const eggless = /yes|true|1/i.test((p.Eggless || '').toString());
-      const flavours = (p.Flavours || '').split(',').map((s) => s.trim()).filter(Boolean);
-      const badges = (p.Badges || '').split(',').map((s) => s.trim()).filter(Boolean);
+      const flavours = (p.Flavours || '').split(',').map((s: string) => s.trim()).filter(Boolean);
+      const badges = (p.Badges || '').split(',').map((s: string) => s.trim()).filter(Boolean);
       if (badges.length === 0 && /bestseller/i.test((p.Tags || '') + (p['Is featured?'] || ''))) badges.push('Bestseller');
-      const tags = (p.Tags || '').split(',').map((s) => s.trim()).filter(Boolean);
+      const tags = (p.Tags || '').split(',').map((s: string) => s.trim()).filter(Boolean);
 
       // images
-      const csvImages = (p.Images || '').split(',').map((s) => s.trim()).filter(Boolean);
+      const csvImages = (p.Images || '').split(',').map((s: string) => s.trim()).filter(Boolean);
       const primary = findPrimaryImage(name, csvImages);
       const images = buildImages(name, csvImages, primary);
 

@@ -1,18 +1,15 @@
-import { ok, err, db, getCurrentUser, isAdminRole, logAudit, jsonParseSafe, slugify } from '../../../lib/server/api';
+import { ok, err, db, requireAdmin, logAudit, jsonParseSafe, slugify } from '../../../lib/server/api';
 import { getCatalogSourceConfig } from '../../../lib/server/catalog-sources';
+import { hasPerm } from '../../../lib/server/authorization';
 import * as ops from '../../../lib/server/admin-ops';
+import { logError } from '../../../lib/server/logger';
 
 export const runtime = 'nodejs';
-
-function admin(req: Request) {
-  const u = getCurrentUser(req);
-  return u && isAdminRole(u.role) ? u : null;
-}
 
 function isSuper(user: any) { return !!user && user.role === 'super_admin'; }
 
 export async function GET(req: Request) {
-  const user = admin(req);
+  const user = requireAdmin(req);
   if (!user) return err('Admin access required', 403);
   const url = new URL(req.url);
   const type = url.searchParams.get('type') || 'orders';
@@ -21,20 +18,20 @@ export async function GET(req: Request) {
   try {
     if (type === 'orders') {
       const q = search ? `%${search}%` : null;
-      let rows;
+      let rows: any[];
       if (status) rows = db.prepare('SELECT * FROM orders WHERE status=? ORDER BY created_at DESC LIMIT 300').all(status);
       else if (q) rows = db.prepare(`SELECT * FROM orders WHERE order_number LIKE ? OR customer_name LIKE ? OR customer_phone LIKE ? OR customer_email LIKE ? ORDER BY created_at DESC LIMIT 300`).all(q, q, q, q);
       else rows = db.prepare('SELECT * FROM orders ORDER BY created_at DESC LIMIT 300').all();
       for (const o of rows) { o.items = jsonParseSafe(o.items, []); o.timeline = jsonParseSafe(o.timeline, []); }
       return ok({ orders: rows });
     }
-    if (type === 'categories') return ok({ categories: db.prepare('SELECT * FROM categories ORDER BY name').all() });
+    if (type === 'categories') return ok({ categories: db.prepare('SELECT * FROM categories ORDER BY sort_order ASC, name ASC').all() });
     if (type === 'coupons') return ok({ coupons: db.prepare('SELECT * FROM coupons ORDER BY id DESC').all() });
     if (type === 'customers') return ok({ customers: db.prepare('SELECT * FROM customers ORDER BY id DESC LIMIT 300').all() });
     if (type === 'custom') return ok({ requests: db.prepare('SELECT * FROM custom_requests ORDER BY created_at DESC LIMIT 300').all() });
     if (type === 'delivery_slots') return ok({ slots: db.prepare('SELECT * FROM delivery_slots ORDER BY start_time').all() });
     if (type === 'addons') return ok({ addons: db.prepare('SELECT * FROM addons').all() });
-    if (type === 'settings') return ok({ settings: Object.fromEntries(db.prepare('SELECT key, value FROM settings').all().map((r) => [r.key, r.value])) });
+    if (type === 'settings') return ok({ settings: Object.fromEntries((db.prepare('SELECT key, value FROM settings').all() as { key: string; value: string }[]).map((r) => [r.key, r.value])) });
     if (type === 'audit') return ok({ audit: db.prepare('SELECT * FROM audit_logs ORDER BY id DESC LIMIT 200').all() });
     if (type === 'reviews') return ok({ reviews: db.prepare('SELECT * FROM product_reviews ORDER BY id DESC LIMIT 300').all() });
     if (type === 'catalog_sources') return ok({ ...getCatalogSourceConfig() });
@@ -46,6 +43,11 @@ export async function GET(req: Request) {
     if (type === 'banners') return ok({ banners: db.prepare('SELECT * FROM banners').all() });
     if (type === 'homepage') return ok({ sections: db.prepare('SELECT * FROM homepage_sections ORDER BY sort_order').all() });
     if (type === 'media') return ok({ media: db.prepare('SELECT * FROM media ORDER BY id DESC LIMIT 200').all() });
+    if (type === 'hamper_settings') {
+      if (!hasPerm(user, 'manage_hampers')) return err('Manage hampers permission required', 403);
+      const row = db.prepare("SELECT value FROM settings WHERE key='hamper_settings'").get() as any;
+      return ok({ settings: row ? jsonParseSafe(row.value, null) : null });
+    }
     // ---- Phase 2 domains ----
     if (type === 'order') {
       const order = ops.getOrder(user, Number(url.searchParams.get('id')));
@@ -143,11 +145,11 @@ export async function GET(req: Request) {
       return ok({ topOccasions, dailyTrends, summary, dateRange: range });
     }
     return ok({});
-  } catch (e: any) { return err(e.message, 500); }
+  } catch (e: any) { logError('admin_get_error', e?.message || e); return err('Internal server error', 500); }
 }
 
 export async function POST(req: Request) {
-  const user = admin(req);
+  const user = requireAdmin(req);
   if (!user) return err('Admin access required', 403);
   const body = await req.json().catch(() => ({}));
   const type = body.type;
@@ -183,19 +185,50 @@ export async function POST(req: Request) {
 
     // ---- CATEGORIES ----
     if (type === 'categories' && (action === 'create' || action === 'update')) {
+      const catId = action === 'update' ? Number(body.id) : null;
+      const name = String(body.name || '').trim();
+      if (!name) return err('Category name is required', 400);
       const slug = slugify(body.name);
-      if (action === 'create') {
-        db.prepare('INSERT INTO categories (name, slug, parent_id, description, image, sort_order) VALUES (?,?,?,?,?,?)')
-          .run(body.name, slug, body.parent_id || null, body.description || null, body.image || null, body.sort_order || 0);
-      } else {
+      if (catId) {
+        const existing = db.prepare('SELECT id FROM categories WHERE id=?').get(catId) as any;
+        if (!existing) return err('Category not found', 404);
+        const parentId = body.parent_id ? Number(body.parent_id) : null;
+        if (parentId !== null && parentId === catId) return err('A category cannot be its own parent', 400);
+        if (parentId !== null) {
+          let cur: number | null = parentId;
+          let hops = 0;
+          while (cur) {
+            if (cur === catId) return err('Setting this parent would create a circular hierarchy', 400);
+            const p = db.prepare('SELECT parent_id FROM categories WHERE id=?').get(cur) as any;
+            cur = p && p.parent_id ? Number(p.parent_id) : null;
+            if (++hops > 100) return err('Category hierarchy is too deep or cyclic', 400);
+          }
+        }
+        const dup = db.prepare('SELECT id FROM categories WHERE slug=? AND id!=?').get(slug, catId) as any;
+        if (dup) return err('A category with this name/slug already exists', 409);
         db.prepare('UPDATE categories SET name=?, slug=?, parent_id=?, description=?, image=?, sort_order=? WHERE id=?')
-          .run(body.name, slug, body.parent_id || null, body.description || null, body.image || null, body.sort_order || 0, body.id);
+          .run(name, slug, parentId, body.description || null, body.image || null, body.sort_order || 0, catId);
+      } else {
+        const dup = db.prepare('SELECT id FROM categories WHERE slug=?').get(slug) as any;
+        if (dup) return err('A category with this name/slug already exists', 409);
+        db.prepare('INSERT INTO categories (name, slug, parent_id, description, image, sort_order) VALUES (?,?,?,?,?,?)')
+          .run(name, slug, body.parent_id || null, body.description || null, body.image || null, body.sort_order || 0);
       }
       logAudit(user, 'CATEGORY_' + (action === 'create' ? 'CREATE' : 'UPDATE'), 'Category', slug);
       return ok({ ok: true });
     }
     if (type === 'categories' && action === 'delete') {
-      db.prepare('DELETE FROM categories WHERE id=?').run(body.id);
+      const catId = Number(body.id);
+      if (!catId) return err('Category id is required', 400);
+      const existing = db.prepare('SELECT id, name FROM categories WHERE id=?').get(catId) as any;
+      if (!existing) return err('Category not found', 404);
+      const children = db.prepare('SELECT COUNT(*) c FROM categories WHERE parent_id=?').get(catId) as any;
+      if (children && children.c > 0) return err('This category has subcategories — move or delete them first', 409);
+      const products = db.prepare('SELECT COUNT(*) c FROM products WHERE category_id=? AND deleted_at IS NULL').get(catId) as any;
+      if (products && products.c > 0) return err('This category still has assigned products', 409);
+      db.prepare('DELETE FROM categories WHERE id=?').run(catId);
+      db.prepare('UPDATE products SET category_id=NULL WHERE category_id=?').run(catId);
+      logAudit(user, 'CATEGORY_DELETE', 'Category', existing.name);
       return ok({ ok: true });
     }
 
@@ -315,6 +348,13 @@ export async function POST(req: Request) {
       return ok({ ok: true });
     }
     if (type === 'media' && action === 'delete') { db.prepare('DELETE FROM media WHERE id=?').run(body.id); return ok({ ok: true }); }
+    if (type === 'hamper_settings' && action === 'save') {
+      if (!hasPerm(user, 'manage_hampers')) return err('Manage hampers permission required', 403);
+      const value = body.settings ?? {};
+      db.prepare("INSERT INTO settings (key, value) VALUES ('hamper_settings', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(JSON.stringify(value));
+      logAudit(user, 'HAMPERS_SAVE', 'Settings', 'hamper_settings');
+      return ok({ ok: true, settings: value });
+    }
 
     // ===================== PHASE 2 =====================
     // ---- Orders full ----
@@ -397,6 +437,7 @@ export async function POST(req: Request) {
      if (type === 'tickets' && action === 'update_status') return ok(ops.updateTicketStatus(user, body.id, body.status));
 
      // ---- Festival & Special Days Automation ----
+     if (type === 'occasions_default') { ops.seedDefaultOccasions(user); return ok({ ok: true }); }
      if (type === 'occasions' && (action === 'save' || action === 'create' || action === 'update')) return ok(ops.saveOccasion(user, body));
      if (type === 'occasions' && action === 'archive') return ok(ops.archiveOccasion(user, Number(body.id), true));
      if (type === 'occasions' && action === 'restore') return ok(ops.archiveOccasion(user, Number(body.id), false));
@@ -410,6 +451,6 @@ export async function POST(req: Request) {
      if (type === 'product_occasions' && action === 'unmap') return ok(ops.removeProductMapping(user, Number(body.product_id), Number(body.occasion_id)));
      if (type === 'product_occasions' && action === 'priority') return ok(ops.updateProductMappingPriority(user, Number(body.product_id), Number(body.occasion_id), Number(body.priority) || 0));
 
-     return err('Unknown admin action');
-  } catch (e: any) { return err(e.message, 500); }
+      return err('Unknown admin action');
+  } catch (e: any) { logError('admin_post_error', e?.message || e); return err('Internal server error', 500); }
 }

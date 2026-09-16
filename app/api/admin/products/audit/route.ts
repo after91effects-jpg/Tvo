@@ -1,11 +1,11 @@
-import { ok, err, getCurrentUser, isAdminRole } from '../../../../../lib/server/api';
+import { ok, err, requireAdmin } from '../../../../../lib/server/api';
 import { db } from '../../../../../lib/server/api';
 
 export const runtime = 'nodejs';
 
 export async function GET(req: Request) {
-  const user = getCurrentUser(req);
-  if (!user || !isAdminRole(user.role)) return err('Admin access required', 403);
+  const user = requireAdmin(req);
+  if (!user) return err('Admin access required', 403);
   const url = new URL(req.url);
   const productId = url.searchParams.get('product_id');
   try {

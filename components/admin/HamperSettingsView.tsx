@@ -21,6 +21,7 @@ import {
   LayoutGrid,
 } from 'lucide-react';
 import { HamperSettings, HamperBoxOption, HamperCategoryOption, HamperWrappingOption, HamperThemeOption } from '../../lib/types';
+import { DEFAULT_HAMPER_SETTINGS } from '../../lib/seedData';
 
 interface HamperSettingsViewProps {
   settings: HamperSettings;
@@ -36,8 +37,35 @@ const SECTION_ICONS: Record<string, React.ReactNode> = {
   features: <Gift className="w-4 h-4" />,
 };
 
+function sanitizeSettings(settings: HamperSettings | null | undefined): HamperSettings {
+  const base = DEFAULT_HAMPER_SETTINGS as HamperSettings;
+  if (!settings || typeof settings !== 'object') return base;
+  return {
+    ...base,
+    ...settings,
+    banner: { ...base.banner, ...(settings.banner || {}) },
+    boxes: (Array.isArray(settings.boxes) && settings.boxes.length ? settings.boxes : base.boxes).map((b) => ({
+      ...(base.boxes.find((x) => x.id === b.id) || {}),
+      ...b,
+    })),
+    categories: (Array.isArray(settings.categories) && settings.categories.length ? settings.categories : base.categories).map((c) => ({
+      ...(base.categories.find((x) => x.id === c.id) || {}),
+      ...c,
+      keywords: Array.isArray(c.keywords) ? c.keywords : [],
+    })),
+    wrappings: (Array.isArray(settings.wrappings) && settings.wrappings.length ? settings.wrappings : base.wrappings).map((w) => ({
+      ...(base.wrappings.find((x) => x.id === w.id) || {}),
+      ...w,
+    })),
+    themes: (Array.isArray(settings.themes) && settings.themes.length ? settings.themes : base.themes).map((t) => ({
+      ...(base.themes.find((x) => x.id === t.id) || {}),
+      ...t,
+    })),
+  };
+}
+
 export const HamperSettingsView: React.FC<HamperSettingsViewProps> = ({ settings, onSave }) => {
-  const [draft, setDraft] = useState<HamperSettings>(settings);
+  const [draft, setDraft] = useState<HamperSettings>(sanitizeSettings(settings));
   const [expanded, setExpanded] = useState<string[]>(['banner', 'boxes']);
   const [saved, setSaved] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
@@ -54,11 +82,18 @@ export const HamperSettingsView: React.FC<HamperSettingsViewProps> = ({ settings
 
   const validate = (): boolean => {
     const errs: string[] = [];
+    if (!draft.boxes || draft.boxes.length === 0) { errs.push('At least one hamper box must exist.'); setErrors(errs); return false; }
     if (draft.boxes.filter((b) => b.enabled).length === 0) errs.push('At least one hamper box must be enabled.');
+    if (!draft.categories || draft.categories.length === 0) { errs.push('At least one category must exist.'); setErrors(errs); return false; }
     if (draft.categories.filter((c) => c.enabled).length === 0) errs.push('At least one category must be enabled.');
-    const enabledBoxes = draft.boxes.filter((b) => b.enabled);
-    if (enabledBoxes.length > 0 && Math.min(...enabledBoxes.map((b) => b.maxItems)) < draft.minItemsRequired) {
-      errs.push(`minItemsRequired (${draft.minItemsRequired}) is higher than the smallest enabled box capacity (${Math.min(...enabledBoxes.map((b) => b.maxItems))}).`);
+    const enabledBoxes = draft.boxes.filter((b) => b.enabled && Number.isFinite(b.maxItems) && b.maxItems > 0);
+    if (enabledBoxes.length > 0) {
+      const minCapacity = Math.min(...enabledBoxes.map((b) => b.maxItems));
+      if (draft.minItemsRequired > minCapacity) {
+        errs.push(`minItemsRequired (${draft.minItemsRequired}) is higher than the smallest enabled box capacity (${minCapacity}).`);
+      }
+      const badPrice = enabledBoxes.filter((b) => !Number.isFinite(b.price) || b.price < 0);
+      if (badPrice.length) errs.push('Some enabled boxes have an invalid price (must be 0 or above).');
     }
     setErrors(errs);
     return errs.length === 0;

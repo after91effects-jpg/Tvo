@@ -1,5 +1,6 @@
 import Papa from 'papaparse';
 import { Product, WeightOption, DuplicateStrategy, ImportSummary } from './types';
+import { logError } from './server/logger';
 
 // The canonical fields for TVO Flavours that can be mapped from CSV
 export const CONFETTO_PRODUCT_FIELDS = [
@@ -149,14 +150,19 @@ export function exportProductsToWooCommerceCSV(products: Product[], filename: st
  */
 export function autoSuggestColumnMapping(csvHeaders: string[]): Record<string, string> {
   const mapping: Record<string, string> = {};
+  const cleanHeaders = csvHeaders.map((h: string) => ({ raw: h, clean: h.trim().toLowerCase() }));
 
   CONFETTO_PRODUCT_FIELDS.forEach(field => {
-    const matchedHeader = csvHeaders.find(header => {
-      const clean = header.trim().toLowerCase();
-      return field.aliases.some(alias => clean === alias.toLowerCase() || clean.includes(alias.toLowerCase()));
-    });
-    if (matchedHeader) {
-      mapping[field.key] = matchedHeader;
+    const hasAlias = (clean: string, alias: string) => clean === alias.toLowerCase();
+    const hasWordBoundary = (clean: string, alias: string) => {
+      const escaped = alias.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`).test(clean);
+    };
+    const exactMatch = cleanHeaders.find(({ clean }) => field.aliases.some((a) => hasAlias(clean, a)));
+    const boundMatch = cleanHeaders.find(({ clean }) => field.aliases.some((a) => hasWordBoundary(clean, a)));
+    const matchedHeader = exactMatch || boundMatch;
+    if (matchedHeader && !Object.values(mapping).includes(matchedHeader.raw)) {
+      mapping[field.key] = matchedHeader.raw;
     }
   });
 
@@ -181,8 +187,15 @@ export function transformCSVRowToProduct(
   const name = getValue('name') || (existingProduct ? existingProduct.name : 'Imported Artisan Cake');
   const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
 
-  const regularPrice = parseFloat(getValue('regularPrice')) || 999;
-  const salePrice = parseFloat(getValue('salePrice')) || regularPrice;
+  const toNum = (val: any, fallback: number): number => {
+    if (val === null || val === undefined || String(val).trim() === '') return fallback;
+    const cleaned = String(val).replace(/[^0-9.\-]/g, '');
+    const n = parseFloat(cleaned);
+    return Number.isFinite(n) ? n : fallback;
+  };
+
+  const regularPrice = toNum(getValue('regularPrice'), 0);
+  const salePrice = toNum(getValue('salePrice'), regularPrice || 0);
 
   const rawCategory = getValue('category') || 'birthday';
   const categorySlug = rawCategory.toLowerCase().replace(/\s+/g, '-');
@@ -190,8 +203,8 @@ export function transformCSVRowToProduct(
   const shortDesc = getValue('shortDescription') || 'Freshly baked artisan confection by TVO Flavours.';
   const fullDesc = getValue('description') || shortDesc;
 
-  const rawStock = parseInt(getValue('stock'), 10);
-  const stock = isNaN(rawStock) ? 20 : rawStock;
+  const rawStock = toNum(getValue('stock'), 20);
+  const stock = Math.max(0, Math.round(rawStock));
   const stockStatus = getValue('stockStatus').toLowerCase().includes('out') || stock <= 0 ? 'out_of_stock' : 'in_stock';
 
   const rawEggless = getValue('eggless').toLowerCase();
@@ -239,8 +252,8 @@ export function transformCSVRowToProduct(
     eggless,
     weightOptions,
     images,
-    rating: existingProduct?.rating || 4.8,
-    reviewCount: existingProduct?.reviewCount || 1,
+    rating: existingProduct?.rating || 0,
+    reviewCount: existingProduct?.reviewCount || 0,
     stock,
     stockStatus,
     badges,
@@ -303,7 +316,7 @@ export async function importProductsFromWooCommerce(
 
     return data.data;
   } catch (err: any) {
-    console.error('CSV Import error:', err);
+    logError('csv_import_error', err?.message || err);
     // Return a failed summary with the error
     return {
       created: 0,

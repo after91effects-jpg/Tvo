@@ -1,5 +1,6 @@
 import { ok, err, db, generateOrderNumber, jsonParseSafe, getCurrentUser, logAudit } from '../../../lib/server/api';
 import { createOrder, OrderInputError, extractPieceCount } from '../../../lib/server/order-engine';
+import { logError } from '../../../lib/server/logger';
 
 export const runtime = 'nodejs';
 
@@ -98,7 +99,7 @@ export async function POST(req: Request) {
     return ok(created);
   } catch (e: any) {
     if (e instanceof OrderInputError) return err(e.message, 400);
-    console.error('Order creation failed:', e);
+    logError('order_creation_failed', e?.message || e);
     return err('Failed to create order. Please try again.', 500);
   }
 }
@@ -118,6 +119,22 @@ export async function PUT(req: Request) {
     if (!order) return err('Order not found', 404);
     const newStatus = body.status;
     if (!PRODUCTION_STATUSES.includes(newStatus)) return err('Invalid status', 400);
+
+    const currentIdx = PRODUCTION_STATUSES.indexOf(order.status);
+    const nextIdx = PRODUCTION_STATUSES.indexOf(newStatus);
+    const isCancellation = String(newStatus).toLowerCase() === 'cancelled';
+    const isTerminal = currentIdx >= PRODUCTION_STATUSES.indexOf('Delivered');
+    if (currentIdx !== -1 && nextIdx !== -1) {
+      if (isTerminal && nextIdx !== currentIdx) {
+        return err('This order is already ' + order.status + ' and is final', 400);
+      }
+      if (!isCancellation && nextIdx < currentIdx) {
+        return err('Invalid transition: cannot move this order to a prior stage', 400);
+      }
+    }
+    if (newStatus === order.status) {
+      return ok({ ok: true, status: newStatus, noOp: true });
+    }
 
     db.prepare('UPDATE orders SET status=?, updated_at=datetime(\'now\') WHERE id=?').run(newStatus, order.id);
     db.prepare('INSERT INTO order_status_history (order_id, status, note, user_id) VALUES (?,?,?,?)').run(order.id, newStatus, body.note || null, user?.id ?? null);

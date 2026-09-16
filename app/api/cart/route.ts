@@ -7,9 +7,9 @@ export async function GET(req: Request) {
   const session = url.searchParams.get('session') || '';
   const user = getCurrentUser(req);
   let customerId = null;
-  if (user) customerId = db.prepare('SELECT id FROM customers WHERE user_id=?').get(user.id)?.id ?? null;
+  if (user) customerId = (db.prepare('SELECT id FROM customers WHERE user_id=?').get(user.id) as any)?.id ?? null;
   const row = db.prepare('SELECT * FROM carts WHERE customer_id=? OR (customer_id IS NULL AND session_id=?) ORDER BY id DESC LIMIT 1')
-    .get(customerId, session);
+    .get(customerId, session) as any;
   return ok(row ? { cart: { ...row, items: JSON.parse(row.items || '[]') } } : { cart: null });
 }
 
@@ -19,10 +19,10 @@ export async function POST(req: Request) {
   const session = body.session_id || '';
   const user = getCurrentUser(req);
   let customerId = null;
-  if (user) customerId = db.prepare('SELECT id FROM customers WHERE user_id=?').get(user.id)?.id ?? null;
+  if (user) customerId = (db.prepare('SELECT id FROM customers WHERE user_id=?').get(user.id) as any)?.id ?? null;
 
   let row = db.prepare('SELECT * FROM carts WHERE customer_id=? OR (customer_id IS NULL AND session_id=?) ORDER BY id DESC LIMIT 1')
-    .get(customerId, session);
+    .get(customerId, session) as any;
 
   if (action === 'save') {
     const itemsJson = JSON.stringify(body.items || []);

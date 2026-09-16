@@ -2,6 +2,7 @@ import { logAudit, slugify, jsonParseSafe } from './api';
 import { db } from './db';
 import { hashPassword } from './auth';
 import { extractPieceCount } from './order-engine';
+import { ADMIN_ROLES } from './permissions';
 
 // ============================================================================
 // Phase 2 Admin Operations
@@ -136,17 +137,19 @@ export function updateOrderDetails(user: User, id: number, fields: Partial<Row>)
 }
 
 export function createRefund(user: User, orderId: number, amount: number, reason?: string) {
+  const numAmount = Number(amount);
+  if (!numAmount || numAmount <= 0) return { ok: false, error: 'Refund amount must be positive' };
   const order = one<Row>('SELECT * FROM orders WHERE id=?', orderId);
   if (!order) return { ok: false, error: 'Order not found' };
   const refunded = one<{ v: number }>("SELECT COALESCE(SUM(amount),0) v FROM order_refunds WHERE order_id=? AND status IN ('pending','completed')", orderId)?.v ?? 0;
-  const totalRefunded = Number(refunded) + Number(amount);
+  const totalRefunded = Number(refunded) + numAmount;
   if (totalRefunded > order.total) return { ok: false, error: 'Refund amount exceeds order total' };
   const status = totalRefunded >= order.total ? 'Refunded' : 'Partially Refunded';
   tx(() => {
-    run("INSERT INTO order_refunds (order_id, amount, reason, status, method) VALUES (?,?,?,?,?)", orderId, amount, reason || null, 'pending', 'original');
+    run("INSERT INTO order_refunds (order_id, amount, reason, status, method) VALUES (?,?,?,?,?)", orderId, numAmount, reason || null, 'pending', 'original');
     run("UPDATE orders SET payment_status=?, updated_at=datetime('now') WHERE id=?", status, orderId);
   });
-  audit(user, 'ORDER_REFUND_CREATE', 'Order', String(orderId), `₹${amount}`);
+  audit(user, 'ORDER_REFUND_CREATE', 'Order', String(orderId), `₹${numAmount}`);
   return { ok: true, payment_status: status };
 }
 
@@ -453,7 +456,7 @@ export function saveGiftCard(user: User, data: any) {
   if (amount <= 0) return { ok: false, error: 'Amount must be greater than 0' };
   if (data.id) {
     run('UPDATE gift_cards SET amount=?, balance=?, recipient_name=?, recipient_email=?, message=?, delivery_date=?, expires_at=?, active=? WHERE id=?',
-      amount, Number(data.balance) ?? amount, data.recipient_name || null, data.recipient_email || null, data.message || null, data.delivery_date || null, data.expires_at || null, data.active ? 1 : 0, data.id);
+      amount, Number(data.balance ?? amount), data.recipient_name || null, data.recipient_email || null, data.message || null, data.delivery_date || null, data.expires_at || null, data.active ? 1 : 0, data.id);
   } else {
     try {
       run('INSERT INTO gift_cards (code, amount, balance, recipient_name, recipient_email, message, delivery_date, expires_at, active) VALUES (?,?,?,?,?,?,?,?,?)',
@@ -812,8 +815,10 @@ export function createAdminUser(user: User, data: any) {
   const email = data.email.toLowerCase().trim();
   const exists = one('SELECT id FROM users WHERE email=?', email);
   if (exists) return { ok: false, error: 'A user with that email already exists' };
-  const pw = data.password || 'Password@123';
+  const pw = data.password || '';
+  if (!pw || pw.length < 8) return { ok: false, error: 'Password must be at least 8 characters' };
   const role = data.role || 'staff';
+  if (!ADMIN_ROLES.includes(role as any)) return { ok: false, error: 'Invalid role' };
   try {
     const r = run('INSERT INTO users (name, email, password_hash, phone, role, status) VALUES (?,?,?,?,?,?)',
       data.name, email, hashPassword(pw), data.phone || null, role, data.status || 'active');
@@ -828,6 +833,16 @@ export function updateAdminUser(user: User, id: number, data: any) {
   if (!target) return { ok: false, error: 'User not found' };
   if (target.id === user.id && data.role && data.role !== 'super_admin') {
     return { ok: false, error: 'You cannot demote your own super_admin role' };
+  }
+  if (target.role === 'super_admin' && data.role && data.role !== 'super_admin') {
+    const others = count("SELECT COUNT(*) c FROM users WHERE role='super_admin' AND id!=?", id);
+    if (others === 0) return { ok: false, error: 'Cannot demote the last super_admin' };
+  }
+  if (data.role !== undefined && !ADMIN_ROLES.includes(data.role as any)) {
+    return { ok: false, error: 'Invalid role' };
+  }
+  if (data.password !== undefined && data.password !== '') {
+    if (data.password.length < 8) return { ok: false, error: 'Password must be at least 8 characters' };
   }
   const sets: string[] = [];
   const params: any[] = [];

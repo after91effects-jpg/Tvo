@@ -1,4 +1,4 @@
-import { ok, err } from '../../../lib/server/api';
+import { ok, err, getCurrentUser, isAdminRole } from '../../../lib/server/api';
 import { serializeProduct, PRODUCT_BASE_SELECT } from '../../../lib/server/product-serializer';
 import { resolveActiveOccasion, getOccasionBySlug } from '../../../lib/server/occasions';
 
@@ -40,7 +40,7 @@ export async function GET(req: Request) {
       if (list.length > 0) {
         const marks = list.map(() => '?').join(',');
         const rows = data.prepare(`${BASE_SELECT} WHERE p.deleted_at IS NULL AND p.published=1 AND p.id IN (${marks})`).all(...list);
-        const byId = new Map(rows.map((r) => [String(r.id), r]));
+        const byId = new Map(rows.map((r: any) => [String(r.id), r]));
         return ok({ products: list.map((i) => serializeProduct(byId.get(i))).filter(Boolean) });
       }
     }
@@ -72,6 +72,18 @@ export async function GET(req: Request) {
     }
 
     let where = 'p.deleted_at IS NULL AND p.published = 1';
+
+    // Admin-only visibility: when requested by an authenticated admin with
+    // ?include_drafts=1, drafts (published=0) are included. Customers can never
+    // request this — the flag is ignored unless the admin session cookie is valid.
+    const currentUser = getCurrentUser(req);
+    const adminListingAll =
+      url.searchParams.get('include_drafts') === '1' &&
+      currentUser &&
+      isAdminRole(currentUser.role);
+    if (adminListingAll) {
+      where = 'p.deleted_at IS NULL';
+    }
 
     // Stock/availability filter for occasion-aware requests (respects existing rules)
     if (joinClause) {

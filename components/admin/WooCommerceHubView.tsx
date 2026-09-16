@@ -44,7 +44,7 @@ export const WooCommerceHubView: React.FC<WooCommerceHubViewProps> = ({
   // Import wizard state
   const [importFile, setImportFile] = useState<File | null>(null);
   const [parsedRows, setParsedRows] = useState<any[]>([]);
-  const [duplicateStrategy, setDuplicateStrategy] = useState<DuplicateStrategy>('overwrite');
+  const [duplicateStrategy, setDuplicateStrategy] = useState<DuplicateStrategy>('skip');
   const [isImporting, setIsImporting] = useState(false);
   const [importSummary, setImportSummary] = useState<ImportSummary | null>(null);
   const [importError, setImportError] = useState<string>('');
@@ -328,13 +328,14 @@ export const WooCommerceHubView: React.FC<WooCommerceHubViewProps> = ({
           )}
 
           {importSummary && (
-            <div className="p-4 rounded-xl bg-[var(--success-light)] border border-[var(--success)]/20 text-xs space-y-1 animate-in fade-in">
-              <div className="font-bold text-[var(--success)] flex items-center gap-1.5">
-                <CheckCircle className="w-4 h-4" />
-                <span>WooCommerce Import Completed!</span>
+            <div className={`p-4 rounded-xl border text-xs space-y-1 animate-in fade-in ${importSummary.failed > 0 ? 'bg-[var(--danger-light)] border-[var(--danger)]/20' : 'bg-[var(--success-light)] border-[var(--success)]/20'}`}>
+              <div className={`font-bold flex items-center gap-1.5 ${importSummary.failed > 0 ? 'text-[var(--danger)]' : 'text-[var(--success)]'}`}>
+                {importSummary.failed > 0 ? <AlertTriangle className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />}
+                <span>{importSummary.failed > 0 ? `WooCommerce Import Completed with ${importSummary.failed} error(s)` : 'WooCommerce Import Completed!'}</span>
               </div>
               <div className="text-[11px] text-[var(--text-main)]">
                 Processed {importSummary.totalProcessed} records: <strong>{importSummary.created} created</strong>, <strong>{importSummary.updated} updated</strong>, {importSummary.skipped} skipped, {importSummary.failed} failed.
+                {importSummary.failed > 0 && importSummary.errors?.length ? ` First error (row ${importSummary.errors[0].row}): ${importSummary.errors[0].reason}` : ''}
               </div>
             </div>
           )}

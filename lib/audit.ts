@@ -1,10 +1,12 @@
 import { AuditLog } from './types';
+import type { UserRole } from './types';
+import { logWarn } from './server/logger';
 
 export async function logAuditEvent(params: {
   actorUid?: string;
   actorName?: string;
   actorEmail?: string;
-  role?: 'admin' | 'staff' | 'system' | 'customer';
+  role?: UserRole | 'system';
   action: string;
   targetType: 'Product' | 'Order' | 'Media' | 'Settings' | 'Security' | 'Auth' | 'Catalog' | string;
   targetId?: string;
@@ -29,6 +31,6 @@ export async function logAuditEvent(params: {
       body: JSON.stringify(auditData),
     });
   } catch (error) {
-    console.warn('Failed to record audit log:', error);
+    logWarn('audit_log_failed', 'Failed to record audit log', undefined, { error: String(error) });
   }
 }

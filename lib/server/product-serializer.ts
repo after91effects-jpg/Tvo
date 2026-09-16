@@ -4,6 +4,18 @@ import { jsonParseSafe } from './api';
 import { normalizeImageUrl, mediumImageUrl } from '../imageUrl';
 import { stripHtmlAndMetadata, cleanDescription } from '../sanitizeDescription';
 
+function parseFlavourOptions(raw: any): any[] {
+  if (!raw) return [];
+  try {
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+
+
 export function serializeProduct(row: any) {
   if (!row) return null;
 
@@ -11,6 +23,20 @@ export function serializeProduct(row: any) {
   const rawDesc = row.description || '';
   const cleanShort = stripHtmlAndMetadata(rawShort || rawDesc);
   const cleanDesc = cleanDescription(rawDesc || rawShort);
+
+  let flavourOptions = parseFlavourOptions(row.flavour_options_json);
+  if (flavourOptions.length === 0 && row.flavours) {
+    const legacyFlavours = jsonParseSafe(row.flavours, []);
+    if (Array.isArray(legacyFlavours) && legacyFlavours.length > 0) {
+      flavourOptions = legacyFlavours.map((fl: any, idx: number) => ({
+        id: `flav_${idx + 1}`,
+        name: typeof fl === 'string' ? fl : fl.name,
+        additionalPrice: 0,
+        enabled: true,
+        sortOrder: idx + 1,
+      }));
+    }
+  }
 
   return {
     id: String(row.id),
@@ -38,6 +64,7 @@ export function serializeProduct(row: any) {
       return { url, mediumUrl: finalMedium, thumbUrl: finalMedium, isPrimary: true };
     }).filter((i: any) => i.url),
     flavours: jsonParseSafe(row.flavours, []),
+    flavourOptions,
     badges: jsonParseSafe(row.badges, []),
     tags: jsonParseSafe(row.tags, []),
     eggless: !!row.eggless,
@@ -59,6 +86,18 @@ export function serializeProduct(row: any) {
     prepTimeMinutes: row.prep_time_minutes ?? null,
     sameDayEligible: !!row.same_day_eligible,
     minAdvanceNotice: row.min_advance_notice ?? null,
+    // Customization fields
+    customizationFee: Number(row.customization_fee) || 0,
+    allowCustomMessage: row.allow_custom_message !== 0,
+    allowCustomDesign: row.allow_custom_design === 1,
+    // Feature toggles
+    showGallery: row.show_gallery !== 0,
+    showVideo: row.show_video === 1,
+    showFlavour: row.show_flavour !== 0,
+    showCustomize: row.show_customize !== 0,
+    showCustomization: row.show_customize !== 0,
+    showDesignUpload: row.show_design_upload !== 0,
+    showCustomerDesignUpload: row.show_design_upload !== 0,
   };
 }
 
@@ -66,3 +105,5 @@ export const PRODUCT_BASE_SELECT = `SELECT p.*, c.name AS category_name, c.slug 
   (SELECT AVG(rating) FROM product_reviews pr WHERE pr.product_id=p.id AND pr.status='approved') AS avg_rating,
   (SELECT COUNT(*) FROM product_reviews pr WHERE pr.product_id=p.id AND pr.status='approved') AS review_count
   FROM products p LEFT JOIN categories c ON p.category_id = c.id`;
+
+export const deserializeProduct = serializeProduct;

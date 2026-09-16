@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import Papa from 'papaparse';
 import {
   Plus,
@@ -26,8 +26,19 @@ import {
   ArrowRight,
   Info,
   CheckCheck,
+  Sparkles as SparklesIcon,
+  MessageSquare,
+  Upload as UploadIcon,
+  Tag,
+  Eye as EyeIcon,
+  ToggleLeft,
+  ToggleRight,
+  LayoutDashboard,
+  Image as ImageIcon2,
+  Menu,
+  Settings,
 } from 'lucide-react';
-import { Product, WeightOption, DuplicateStrategy, ImportSummary } from '../../lib/types';
+import { Product, WeightOption, FlavourOption, DuplicateStrategy, ImportSummary } from '../../lib/types';
 import { logAuditEvent } from '../../lib/audit';
 import { useAuth } from '../../context/AuthContext';
 import { Modal } from '../common/Modal';
@@ -109,6 +120,39 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
   );
   const [formPublished, setFormPublished] = useState(true);
   const [formSellingUnit, setFormSellingUnit] = useState<'piece' | 'weight'>('weight');
+  // Flavour Options
+  const [formFlavourOptions, setFormFlavourOptions] = useState<FlavourOption[]>([
+    { id: 'flav-1', name: 'Original', additionalPrice: 0, isDefault: true, displayOrder: 1, isActive: true, showOnStorefront: true },
+  ]);
+  // Customization
+  const [formCustomizationFee, setFormCustomizationFee] = useState('0');
+  const [formAllowCustomMessage, setFormAllowCustomMessage] = useState(true);
+  const [formAllowCustomDesign, setFormAllowCustomDesign] = useState(false);
+  // Feature Toggles
+  const [formShowGallery, setFormShowGallery] = useState(true);
+  const [formShowVideo, setFormShowVideo] = useState(false);
+  const [formShowFlavour, setFormShowFlavour] = useState(true);
+  const [formShowCustomize, setFormShowCustomize] = useState(true);
+  const [formShowDesignUpload, setFormShowDesignUpload] = useState(false);
+  const [formShowAddons, setFormShowAddons] = useState(true);
+  const [formShowDietary, setFormShowDietary] = useState(true);
+  const [formShowDelivery, setFormShowDelivery] = useState(true);
+  const [formShowSpecialInstructions, setFormShowSpecialInstructions] = useState(true);
+
+  const [categoryIdMap, setCategoryIdMap] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    fetch('/api/admin?type=categories')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: any) => {
+        if (data?.categories?.length) {
+          const map: Record<string, number> = {};
+          for (const c of data.categories) if (c?.slug) map[c.slug] = Number(c.id);
+          setCategoryIdMap(map);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Download Sample CSV Template
   const handleDownloadSampleCsv = () => {
@@ -420,7 +464,7 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
       for (let i = 0; i < rowsToProcess.length; i += batchSize) {
         const chunk = rowsToProcess.slice(i, i + batchSize);
 
-        chunk.forEach(async (row, chunkIdx) => {
+        await Promise.all(chunk.map(async (row, chunkIdx) => {
           const overallIndex = i + chunkIdx + 1;
 
           try {
@@ -486,8 +530,8 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
                   alt: row.name,
                 },
               ],
-              rating: 4.9,
-              reviewCount: 1,
+              rating: 0,
+              reviewCount: 0,
               stock: row.stock,
               stockStatus: row.stock > 0 ? 'in_stock' : 'out_of_stock',
               badges: row.badges,
@@ -499,7 +543,7 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
               createdBy: user?.name || 'Chef Administrator (CSV Import)',
             };
 
-            await fetch('/api/admin/products', {
+            const res = await fetch('/api/admin/products', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -508,8 +552,8 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
                 name: productPayload.name,
                 sku: row.sku,
                 slug,
-                regular_price: row.price,
-                sale_price: row.mrp,
+                regular_price: row.mrp,
+                sale_price: row.price,
                 stock: row.stock,
                 published: row.published ? 1 : 0,
                 short_description: productPayload.shortDescription,
@@ -530,7 +574,8 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
                   })),
                 },
               }),
-            }).catch(() => {});
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
             if (isUpdating) {
               updatedCount++;
@@ -541,10 +586,10 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
             failedCount++;
             errorsList.push({
               row: overallIndex,
-              reason: itemErr?.message || 'Error formulating batch update',
+              reason: itemErr?.message || 'Error writing row to catalog',
             });
           }
-        });
+        }));
 
         const progressPercent = Math.min(100, Math.round(((i + chunk.length) / rowsToProcess.length) * 100));
         setImportProgress(progressPercent);
@@ -595,6 +640,22 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
     );
     setFormPublished(true);
     setFormSellingUnit('weight');
+    // Reset flavour options
+    setFormFlavourOptions([{ id: 'flav-1', name: 'Original', additionalPrice: 0, isDefault: true, displayOrder: 1, isActive: true, showOnStorefront: true }]);
+    // Reset customization
+    setFormCustomizationFee('0');
+    setFormAllowCustomMessage(true);
+    setFormAllowCustomDesign(false);
+    // Reset feature toggles
+    setFormShowGallery(true);
+    setFormShowVideo(false);
+    setFormShowFlavour(true);
+    setFormShowCustomize(true);
+    setFormShowDesignUpload(false);
+    setFormShowAddons(true);
+    setFormShowDietary(true);
+    setFormShowDelivery(true);
+    setFormShowSpecialInstructions(true);
     setIsAddModalOpen(true);
   };
 
@@ -615,6 +676,24 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
     setFormImageUrl(prod.images?.[0]?.url || '');
     setFormPublished(prod.published);
     setFormSellingUnit((prod as any).sellingUnit ?? (prod as any).selling_unit ?? 'weight');
+    // Load flavour options
+    setFormFlavourOptions((prod as any).flavourOptions?.length
+      ? (prod as any).flavourOptions
+      : [{ id: 'flav-1', name: 'Original', additionalPrice: 0, isDefault: true, displayOrder: 1, isActive: true, showOnStorefront: true }]);
+    // Load customization
+    setFormCustomizationFee((prod as any).customizationFee?.toString() || '0');
+    setFormAllowCustomMessage((prod as any).allowCustomMessage !== false);
+    setFormAllowCustomDesign((prod as any).allowCustomDesign === true);
+    // Load feature toggles
+    setFormShowGallery((prod as any).showGallery !== false);
+    setFormShowVideo((prod as any).showVideo === true);
+    setFormShowFlavour((prod as any).showFlavour !== false);
+    setFormShowCustomize((prod as any).showCustomize !== false);
+    setFormShowDesignUpload((prod as any).showDesignUpload === true);
+    setFormShowAddons((prod as any).showAddons !== false);
+    setFormShowDietary((prod as any).showDietary !== false);
+    setFormShowDelivery((prod as any).showDelivery !== false);
+    setFormShowSpecialInstructions((prod as any).showSpecialInstructions !== false);
     setIsAddModalOpen(true);
   };
 
@@ -629,9 +708,12 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
       setIsSaving(true);
       setErrorMessage('');
 
-      const priceNum = parseFloat(formPrice) || 699;
-      const mrpNum = parseFloat(formMrp) || Math.round(priceNum * 1.2);
-      const stockNum = parseInt(formStock, 10) || 20;
+      const parsedPrice = parseFloat(formPrice);
+      const parsedMrp = parseFloat(formMrp);
+      const parsedStock = parseInt(formStock, 10);
+      const priceNum = Number.isFinite(parsedPrice) ? Math.max(0, parsedPrice) : 699;
+      const mrpNum = Number.isFinite(parsedMrp) ? Math.max(0, parsedMrp) : Math.round(priceNum * 1.2);
+      const stockNum = Number.isFinite(parsedStock) ? Math.max(0, parsedStock) : 20;
 
       const weightOptions: WeightOption[] = formSellingUnit === 'piece'
         ? [
@@ -693,8 +775,8 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
             alt: formName.trim(),
           },
         ],
-        rating: editingProduct?.rating || 4.9,
-        reviewCount: editingProduct?.reviewCount || 1,
+        rating: editingProduct?.rating ?? 0,
+        reviewCount: editingProduct?.reviewCount ?? 0,
         stock: stockNum,
         stockStatus: stockNum > 0 ? 'in_stock' : 'out_of_stock',
         badges: formBadges.split(',').map((s) => s.trim()).filter(Boolean),
@@ -716,12 +798,12 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
             name: productPayload.name,
             sku: formSku,
             slug: productPayload.slug || undefined,
-            regular_price: productPayload.regularPrice,
-            sale_price: productPayload.salePrice,
+            regular_price: mrpNum,
+            sale_price: priceNum,
             stock: stockNum,
             stock_status: stockNum > 0 ? 'in_stock' : 'out_of_stock',
             published: formPublished ? 1 : 0,
-            category_id: (editingProduct as any)?.category_id ? Number((editingProduct as any).category_id) : undefined,
+            category_id: categoryIdMap[formCategory] || undefined,
             short_description: productPayload.shortDescription,
             description: productPayload.description,
             eggless: formEggless ? 1 : 0,
@@ -738,8 +820,29 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
               })),
             },
             flavours: productPayload.flavours,
+            flavour_options_json: formFlavourOptions.filter(f => f.name.trim()).map(f => ({
+              id: f.id,
+              name: f.name,
+              additionalPrice: f.additionalPrice,
+              isDefault: f.isDefault,
+              displayOrder: f.displayOrder,
+              isActive: f.isActive,
+              showOnStorefront: f.showOnStorefront,
+            })),
             badges: productPayload.badges,
             tags: productPayload.tags,
+            customization_fee: Number(formCustomizationFee) || 0,
+            allow_custom_message: formAllowCustomMessage ? 1 : 0,
+            allow_custom_design: formAllowCustomDesign ? 1 : 0,
+            show_gallery: formShowGallery ? 1 : 0,
+            show_video: formShowVideo ? 1 : 0,
+            show_flavour: formShowFlavour ? 1 : 0,
+            show_customize: formShowCustomize ? 1 : 0,
+            show_design_upload: formShowDesignUpload ? 1 : 0,
+            show_addons: formShowAddons ? 1 : 0,
+            show_dietary: formShowDietary ? 1 : 0,
+            show_delivery: formShowDelivery ? 1 : 0,
+            show_special_instructions: formShowSpecialInstructions ? 1 : 0,
           }),
         });
         if (!res.ok) {
@@ -779,16 +882,18 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
     }
 
     try {
-      try {
-        await fetch('/api/admin/products', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'delete',
-            id: productToDelete.id,
-          }),
-        });
-      } catch (e) {}
+      const res = await fetch('/api/admin/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'delete',
+          id: productToDelete.id,
+        }),
+      });
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody?.error || `Could not delete product (${res.status}).`);
+      }
 
       await logAuditEvent({
         actorUid: user?.uid,
@@ -811,8 +916,8 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
   const filteredProducts = products.filter((p) => {
     const matchesSearch =
       searchQuery === '' ||
-      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.sku.toLowerCase().includes(searchQuery.toLowerCase());
+      (p.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (p.sku || '').toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory =
       selectedCategory === 'all' || p.category === selectedCategory;
     const matchesDietary =
@@ -893,7 +998,7 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
       {/* Filter Toolbar */}
       <div className="bg-[var(--bg-surface)] p-4 rounded-2xl border border-[var(--border)] shadow-xs flex flex-wrap items-center gap-3">
         {/* Search */}
-        <div className="relative flex-1 min-w-[200px]">
+        <div className="relative flex-1 w-full sm:min-w-[200px] min-w-0">
           <Search className="w-4 h-4 text-[var(--text-subtle)] absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
@@ -1290,6 +1395,184 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
             />
           </div>
 
+          {/* Flavour Options */}
+          <div className="space-y-3">
+            <label className="block text-xs font-semibold text-[var(--text-main)] mb-1 flex items-center gap-1.5">
+              <SparklesIcon className="w-3.5 h-3.5 text-amber-500" />
+              Flavour Options (with pricing)
+            </label>
+            <div className="space-y-2">
+              {formFlavourOptions.map((fo, idx) => (
+                <div key={fo.id} className="flex items-center gap-2 p-2 rounded-lg bg-[var(--bg-subtle)] border border-[var(--border)]">
+                  <input
+                    type="checkbox"
+                    checked={fo.isActive}
+                    onChange={(e) => {
+                      const updated = [...formFlavourOptions];
+                      updated[idx] = { ...updated[idx], isActive: e.target.checked };
+                      setFormFlavourOptions(updated);
+                    }}
+                    className="w-4 h-4 rounded accent-[var(--primary)]"
+                    title="Active"
+                  />
+                  <input
+                    type="checkbox"
+                    checked={fo.showOnStorefront}
+                    onChange={(e) => {
+                      const updated = [...formFlavourOptions];
+                      updated[idx] = { ...updated[idx], showOnStorefront: e.target.checked };
+                      setFormFlavourOptions(updated);
+                    }}
+                    className="w-4 h-4 rounded accent-[var(--primary)]"
+                    title="Show on Storefront"
+                  />
+                  <input
+                    type="radio"
+                    name="default-flavour"
+                    checked={fo.isDefault}
+                    onChange={() => {
+                      const updated = formFlavourOptions.map((f, i) => ({ ...f, isDefault: i === idx }));
+                      setFormFlavourOptions(updated);
+                    }}
+                    className="w-4 h-4 rounded accent-[var(--primary)]"
+                    title="Default"
+                  />
+                  <input
+                    type="text"
+                    value={fo.name}
+                    onChange={(e) => {
+                      const updated = [...formFlavourOptions];
+                      updated[idx] = { ...updated[idx], name: e.target.value };
+                      setFormFlavourOptions(updated);
+                    }}
+                    placeholder="Flavour name"
+                    className="flex-1 px-2 py-1.5 text-xs rounded border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-main)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
+                  />
+                  <input
+                    type="number"
+                    value={fo.additionalPrice}
+                    onChange={(e) => {
+                      const updated = [...formFlavourOptions];
+                      updated[idx] = { ...updated[idx], additionalPrice: Number(e.target.value) || 0 };
+                      setFormFlavourOptions(updated);
+                    }}
+                    placeholder="+₹"
+                    min="0"
+                    className="w-20 px-2 py-1.5 text-xs rounded border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-main)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
+                  />
+                  <input
+                    type="number"
+                    value={fo.displayOrder}
+                    onChange={(e) => {
+                      const updated = [...formFlavourOptions];
+                      updated[idx] = { ...updated[idx], displayOrder: Number(e.target.value) || 1 };
+                      setFormFlavourOptions(updated);
+                    }}
+                    placeholder="Order"
+                    min="1"
+                    className="w-16 px-2 py-1.5 text-xs rounded border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-main)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
+                  />
+                  {formFlavourOptions.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setFormFlavourOptions(formFlavourOptions.filter((_, i) => i !== idx))}
+                      className="p-1.5 text-[var(--text-muted)] hover:text-red-500 transition-colors"
+                      title="Remove flavour"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => setFormFlavourOptions([
+                  ...formFlavourOptions,
+                  { id: `flav-${Date.now()}`, name: '', additionalPrice: 0, isDefault: false, displayOrder: formFlavourOptions.length + 1, isActive: true, showOnStorefront: true }
+                ])}
+                className="w-full py-2 px-3 rounded-lg border-2 border-dashed border-[var(--border)] text-xs font-medium text-[var(--text-muted)] hover:border-[var(--primary)] hover:text-[var(--primary)] hover:bg-[var(--primary-light)]/10 transition-colors flex items-center justify-center gap-1.5"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add Flavour Option</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Customization Settings */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-[var(--border)]">
+            <div>
+              <label className="block text-xs font-semibold text-[var(--text-main)] mb-1 flex items-center gap-1.5">
+                <MessageSquare className="w-3.5 h-3.5 text-[var(--primary)]" />
+                Customization Fee (₹)
+              </label>
+              <input
+                type="number"
+                value={formCustomizationFee}
+                onChange={(e) => setFormCustomizationFee(e.target.value)}
+                placeholder="0"
+                min="0"
+                className="w-full px-3 py-2 text-xs rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
+              />
+            </div>
+            <div className="flex items-center pt-6">
+              <label className="flex items-center gap-2 text-xs text-[var(--text-main)] cursor-pointer w-full">
+                <input
+                  type="checkbox"
+                  checked={formAllowCustomMessage}
+                  onChange={(e) => setFormAllowCustomMessage(e.target.checked)}
+                  className="w-4 h-4 rounded accent-[var(--primary)]"
+                />
+                <span>Allow custom message on cake</span>
+              </label>
+            </div>
+            <div className="flex items-center pt-2">
+              <label className="flex items-center gap-2 text-xs text-[var(--text-main)] cursor-pointer w-full">
+                <input
+                  type="checkbox"
+                  checked={formAllowCustomDesign}
+                  onChange={(e) => setFormAllowCustomDesign(e.target.checked)}
+                  className="w-4 h-4 rounded accent-[var(--primary)]"
+                />
+                <span>Allow customer design upload</span>
+              </label>
+            </div>
+          </div>
+
+          {/* Product Page Feature Toggles */}
+          <div className="pt-4 border-t border-[var(--border)]">
+            <h4 className="text-xs font-bold text-[var(--text-main)] uppercase tracking-wider mb-3 flex items-center gap-1.5">
+              <Settings className="w-3.5 h-3.5 text-[var(--primary)]" />
+              Product Page Sections (Show/Hide on Storefront)
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {[
+                { key: 'showGallery', label: 'Product Gallery', icon: ImageIcon2, state: formShowGallery, setState: setFormShowGallery },
+                { key: 'showVideo', label: 'Product Video', icon: Menu, state: formShowVideo, setState: setFormShowVideo },
+                { key: 'showFlavour', label: 'Flavour Selector', icon: SparklesIcon, state: formShowFlavour, setState: setFormShowFlavour },
+                { key: 'showCustomize', label: 'Customize Cake', icon: MessageSquare, state: formShowCustomize, setState: setFormShowCustomize },
+                { key: 'showDesignUpload', label: 'Design Upload', icon: UploadIcon, state: formShowDesignUpload, setState: setFormShowDesignUpload },
+                { key: 'showAddons', label: 'Add-ons', icon: Tag, state: formShowAddons, setState: setFormShowAddons },
+                { key: 'showDietary', label: 'Dietary Info', icon: EyeIcon, state: formShowDietary, setState: setFormShowDietary },
+                { key: 'showDelivery', label: 'Delivery Options', icon: LayoutDashboard, state: formShowDelivery, setState: setFormShowDelivery },
+                { key: 'showSpecialInstructions', label: 'Special Instructions', icon: Settings, state: formShowSpecialInstructions, setState: setFormShowSpecialInstructions },
+              ].map((item) => (
+                <label key={item.key} className="flex items-center justify-between p-3 rounded-xl border bg-[var(--bg-surface)] cursor-pointer transition-all hover:border-[var(--border-strong)]">
+                  <div className="flex items-center gap-2">
+                    <item.icon className="w-4 h-4 text-[var(--primary)]" />
+                    <span className="text-xs font-medium text-[var(--text-main)]">{item.label}</span>
+                  </div>
+                  <div className="relative w-10 h-6 rounded-full transition-colors cursor-pointer"
+                    style={{ backgroundColor: item.state ? 'var(--primary)' : 'var(--border)' }}
+                    onClick={() => item.setState(!item.state)}
+                  >
+                    <div className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform"
+                      style={{ transform: item.state ? 'translateX(26px)' : 'translateX(0.5px)' }} />
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
+
           <div className="flex items-center gap-2 pt-2">
             <input
               type="checkbox"
@@ -1332,7 +1615,7 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
       >
         <div className="space-y-4">
           <p className="text-xs text-[var(--text-muted)] leading-relaxed">
-            Are you sure you want to delete <strong className="text-[var(--text-main)]">{productToDelete?.name}</strong> (SKU: {productToDelete?.sku}) from the TVO Flavours catalog? This action is permanent and recorded in the audit trail.
+            Are you sure you want to delete <strong className="text-[var(--text-main)]">{productToDelete?.name}</strong> (SKU: {productToDelete?.sku}) from the TVO Flavours catalog? This moves it to Trash (recoverable) and is recorded in the audit trail.
           </p>
 
           <div className="pt-2 flex items-center justify-end gap-2">
@@ -1421,12 +1704,14 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
           ) : importSummary ? (
             /* Import Success Summary */
             <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-6 space-y-5">
-              <div className="flex items-center gap-3 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600">
-                <CheckCircle2 className="w-6 h-6 shrink-0" />
+              <div className={`flex items-center gap-3 p-4 rounded-xl border ${importSummary.failed > 0 ? 'bg-[var(--danger-light)] border-[var(--danger)]/20 text-[var(--danger)]' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600'}`}>
+                {importSummary.failed > 0 ? <AlertCircle className="w-6 h-6 shrink-0" /> : <CheckCircle2 className="w-6 h-6 shrink-0" />}
                 <div>
-                  <h4 className="text-sm font-bold">CSV Bulk Import Complete!</h4>
-                  <p className="text-xs text-emerald-700 mt-0.5">
-                    Your cake catalog has been updated in Firestore database.
+                  <h4 className="text-sm font-bold">{importSummary.failed > 0 ? `CSV Bulk Import Completed with ${importSummary.failed} error(s)` : 'CSV Bulk Import Complete!'}</h4>
+                  <p className="text-xs mt-0.5 opacity-90">
+                    {importSummary.failed > 0
+                      ? 'Some rows could not be written to the catalog. Review the errors below.'
+                      : 'Your cake catalog has been updated.'}
                   </p>
                 </div>
               </div>
@@ -1567,7 +1852,7 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
 
               {/* Preview Search & Filter Toolbar */}
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="relative flex-1 min-w-[180px]">
+                <div className="relative flex-1 w-full sm:min-w-[180px] min-w-0">
                   <Search className="w-3.5 h-3.5 text-[var(--text-subtle)] absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"

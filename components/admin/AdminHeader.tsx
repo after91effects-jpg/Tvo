@@ -9,17 +9,23 @@ import {
   User as UserIcon,
   Wifi,
   Sparkles,
+  Menu,
+  X,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useIsMobile } from '../../hooks/use-mobile';
 import { ThemeToggle } from '../common/ThemeToggle';
 import { NotificationBellDrawer } from '../common/NotificationBellDrawer';
 
 interface AdminHeaderProps {
   onNavigateToStore: () => void;
+  onToggleSidebar: () => void;
+  isSidebarOpen: boolean;
 }
 
-export const AdminHeader: React.FC<AdminHeaderProps> = ({ onNavigateToStore }) => {
+export const AdminHeader:React.FC<AdminHeaderProps> = ({ onNavigateToStore, onToggleSidebar, isSidebarOpen }) => {
   const { user, role, logout } = useAuth();
+  const isMobile = useIsMobile();
   const [latencyMs, setLatencyMs] = useState<number>(42);
   const [isConnected, setIsConnected] = useState<boolean>(true);
 
@@ -46,11 +52,24 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ onNavigateToStore }) =
     <header className="h-16 border-b border-[var(--border)] bg-[var(--bg-surface)] px-4 sm:px-6 flex items-center justify-between sticky top-0 z-30 shadow-xs">
       {/* Left: Brand & Connection Status Badges */}
       <div className="flex items-center gap-3 sm:gap-4">
+        {/* Mobile Sidebar Toggle */}
+        {isMobile && (
+          <button
+            id="admin-mobile-sidebar-btn"
+            type="button"
+            onClick={onToggleSidebar}
+            className="p-2 -ml-1 text-[var(--text-main)] hover:bg-[var(--bg-subtle)] rounded-xl transition-colors cursor-pointer shrink-0"
+            aria-label={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+            aria-expanded={isSidebarOpen}
+          >
+            {isSidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
+        )}
         <div className="flex items-baseline gap-1.5">
           <span className="text-xl font-bold font-display text-[var(--text-main)]">
             TVO Flavours
           </span>
-          <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--primary)] bg-[var(--primary-light)] px-2 py-0.5 rounded-full">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--primary)] bg-[var(--primary-light)] px-2 py-0.5 rounded-full max-[420px]:hidden">
             Chef Admin
           </span>
         </div>
@@ -84,11 +103,11 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ onNavigateToStore }) =
         <button
           id="admin-preview-store-btn"
           onClick={onNavigateToStore}
-          className="px-3 py-1.5 rounded-xl border border-[var(--border)] hover:bg-[var(--bg-subtle)] text-xs font-semibold text-[var(--text-main)] flex items-center gap-1.5 transition-colors cursor-pointer"
+          className="hidden sm:inline-flex px-3 py-1.5 rounded-xl border border-[var(--border)] hover:bg-[var(--bg-subtle)] text-xs font-semibold text-[var(--text-main)] items-center gap-1.5 transition-colors cursor-pointer"
           title="Open customer storefront"
         >
           <ExternalLink className="w-3.5 h-3.5 text-[var(--primary)]" />
-          <span className="hidden sm:inline">Preview Storefront</span>
+          <span>Preview Storefront</span>
         </button>
 
         {/* Theme Toggle */}
