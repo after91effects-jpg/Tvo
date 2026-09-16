@@ -1,10 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { jsonParseSafe } from './api';
-import { normalizeImageUrl, mediumImageUrl } from '../imageUrl';
+import { normalizeImageUrl, mediumImageUrl, isSafeMediaUrl } from '../imageUrl';
 import { stripHtmlAndMetadata, cleanDescription } from '../sanitizeDescription';
 import { getAddons } from './addons-data';
-import { DietaryAttribute, DEFAULT_DIETARY_ATTRIBUTES } from '../types';
+import { DietaryAttribute, DEFAULT_DIETARY_ATTRIBUTES, ProductVideo } from '../types';
 
 function parseFlavourOptions(raw: any): any[] {
   if (!raw) return [];
@@ -14,6 +14,40 @@ function parseFlavourOptions(raw: any): any[] {
   } catch {
     return [];
   }
+}
+
+// Safe, backward-compatible product video parsing.
+// - Missing/malformed JSON never throws and never guesses videos.
+// - Entries may be strings (legacy plain URLs) or objects.
+// - URLs are normalized; poster/caption are passed through when present.
+export function parseVideos(raw: any): ProductVideo[] {
+  if (!raw) return [];
+  let parsed: any = null;
+  try {
+    parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(parsed)) return [];
+  const out: ProductVideo[] = [];
+  for (const item of parsed) {
+    if (!item) continue;
+    const url = typeof item === 'string' ? item : (item?.url || '');
+    if (!url) continue;
+    if (!isSafeMediaUrl(url)) continue;
+    const normalized = normalizeImageUrl(url);
+    if (!normalized) continue;
+    const posterRaw = typeof item === 'object' && item.posterUrl ? String(item.posterUrl) : '';
+    const posterUrl = posterRaw && isSafeMediaUrl(posterRaw) ? normalizeImageUrl(posterRaw) : undefined;
+    out.push({
+      url: normalized,
+      posterUrl,
+      caption: typeof item === 'object' && typeof item.caption === 'string' && item.caption.trim() ? item.caption.trim() : undefined,
+      isPrimary: typeof item === 'object' ? !!item.isPrimary : false,
+      ...(typeof item === 'object' && item.id ? { id: String(item.id) } : {}),
+    });
+  }
+  return out;
 }
 
 // Safe, backward-compatible dietary attribute parsing.
@@ -134,15 +168,29 @@ export function serializeProduct(row: any) {
     stock: row.stock,
     stockStatus: row.stock_status,
     weightOptions: jsonParseSafe(row.variations_json, []),
-    images: jsonParseSafe(row.images_json, []).map((u: any) => {
-      const url = normalizeImageUrl(typeof u === 'string' ? u : (u?.url || ''));
-      const candidateMedium = mediumImageUrl(url);
-      // Only serve mediumUrl if file physically exists on disk, otherwise serve original url directly
-      const mediumExists = candidateMedium && candidateMedium !== url &&
-        fs.existsSync(path.join(process.cwd(), 'public', candidateMedium));
-      const finalMedium = mediumExists ? candidateMedium : url;
-      return { url, mediumUrl: finalMedium, thumbUrl: finalMedium, isPrimary: true };
-    }).filter((i: any) => i.url),
+    images: (() => {
+      const arr = jsonParseSafe(row.images_json, []).map((u: any) => {
+        const url = normalizeImageUrl(typeof u === 'string' ? u : (u?.url || ''));
+        const candidateMedium = mediumImageUrl(url);
+        // Only serve mediumUrl if file physically exists on disk, otherwise serve original url directly
+        const mediumExists = candidateMedium && candidateMedium !== url &&
+          fs.existsSync(path.join(process.cwd(), 'public', candidateMedium));
+        const finalMedium = mediumExists ? candidateMedium : url;
+        const asObject = typeof u === 'object' && u ? u : {};
+        return {
+          url,
+          mediumUrl: finalMedium,
+          thumbUrl: finalMedium,
+          alt: asObject.alt || asObject.altText || '',
+          caption: asObject.caption || '',
+          isPrimary: !!asObject.isPrimary || asObject.type === 'primary',
+        };
+      }).filter((i: any) => i.url);
+      // Legacy rows have no primary marker: first image wins backwards-compatibly.
+      if (arr.length && !arr.some((i: any) => i.isPrimary)) arr[0].isPrimary = true;
+      return arr;
+    })(),
+    videos: parseVideos(row.videos_json),
     flavours: (Array.isArray(jsonParseSafe(row.flavours, [])) && jsonParseSafe(row.flavours, []).length > 0)
       ? jsonParseSafe(row.flavours, []).map((fl: any) => typeof fl === 'string' ? fl : fl.name)
       : flavourOptions.map((fo: any) => fo.name),

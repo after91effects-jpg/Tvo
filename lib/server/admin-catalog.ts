@@ -1,8 +1,8 @@
 import { db } from './db';
 import { logAudit, slugify, jsonParseSafe } from './api';
-import { normalizeImageUrl, mediumImageUrl } from '../imageUrl';
+import { normalizeImageUrl, mediumImageUrl, isSafeMediaUrl } from '../imageUrl';
 import { listActiveVariants, getVariantStockStatus } from './product-variants';
-import { parseDietaryAttributes } from './product-serializer';
+import { parseDietaryAttributes, parseVideos } from './product-serializer';
 
 // ============================================================================
 // Shared helpers
@@ -28,12 +28,23 @@ export function serializeAdminProduct(row: any) {
   return {
     ...row,
     id: String(row.id),
-    images: jsonParseSafe(row.images_json, []).map((i: any) => {
-      const raw = typeof i === 'string' ? i : (i?.url || '');
-      if (!raw) return i;
-      const url = normalizeImageUrl(raw);
-      return typeof i === 'string' ? url : ({ ...(typeof i === 'object' && i ? i : {}), url, mediumUrl: mediumImageUrl(url) });
-    }).filter((i: any) => i?.url),
+    images: (() => {
+      const parsed = jsonParseSafe(row.images_json, []);
+      const arr = parsed.map((i: any) => {
+        const raw = typeof i === 'string' ? i : (i?.url || '');
+        if (!raw) return i;
+        const url = normalizeImageUrl(raw);
+        if (typeof i === 'string') return url;
+        return { ...(typeof i === 'object' && i ? i : {}), url, mediumUrl: mediumImageUrl(url) };
+      }).filter((i: any) => i?.url);
+      // Backward-compat: first image is primary when the row carries no marker.
+      if (Array.isArray(arr) && arr.length && !arr.some((i: any) => i?.isPrimary || i?.type === 'primary')) {
+        const first = arr[0];
+        if (first && typeof first === 'object') first.isPrimary = true;
+      }
+      return arr;
+    })(),
+    videos: parseVideos(row.videos_json),
     variations: jsonParseSafe(row.variations_json, []),
     flavours: jsonParseSafe(row.flavours, []),
     flavourOptions: jsonParseSafe(row.flavour_options_json, []),
@@ -184,6 +195,90 @@ function auditProduct(user: any, productId: number, action: string, field: strin
   } catch { /* no-op */ }
 }
 
+// Edge-only guard for URLs persisted into product media columns. Accepts only
+// http(s) external URLs and self-hosted root-absolute paths (e.g. /uploads/...).
+// Rejects data URIs, javascript:/file:/other schemes, and any relative path so
+// path-traversal-style values ("../../etc/passwd") can never be stored.
+// (isSafeMediaUrl lives in imageUrl.ts and is shared with the serializer.)
+
+// Normalize an images_json value (string or array) into a cleaned array of
+// objects. Preserves legacy shapes (string entries, importer type fields) while
+// guaranteeing: url present after normalization, alt/caption bounded, no untrusted
+// schemes or relative path-traversal values, no protocol beyond http(s) or
+// app-relative roots.
+export function sanitizeImagesPayload(rawImages: any): any[] {
+  let arr: any[] = [];
+  if (typeof rawImages === 'string') {
+    try {
+      const p = JSON.parse(rawImages);
+      arr = Array.isArray(p) ? p : [];
+    } catch { return []; }
+  } else if (Array.isArray(rawImages)) {
+    arr = rawImages;
+  } else {
+    return [];
+  }
+
+  const out: any[] = [];
+  for (const item of arr) {
+    if (!item) continue;
+    const base = typeof item === 'string' ? { url: item } : (typeof item === 'object' ? item : null);
+    if (!base) continue;
+    const url = typeof base.url === 'string' ? base.url.trim() : '';
+    if (!url || !isSafeMediaUrl(url)) continue;
+    const normalized = normalizeImageUrl(url);
+    if (!normalized) continue;
+    out.push({
+      ...(typeof item === 'object' ? base : {}),
+      url: normalized,
+      ...(typeof base.thumbUrl === 'string' && base.thumbUrl.trim() && isSafeMediaUrl(base.thumbUrl) ? { thumbUrl: normalizeImageUrl(base.thumbUrl) } : {}),
+      ...(typeof base.mediumUrl === 'string' && base.mediumUrl.trim() && isSafeMediaUrl(base.mediumUrl) ? { mediumUrl: normalizeImageUrl(base.mediumUrl) } : {}),
+      alt: typeof base.alt === 'string' ? base.alt.slice(0, 300) : (typeof base.altText === 'string' ? base.altText.slice(0, 300) : ''),
+      caption: typeof base.caption === 'string' ? base.caption.slice(0, 500) : '',
+      isPrimary: !!base.isPrimary || base.type === 'primary',
+    });
+  }
+  // Guarantee exactly one primary: first explicit primary, else index 0.
+  if (out.length && !out.some((i) => i.isPrimary)) out[0].isPrimary = true;
+  return out;
+}
+
+// Normalize a videos_json value into cleaned objects of { url, posterUrl, caption }.
+export function sanitizeVideosPayload(rawVideos: any): any[] {
+  let arr: any[] = [];
+  if (typeof rawVideos === 'string') {
+    try {
+      const p = JSON.parse(rawVideos);
+      arr = Array.isArray(p) ? p : [];
+    } catch { return []; }
+  } else if (Array.isArray(rawVideos)) {
+    arr = rawVideos;
+  } else {
+    return [];
+  }
+
+  const out: any[] = [];
+  for (const item of arr) {
+    if (!item) continue;
+    const base = typeof item === 'string' ? { url: item } : (typeof item === 'object' ? item : null);
+    if (!base) continue;
+    const url = typeof base.url === 'string' ? base.url.trim() : '';
+    if (!url || !isSafeMediaUrl(url)) continue;
+    const normalized = normalizeImageUrl(url);
+    if (!normalized) continue;
+    const posterRaw = typeof base.posterUrl === 'string' ? base.posterUrl.trim() : '';
+    const posterUrl = posterRaw && isSafeMediaUrl(posterRaw) ? normalizeImageUrl(posterRaw) : '';
+    out.push({
+      ...(typeof item === 'object' ? base : {}),
+      url: normalized,
+      posterUrl,
+      caption: typeof base.caption === 'string' ? base.caption.slice(0, 500) : '',
+      isPrimary: !!base.isPrimary,
+    });
+  }
+  return out;
+}
+
 // Apply core product fields (shared by create/update). Returns an object of
 // validated values for a targeted UPDATE/INSERT. This intentionally never
 // touches importer-managed uniqueness of catalog source.
@@ -239,11 +334,21 @@ function buildProductPayload(body: any, existing: any, user: any) {
   }
 
   // JSON fields
-  for (const jf of ['flavours', 'badges', 'tags', 'images_json', 'variations_json', 'attributes_json', 'related_products', 'upsells', 'cross_sells', 'customization_json', 'flavour_options_json', 'dietary_json']) {
+  for (const jf of ['flavours', 'badges', 'tags', 'images_json', 'variations_json', 'attributes_json', 'related_products', 'upsells', 'cross_sells', 'customization_json', 'flavour_options_json', 'dietary_json', 'videos_json']) {
     if (body[jf] !== undefined) {
       if (typeof body[jf] === 'string') payload[jf] = body[jf];
       else payload[jf] = JSON.stringify(body[jf]);
     }
+  }
+
+  // Server-side media payload sanitization: uploaded files are untrusted.
+  // Normalize URLs, drop empty entries, cap alt/caption lengths, and guard
+  // against path-traversal-style values stored from a client-supplied payload.
+  if (payload.images_json !== undefined) {
+    payload.images_json = JSON.stringify(sanitizeImagesPayload(payload.images_json));
+  }
+  if (payload.videos_json !== undefined) {
+    payload.videos_json = JSON.stringify(sanitizeVideosPayload(payload.videos_json));
   }
 
   // Boolean feature toggles
@@ -388,15 +493,15 @@ export function duplicateProduct(id: number, user: any) {
   const info = db.prepare(`INSERT INTO products
     (sku, name, slug, short_description, description, regular_price, sale_price, cost_price, stock, low_stock_threshold,
      stock_status, category_id, brand_id, weight_kg, dimensions, featured, bestseller, new_arrival, deal, eggless,
-     flavours, badges, tags, attributes_json, variations_json, images_json, related_products, upsells, cross_sells,
+     flavours, badges, tags, attributes_json, variations_json, images_json, videos_json, related_products, upsells, cross_sells,
      seo_title, seo_description, focus_keyword, canonical_url, published, custom_order, product_type, visibility,
      tax_status, tax_class, sale_start, sale_end, enable_stock, backorders, customization_json, status, duplicate_of,
      selling_unit, created_at, updated_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
     .run(sku, baseName, slug, src.short_description, src.description, src.regular_price, src.sale_price, src.cost_price,
       src.stock, src.low_stock_threshold, src.stock_status, src.category_id, src.brand_id, src.weight_kg, src.dimensions,
       src.featured, src.bestseller, src.new_arrival, src.deal, src.eggless, src.flavours, src.badges, src.tags,
-      src.attributes_json, src.variations_json, src.images_json, src.related_products, src.upsells, src.cross_sells,
+      src.attributes_json, src.variations_json, src.images_json, src.videos_json, src.related_products, src.upsells, src.cross_sells,
       src.seo_title, src.seo_description, src.focus_keyword, src.canonical_url, 0, src.custom_order, src.product_type || 'simple',
       src.visibility || 'public', src.tax_status || 'taxable', src.tax_class, src.sale_start, src.sale_end, src.enable_stock,
       src.backorders || 'no', src.customization_json, 'draft', id, src.selling_unit || 'weight', now, now);

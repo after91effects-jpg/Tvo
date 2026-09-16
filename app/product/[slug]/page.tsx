@@ -121,6 +121,20 @@ export default function ProductPage() {
               const thumbUrl = normalizeImageUrl(typeof im === 'object' && im.thumbUrl ? im.thumbUrl : mediumUrl);
               return { url, mediumUrl, thumbUrl, alt: im.alt || p.name };
             }).filter((i: any) => i.url),
+            videos: (() => {
+              let raw: any[] = [];
+              try {
+                if (Array.isArray(p.videos)) raw = p.videos;
+                else if (p.videos) raw = typeof p.videos === 'string' ? JSON.parse(p.videos) : p.videos;
+                else if (p.videos_json) raw = typeof p.videos_json === 'string' ? JSON.parse(p.videos_json) : p.videos_json;
+              } catch { raw = []; }
+              if (!Array.isArray(raw)) raw = [];
+              return raw.filter((v: any) => v && (typeof v === 'string' ? v : v.url)).map((v: any) => ({
+                url: normalizeImageUrl(typeof v === 'string' ? v : v.url) || '',
+                posterUrl: typeof v === 'object' && v.posterUrl ? normalizeImageUrl(v.posterUrl) : '',
+                caption: typeof v === 'object' && v.caption ? v.caption : '',
+              })).filter((v: any) => v.url);
+            })(),
             rating: typeof p.rating === 'number' ? p.rating : 0,
             reviewCount: p.reviewCount || 0,
             stock: p.stock ?? 10,

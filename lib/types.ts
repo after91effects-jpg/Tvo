@@ -105,6 +105,15 @@ export interface ProductImage {
   mediumUrl?: string;
   alt?: string;
   altText?: string;
+  caption?: string;
+  isPrimary?: boolean;
+}
+
+export interface ProductVideo {
+  id?: string;
+  url: string;
+  posterUrl?: string;
+  caption?: string;
   isPrimary?: boolean;
 }
 
@@ -135,6 +144,7 @@ export interface Product {
   sellingUnit?: 'piece' | 'weight';
   weightOptions: WeightOption[];
   images: ProductImage[];
+  videos?: ProductVideo[];
   imageUrl?: string;
   price?: number;
   regularPrice?: number;
@@ -216,7 +226,7 @@ export interface CartItem {
   flavourPrice?: number; // additional price for selected flavour
   messageOnCake?: string;
   customInstructions?: string;
-  customDesignImage?: string; // base64 or URL of uploaded design
+  customDesignImage?: string; // URL of uploaded customer design (never Base64; stripped server-side if a data URI is supplied)
   customDesignDescription?: string; // text description of design
   addons: CartItemAddon[];
   quantity: number;

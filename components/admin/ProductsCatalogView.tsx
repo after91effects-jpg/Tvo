@@ -45,12 +45,16 @@ import {
   HelpCircle,
   ShoppingBag,
   Leaf,
+  Film,
+  ArrowLeft,
 } from 'lucide-react';
-import { Product, WeightOption, FlavourOption, DuplicateStrategy, ImportSummary, DietaryAttribute, DEFAULT_DIETARY_ATTRIBUTES } from '../../lib/types';
+import { Product, WeightOption, FlavourOption, DuplicateStrategy, ImportSummary, DietaryAttribute, DEFAULT_DIETARY_ATTRIBUTES, ProductImage, ProductVideo } from '../../lib/types';
 import { logAuditEvent } from '../../lib/audit';
 import { useAuth } from '../../context/AuthContext';
 import { Modal } from '../common/Modal';
 import { INITIAL_CATEGORIES } from '../../lib/seedData';
+import { validateImageFile, validateVideoFile } from '../../lib/uploadValidation';
+import { normalizeImageUrl } from '../../lib/imageUrl';
 
 interface ProductsCatalogViewProps {
   products: Product[];
@@ -126,6 +130,10 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
   const [formImageUrl, setFormImageUrl] = useState(
     'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=800&q=80'
   );
+  const [formImages, setFormImages] = useState<ProductImage[]>([]);
+  const [formVideos, setFormVideos] = useState<ProductVideo[]>([]);
+  const [isImageUploading, setIsImageUploading] = useState(false);
+  const [isVideoUploading, setIsVideoUploading] = useState(false);
   const [formPublished, setFormPublished] = useState(true);
   const [formSellingUnit, setFormSellingUnit] = useState<'piece' | 'weight'>('weight');
   // Flavour Options
@@ -585,7 +593,20 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
                 flavours: productPayload.flavours,
                 badges: productPayload.badges,
                 tags: productPayload.tags,
-                images_json: productPayload.images,
+images_json: (formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
+              url: i.url.trim(),
+              thumbUrl: i.thumbUrl?.trim() || i.url.trim(),
+              mediumUrl: i.mediumUrl?.trim() || i.url.trim(),
+              alt: i.alt?.trim() || formName.trim(),
+              caption: i.caption?.trim() || '',
+              isPrimary: !!i.isPrimary,
+            }))).map((img, idx, arr) => (arr.some((x) => x.isPrimary) ? img : idx === 0 ? { ...img, isPrimary: true } : img)),
+            videos_json: formVideos.filter((v) => v.url && v.url.trim()).map((v) => ({
+              url: v.url.trim(),
+              posterUrl: v.posterUrl?.trim() || '',
+              caption: v.caption?.trim() || '',
+              isPrimary: !!v.isPrimary,
+            })),
                 variations_json: {
                   attribute: 'Select Weight',
                   options: weightOptions.map((w) => ({
@@ -661,6 +682,13 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
     setFormImageUrl(
       'https://images.unsplash.com/photo-1606890737304-57a1ca8a5b62?auto=format&fit=crop&w=800&q=80'
     );
+    setFormImages([
+      {
+        url: 'https://images.unsplash.com/photo-1606890737304-57a1ca8a5b62?auto=format&fit=crop&w=800&q=80',
+        isPrimary: true,
+      },
+    ]);
+    setFormVideos([]);
     setFormPublished(true);
     setFormSellingUnit('weight');
     // Reset flavour options
@@ -710,6 +738,21 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
     setFormTags(prod.tags?.join(', ') || '');
     setFormBadges(prod.badges?.join(', ') || '');
     setFormImageUrl(prod.images?.[0]?.url || '');
+    setFormImages((prod.images || []).map((img: any) => ({
+      url: img.url || '',
+      thumbUrl: img.thumbUrl || '',
+      mediumUrl: img.mediumUrl || '',
+      alt: img.alt || img.altText || '',
+      caption: img.caption || '',
+      isPrimary: !!img.isPrimary || img.type === 'primary',
+    })));
+    setFormVideos(((prod as any).videos || []).map((v: any) => ({
+      url: v.url || '',
+      posterUrl: v.posterUrl || '',
+      caption: v.caption || '',
+      id: v.id,
+      isPrimary: !!v.isPrimary,
+    })));
     setFormPublished(prod.published);
     setFormSellingUnit((prod as any).sellingUnit ?? (prod as any).selling_unit ?? 'weight');
     // Load flavour options
@@ -832,14 +875,20 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
         eggless: formEggless,
         sellingUnit: formSellingUnit,
         weightOptions,
-        images: [
-          {
-            url: formImageUrl.trim(),
-            thumbUrl: formImageUrl.trim(),
-            mediumUrl: formImageUrl.trim(),
-            alt: formName.trim(),
-          },
-        ],
+        images: formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
+          url: i.url.trim(),
+          thumbUrl: i.thumbUrl?.trim() || i.url.trim(),
+          mediumUrl: i.mediumUrl?.trim() || i.url.trim(),
+          alt: i.alt?.trim() || formName.trim(),
+          caption: i.caption?.trim() || '',
+          isPrimary: !!i.isPrimary,
+        })),
+        videos: formVideos.filter((v) => v.url && v.url.trim()).map((v) => ({
+          url: v.url.trim(),
+          posterUrl: v.posterUrl?.trim() || '',
+          caption: v.caption?.trim() || '',
+          isPrimary: !!v.isPrimary,
+        })),
         rating: editingProduct?.rating ?? 0,
         reviewCount: editingProduct?.reviewCount ?? 0,
         stock: stockNum,
@@ -953,6 +1002,152 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
     } finally {
       setIsSaving(false);
     }
+  };
+
+  // ---- Product Media (Phase 12B-6): image & video manager helpers ----
+
+  const uploadMediaFile = async (file: File, kind: 'image' | 'video', folder?: string): Promise<string> => {
+    const url = new URL('/api/admin/media', window.location.origin);
+    url.searchParams.set('kind', kind);
+    if (folder) url.searchParams.set('folder', folder);
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch(url.toString(), { method: 'POST', body: formData });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data?.error || `Could not upload ${kind} (${res.status}).`);
+    return data.url;
+  };
+
+  const handleImageFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    const check = await validateImageFile(file);
+    if (!check.valid) {
+      setErrorMessage(check.error || 'Invalid image file.');
+      return;
+    }
+    try {
+      setIsImageUploading(true);
+      setErrorMessage('');
+      const uploadedUrl = await uploadMediaFile(file, 'image');
+      setFormImages((prev) => {
+        const next = [...prev, { url: uploadedUrl, isPrimary: prev.length === 0 }];
+        if (!next.some((i) => i.isPrimary)) next[0] = { ...next[0], isPrimary: true };
+        return next;
+      });
+      if (!formImageUrl || !formImages.length) setFormImageUrl(uploadedUrl);
+    } catch (e: any) {
+      setErrorMessage(e.message || 'Image upload failed.');
+    } finally {
+      setIsImageUploading(false);
+    }
+  };
+
+  const handleAddImageByUrl = () => {
+    const raw = formImageUrl.trim();
+    if (!raw) return;
+    const url = normalizeImageUrl(raw);
+    if (!url) {
+      setErrorMessage('Image URL is not valid.');
+      return;
+    }
+    setFormImages((prev) => {
+      const next = prev.some((i) => i.url === url) ? prev : [...prev, { url, isPrimary: prev.length === 0 }];
+      if (!next.some((i) => i.isPrimary)) next[0] = { ...next[0], isPrimary: true };
+      return next;
+    });
+    setFormImageUrl('');
+  };
+
+  const handleRemoveImage = async (index: number) => {
+    const target = formImages[index];
+    setFormImages((prev) => {
+      const next = prev.filter((_, i) => i !== index);
+      if (next.length && !next.some((i) => i.isPrimary)) next[0] = { ...next[0], isPrimary: true };
+      return next;
+    });
+    if (target?.url && target.url.startsWith('/uploads/')) {
+      try {
+        await fetch('/api/admin/media', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: target.url, kind: 'image' }),
+        });
+      } catch { /* orphan file cleanup is best-effort; DB already updated on save */ }
+    }
+  };
+
+  const handleMoveImage = (index: number, dir: -1 | 1) => {
+    setFormImages((prev) => {
+      const to = index + dir;
+      if (to < 0 || to >= prev.length) return prev;
+      const next = [...prev];
+      [next[index], next[to]] = [next[to], next[index]];
+      return next;
+    });
+  };
+
+  const handleSetPrimaryImage = (index: number) => {
+    setFormImages((prev) => prev.map((img, i) => ({ ...img, isPrimary: i === index })));
+  };
+
+  const handleUpdateImage = (index: number, patch: Partial<ProductImage>) => {
+    setFormImages((prev) => prev.map((img, i) => (i === index ? { ...img, ...patch } : img)));
+  };
+
+  const handleVideoFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    const check = await validateVideoFile(file);
+    if (!check.valid) {
+      setErrorMessage(check.error || 'Invalid video file.');
+      return;
+    }
+    try {
+      setIsVideoUploading(true);
+      setErrorMessage('');
+      const uploadedUrl = await uploadMediaFile(file, 'video');
+      setFormVideos((prev) => [
+        ...prev,
+        { url: uploadedUrl, posterUrl: '', caption: '', isPrimary: prev.length === 0 },
+      ]);
+    } catch (e: any) {
+      setErrorMessage(e.message || 'Video upload failed.');
+    } finally {
+      setIsVideoUploading(false);
+    }
+  };
+
+  const handleAddVideoByUrl = (raw: string) => {
+    const url = normalizeImageUrl(raw.trim());
+    if (!url) {
+      setErrorMessage('Video URL is not valid.');
+      return;
+    }
+    setFormVideos((prev) => prev.some((v) => v.url === url)
+      ? prev
+      : [...prev, { url, posterUrl: '', caption: '', isPrimary: prev.length === 0 }]
+    );
+  };
+
+  const handleRemoveVideo = async (index: number) => {
+    const target = formVideos[index];
+    setFormVideos((prev) => prev.filter((_, i) => i !== index));
+    if (target?.url && target.url.startsWith('/uploads/product-videos/')) {
+      try {
+        await fetch('/api/admin/media', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: target.url, kind: 'video' }),
+        });
+      } catch { /* best-effort */ }
+    }
+  };
+
+  const handleUpdateVideo = (index: number, patch: Partial<ProductVideo>) => {
+    setFormVideos((prev) => prev.map((v, i) => (i === index ? { ...v, ...patch } : v)));
   };
 
   const handleDeleteProduct = async () => {
@@ -1462,18 +1657,199 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
             </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-[var(--text-main)] mb-1">
-              Image URL
+          <div className="space-y-4">
+            <label className="block text-xs font-semibold text-[var(--text-main)] mb-1 flex items-center gap-1.5">
+              <ImageIcon2 className="w-3.5 h-3.5 text-violet-500" />
+              Media — Images
             </label>
-            <input
-              type="url"
-              value={formImageUrl}
-              onChange={(e) => setFormImageUrl(e.target.value)}
-              placeholder="https://images.unsplash.com/..."
-              required
-              className="w-full px-3 py-2 text-xs rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
-            />
+
+            {formImages.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-[var(--border)] p-6 text-center">
+                <p className="text-xs text-[var(--text-muted)] mb-3">
+                  No images yet. Upload a file or paste an image URL to add your first image.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {formImages.map((img, idx) => (
+                  <div key={`img-${idx}-${img.url}`} className="rounded-xl border border-[var(--border)] bg-[var(--bg-subtle)] p-2 space-y-2">
+                    <div className="flex items-start gap-2">
+                      <img
+                        src={img.url}
+                        alt={img.alt || 'Product image'}
+                        className="w-14 h-14 rounded-lg object-cover shrink-0 bg-[var(--bg-surface)]"
+                        onError={(e) => { (e.currentTarget as HTMLImageElement).src = 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=800&q=80'; }}
+                      />
+                      <div className="flex-1 min-w-0 space-y-1">
+                        <input
+                          type="text"
+                          value={img.alt || ''}
+                          onChange={(e) => handleUpdateImage(idx, { alt: e.target.value })}
+                          placeholder="Alt text (accessibility & SEO)"
+                          className="w-full px-2 py-1 text-[11px] rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
+                        />
+                        <input
+                          type="text"
+                          value={img.caption || ''}
+                          onChange={(e) => handleUpdateImage(idx, { caption: e.target.value })}
+                          placeholder="Caption (optional)"
+                          className="w-full px-2 py-1 text-[11px] rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleSetPrimaryImage(idx)}
+                        className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold transition ${
+                          img.isPrimary ? 'bg-emerald-500/15 text-emerald-600' : 'bg-[var(--bg-surface)] text-[var(--text-muted)] hover:text-[var(--text-main)]'
+                        }`}
+                      >
+                        <CheckCircle2 className="w-3 h-3" /> {img.isPrimary ? 'Primary' : 'Set Primary'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleMoveImage(idx, -1)}
+                        disabled={idx === 0}
+                        className="p-1 rounded-lg bg-[var(--bg-surface)] text-[var(--text-muted)] hover:text-[var(--text-main)] disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        <ArrowLeft className="w-3 h-3" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleMoveImage(idx, 1)}
+                        disabled={idx === formImages.length - 1}
+                        className="p-1 rounded-lg bg-[var(--bg-surface)] text-[var(--text-muted)] hover:text-[var(--text-main)] disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        <ArrowRight className="w-3 h-3" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveImage(idx)}
+                        className="ml-auto p-1 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500/20"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-semibold bg-[var(--bg-subtle)] border border-[var(--border)] text-[var(--text-main)] cursor-pointer hover:bg-[var(--bg-surface)]">
+                <UploadIcon className="w-3.5 h-3.5" />
+                {isImageUploading ? 'Uploading…' : 'Upload Image'}
+                <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleImageFileUpload} disabled={isImageUploading} />
+              </label>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="url"
+                value={formImageUrl}
+                onChange={(e) => setFormImageUrl(e.target.value)}
+                placeholder="https://images.unsplash.com/... — paste an image URL"
+                className="flex-1 px-3 py-2 text-xs rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
+              />
+              <button
+                type="button"
+                onClick={handleAddImageByUrl}
+                className="shrink-0 px-3 py-2 rounded-xl text-[11px] font-semibold bg-[var(--primary)] text-[var(--primary-fg)] hover:opacity-90 transition"
+              >
+                Add Image
+              </button>
+            </div>
+          </div>
+
+          {/* Product Videos (12B-6) */}
+          <div className="space-y-4">
+            <label className="block text-xs font-semibold text-[var(--text-main)] mb-1 flex items-center gap-1.5">
+              <Film className="w-3.5 h-3.5 text-indigo-500" />
+              Media — Videos
+              <span className="font-normal text-[var(--text-muted)]">(MP4/WEBM up to 50MB)</span>
+            </label>
+
+            {formShowVideo && formVideos.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-[var(--border)] p-6 text-center">
+                <p className="text-xs text-[var(--text-muted)] mb-3">
+                  This product has the video section enabled, but no video has been added yet.
+                </p>
+              </div>
+            ) : null}
+
+            {formVideos.length > 0 && (
+              <div className="space-y-2">
+                {formVideos.map((vid, idx) => (
+                  <div key={`vid-${idx}-${vid.url}`} className="rounded-xl border border-[var(--border)] bg-[var(--bg-subtle)] p-2 space-y-2">
+                    <div className="flex items-start gap-2">
+                      <video
+                        src={vid.url}
+                        poster={vid.posterUrl || undefined}
+                        controls
+                        playsInline
+                        preload="metadata"
+                        className="w-24 h-16 rounded-lg object-cover shrink-0 bg-[var(--bg-surface)]"
+                      />
+                      <div className="flex-1 min-w-0 space-y-1">
+                        <input
+                          type="url"
+                          value={vid.posterUrl || ''}
+                          onChange={(e) => handleUpdateVideo(idx, { posterUrl: e.target.value })}
+                          placeholder="Poster image URL (optional)"
+                          className="w-full px-2 py-1 text-[11px] rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
+                        />
+                        <input
+                          type="text"
+                          value={vid.caption || ''}
+                          onChange={(e) => handleUpdateVideo(idx, { caption: e.target.value })}
+                          placeholder="Video caption (optional)"
+                          className="w-full px-2 py-1 text-[11px] rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveVideo(idx)}
+                        className="p-1 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500/20"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                    <p className="px-1 text-[10px] text-[var(--text-muted)] truncate">{vid.url}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-semibold bg-[var(--bg-subtle)] border border-[var(--border)] text-[var(--text-main)] cursor-pointer hover:bg-[var(--bg-surface)]">
+                <UploadIcon className="w-3.5 h-3.5" />
+                {isVideoUploading ? 'Uploading…' : 'Upload Video'}
+                <input type="file" accept="video/mp4,video/webm" className="hidden" onChange={handleVideoFileUpload} disabled={isVideoUploading} />
+              </label>
+              <input
+                type="url"
+                placeholder="https://cdn.example/... — paste a video URL"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAddVideoByUrl((e.currentTarget as HTMLInputElement).value);
+                    (e.currentTarget as HTMLInputElement).value = '';
+                  }
+                }}
+                className="flex-1 px-3 py-2 text-xs rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
+              />
+              <button
+                type="button"
+                onClick={(e) => {
+                  const input = (e.currentTarget as HTMLButtonElement).parentElement?.querySelector('input[type="url"]') as HTMLInputElement | null;
+                  handleAddVideoByUrl(input?.value || '');
+                  if (input) input.value = '';
+                }}
+                className="shrink-0 px-3 py-2 rounded-xl text-[11px] font-semibold bg-[var(--primary)] text-[var(--primary-fg)] hover:opacity-90 transition"
+              >
+                Add Video
+              </button>
+            </div>
           </div>
 
           {/* Flavour Options */}

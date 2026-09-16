@@ -35,6 +35,21 @@ export function mediumImageUrl(url: string): string {
   return url.replace(/\.[a-z0-9]+$/i, '-w700.webp');
 }
 
+// Edge-only guard for URLs persisted into product media columns. Accepts only
+// http(s) external URLs, protocol-relative URLs, and self-hosted root-absolute
+// paths (e.g. /uploads/...). Rejects data URIs, javascript:/file:/other schemes,
+// and any relative path so path-traversal-style values ("../../etc/passwd")
+// can never be stored.
+export function isSafeMediaUrl(raw: string): boolean {
+  if (!raw) return false;
+  const t = String(raw).trim();
+  if (!t) return false;
+  if (/^https?:\/\//i.test(t)) return true; // https://
+  if (t.startsWith('//')) return /^\/\/[^/?#]+/.test(t); // protocol-relative
+  if (t.startsWith('/')) return /^\/[^/?#]+/.test(t); // self-hosted root-absolute path
+  return false;
+}
+
 export const DEFAULT_FALLBACK_IMAGE = '/uploads/2026/05/Belgian-Chocolate-Cake-w700.webp';
 export const DEFAULT_BANNER_FALLBACK = '/images/products/uploads/Banner_3270x320.webp';
 export const DEFAULT_CAKE_FALLBACK = 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=800&q=80';

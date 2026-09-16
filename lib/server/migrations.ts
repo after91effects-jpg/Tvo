@@ -85,6 +85,9 @@ export function runMigrations() {
   // ---- Phase 12B-5: dietary attributes JSON ----
   addColumn('products', 'dietary_json', 'dietary_json TEXT');
 
+  // ---- Phase 12B-6: product videos JSON (URLs, never binary blobs) ----
+  addColumn('products', 'videos_json', 'videos_json TEXT');
+
   // ---- Auto-infer selling_unit for existing products ----
   if (columnExists('products', 'selling_unit') && columnExists('products', 'variations_json')) {
     const rows = db.prepare(`SELECT id, variations_json FROM products WHERE selling_unit IS NULL`).all() as { id: number; variations_json: string | null }[];

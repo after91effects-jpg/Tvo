@@ -4,9 +4,19 @@ export interface ValidationResult {
   detectedType?: 'jpeg' | 'png' | 'webp';
 }
 
+export interface VideoValidationResult {
+  valid: boolean;
+  error?: string;
+  detectedType?: 'mp4' | 'webm';
+}
+
 export const ALLOWED_IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp'];
 export const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 export const MAX_UPLOAD_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
+
+export const ALLOWED_VIDEO_EXTENSIONS = ['.mp4', '.webm'];
+export const ALLOWED_VIDEO_MIME_TYPES = ['video/mp4', 'video/webm'];
+export const MAX_VIDEO_UPLOAD_SIZE_BYTES = 50 * 1024 * 1024; // 50MB
 
 /**
  * Validates a file's name/extension, browser MIME type, and size.
@@ -145,6 +155,117 @@ export async function validateImageFile(file: File): Promise<ValidationResult> {
     const buffer = await slice.arrayBuffer();
     const bytes = new Uint8Array(buffer);
     return validateMagicBytes(bytes);
+  } catch (err: any) {
+    return { valid: false, error: 'Could not read file header for verification.' };
+  }
+}
+
+/**
+ * Validates a video file's name/extension, browser MIME type, and size.
+ */
+export function validateVideoFileMetadata(fileName: string, mimeType: string, sizeBytes: number): VideoValidationResult {
+  if (!fileName || typeof fileName !== 'string') {
+    return { valid: false, error: 'A video file must be selected.' };
+  }
+
+  if (sizeBytes <= 0) {
+    return { valid: false, error: 'The selected video file is empty.' };
+  }
+
+  if (sizeBytes > MAX_VIDEO_UPLOAD_SIZE_BYTES) {
+    return { valid: false, error: 'Video size exceeds the 50MB limit. Please choose a smaller video.' };
+  }
+
+  const dotIndex = fileName.lastIndexOf('.');
+  if (dotIndex === -1) {
+    return { valid: false, error: 'File has no extension. Only MP4 and WEBM are supported.' };
+  }
+
+  const extension = fileName.slice(dotIndex).toLowerCase();
+  if (!ALLOWED_VIDEO_EXTENSIONS.includes(extension)) {
+    return {
+      valid: false,
+      error: `Unsupported file type (${extension}). Please upload an MP4 or WEBM video.`,
+    };
+  }
+
+  const normalizedMime = (mimeType || '').toLowerCase();
+  if (normalizedMime && !ALLOWED_VIDEO_MIME_TYPES.includes(normalizedMime)) {
+    return {
+      valid: false,
+      error: 'Invalid video format. Only MP4 and WEBM videos are supported.',
+    };
+  }
+
+  return { valid: true };
+}
+
+/**
+ * Validates magic bytes for MP4 (ISO BMFF "ftyp" at offset 4) and WebM (EBML
+ * 0x1A 0x45 0xDF 0xA3) video containers, rejecting executables/scripts first.
+ */
+export function validateVideoMagicBytes(bytes: Uint8Array | number[]): VideoValidationResult {
+  if (!bytes || bytes.length < 12) {
+    return { valid: false, error: 'File is too small or corrupted to be a valid video.' };
+  }
+
+  // Reject executables and scripts exactly like image magic-byte checks.
+  if (bytes[0] === 0x4D && bytes[1] === 0x5A) {
+    return { valid: false, error: 'Executable files are strictly prohibited.' };
+  }
+  if (bytes[0] === 0x7F && bytes[1] === 0x45 && bytes[2] === 0x4C && bytes[3] === 0x46) {
+    return { valid: false, error: 'Executable files are strictly prohibited.' };
+  }
+  if (
+    (bytes[0] === 0xFE && bytes[1] === 0xED && bytes[2] === 0xFA && (bytes[3] === 0xCE || bytes[3] === 0xCF)) ||
+    ((bytes[0] === 0xCE || bytes[0] === 0xCF) && bytes[1] === 0xFA && bytes[2] === 0xED && bytes[3] === 0xFE)
+  ) {
+    return { valid: false, error: 'Executable binary files are strictly prohibited.' };
+  }
+  if (bytes[0] === 0x23 && bytes[1] === 0x21) {
+    return { valid: false, error: 'Script files are strictly prohibited.' };
+  }
+  const asciiStart = String.fromCharCode(...Array.from(bytes.slice(0, 10))).toLowerCase();
+  if (
+    asciiStart.startsWith('<?php') ||
+    asciiStart.startsWith('<script') ||
+    asciiStart.startsWith('<html') ||
+    asciiStart.startsWith('<!doctype')
+  ) {
+    return { valid: false, error: 'Script or markup files are strictly prohibited.' };
+  }
+
+  // MP4 / ISO-BMFF: bytes 4..7 == "ftyp"
+  const isMp4 =
+    bytes[0] === 0x00 && bytes[1] === 0x00 && bytes[2] === 0x00 &&
+    bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70;
+  if (isMp4) {
+    return { valid: true, detectedType: 'mp4' };
+  }
+
+  // WebM / Matroska / EBML: 0x1A 0x45 0xDF 0xA3
+  if (bytes[0] === 0x1A && bytes[1] === 0x45 && bytes[2] === 0xDF && bytes[3] === 0xA3) {
+    return { valid: true, detectedType: 'webm' };
+  }
+
+  return {
+    valid: false,
+    error: 'File content does not match a valid MP4 or WEBM video format.',
+  };
+}
+
+/**
+ * Validates a browser File object as a video using both metadata and magic bytes.
+ */
+export async function validateVideoFile(file: File): Promise<VideoValidationResult> {
+  const metaCheck = validateVideoFileMetadata(file.name, file.type, file.size);
+  if (!metaCheck.valid) return metaCheck;
+
+  try {
+    const slice = file.slice(0, 16);
+    const buffer = await slice.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    return validateVideoMagicBytes(bytes);
   } catch (err: any) {
     return { valid: false, error: 'Could not read file header for verification.' };
   }

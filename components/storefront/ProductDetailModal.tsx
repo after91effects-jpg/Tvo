@@ -256,6 +256,17 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
     };
   });
 
+  const videos: { url: string; posterUrl: string; caption: string }[] = Array.isArray((product as any).videos)
+    ? (product as any).videos
+        .filter((v: any) => v && v.url)
+        .map((v: any) => ({
+          url: normalizeImageUrl(v.url) || '',
+          posterUrl: v.posterUrl ? normalizeImageUrl(v.posterUrl) : '',
+          caption: v.caption || '',
+        }))
+        .filter((v: any) => v.url)
+    : [];
+
   const availableAddOns: AddOn[] = useMemo(() => {
     if (Array.isArray(product?.addons) && product.addons.length > 0) {
       return product.addons;
@@ -544,6 +555,33 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
             </div>
           )}
         </>)}
+
+          {/* Product Video (12B-6): gated by showVideo + presence of videos */}
+          {product.showVideo !== false && videos.length > 0 && (
+            <div className="space-y-2">
+              {videos.map((vid, idx) => (
+                <div key={`video-${idx}`} className="relative rounded-2xl overflow-hidden bg-[var(--bg-subtle)] border border-[var(--border)]">
+                  <video
+                    src={vid.url}
+                    poster={vid.posterUrl || undefined}
+                    controls
+                    playsInline
+                    preload="metadata"
+                    className="w-full aspect-video object-contain bg-black/5"
+                    onError={(e) => {
+                      const el = e.currentTarget;
+                      el.closest('.relative')?.classList.add('hidden');
+                    }}
+                  />
+                  {vid.caption && (
+                    <div className="px-3 py-2 text-[11px] text-[var(--text-muted)] bg-[var(--bg-surface)]/90">
+                      {vid.caption}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Trust Badges */}
           <div className="grid grid-cols-2 gap-2">

@@ -104,6 +104,26 @@ function normalizeProductRecord(p: any): Product {
     };
   }).filter((i: any) => i.url);
 
+  let rawVideos: any[] = [];
+  try {
+    if (p.videos) {
+      rawVideos = typeof p.videos === 'string' ? JSON.parse(p.videos) : p.videos;
+    } else if (p.videos_json) {
+      rawVideos = typeof p.videos_json === 'string' ? JSON.parse(p.videos_json) : p.videos_json;
+    }
+  } catch { rawVideos = []; }
+  const normalizedVideos = Array.isArray(rawVideos)
+    ? rawVideos.filter((v: any) => v && (typeof v === 'string' ? v : v.url)).map((v: any) => {
+        const rawUrl = typeof v === 'string' ? v : v.url;
+        const url = normalizeImageUrl(rawUrl);
+        return {
+          url,
+          posterUrl: typeof v === 'object' && v.posterUrl ? normalizeImageUrl(v.posterUrl) : '',
+          caption: typeof v === 'object' && v.caption ? v.caption : '',
+        };
+      }).filter((v: any) => v.url)
+    : [];
+
   let weightOptions: any[] = [];
   try {
     if (Array.isArray(p.weightOptions)) weightOptions = p.weightOptions;
@@ -142,6 +162,7 @@ function normalizeProductRecord(p: any): Product {
     tags,
     flavours,
     images: normalizedImages,
+    videos: normalizedVideos,
     weight: p.weight || (isPiece ? '1 piece' : '1.0 kg'),
     weightOptions: normalizedOptions,
     flavourOptions: p.flavourOptions || undefined,
