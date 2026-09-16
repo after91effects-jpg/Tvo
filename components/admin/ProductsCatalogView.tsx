@@ -37,8 +37,16 @@ import {
   Image as ImageIcon2,
   Menu,
   Settings,
+  Star,
+  Award,
+  Truck,
+  Calendar,
+  Clock,
+  HelpCircle,
+  ShoppingBag,
+  Leaf,
 } from 'lucide-react';
-import { Product, WeightOption, FlavourOption, DuplicateStrategy, ImportSummary } from '../../lib/types';
+import { Product, WeightOption, FlavourOption, DuplicateStrategy, ImportSummary, DietaryAttribute, DEFAULT_DIETARY_ATTRIBUTES } from '../../lib/types';
 import { logAuditEvent } from '../../lib/audit';
 import { useAuth } from '../../context/AuthContext';
 import { Modal } from '../common/Modal';
@@ -138,6 +146,21 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
   const [formShowDietary, setFormShowDietary] = useState(true);
   const [formShowDelivery, setFormShowDelivery] = useState(true);
   const [formShowSpecialInstructions, setFormShowSpecialInstructions] = useState(true);
+  // Extended Feature Toggles (12B-5)
+  const [formShowRatings, setFormShowRatings] = useState(true);
+  const [formShowBadges, setFormShowBadges] = useState(true);
+  const [formShowSizeSelector, setFormShowSizeSelector] = useState(true);
+  const [formShowDeliveryDate, setFormShowDeliveryDate] = useState(true);
+  const [formShowDeliverySlot, setFormShowDeliverySlot] = useState(true);
+  const [formShowReviews, setFormShowReviews] = useState(true);
+  const [formShowFaq, setFormShowFaq] = useState(true);
+  const [formShowRelatedProducts, setFormShowRelatedProducts] = useState(true);
+  const [formShowCheckoutOptions, setFormShowCheckoutOptions] = useState(true);
+  // Dietary Attributes (12B-5)
+  const [formDietaryAttributes, setFormDietaryAttributes] = useState<DietaryAttribute[]>(
+    () => DEFAULT_DIETARY_ATTRIBUTES.map((d) => ({ ...d }))
+  );
+  const [formCustomDietaryLabel, setFormCustomDietaryLabel] = useState('');
 
   const [categoryIdMap, setCategoryIdMap] = useState<Record<string, number>>({});
 
@@ -656,6 +679,19 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
     setFormShowDietary(true);
     setFormShowDelivery(true);
     setFormShowSpecialInstructions(true);
+    // Reset extended feature toggles (12B-5)
+    setFormShowRatings(true);
+    setFormShowBadges(true);
+    setFormShowSizeSelector(true);
+    setFormShowDeliveryDate(true);
+    setFormShowDeliverySlot(true);
+    setFormShowReviews(true);
+    setFormShowFaq(true);
+    setFormShowRelatedProducts(true);
+    setFormShowCheckoutOptions(true);
+    // Reset dietary attributes (12B-5)
+    setFormDietaryAttributes(DEFAULT_DIETARY_ATTRIBUTES.map((d) => ({ ...d })));
+    setFormCustomDietaryLabel('');
     setIsAddModalOpen(true);
   };
 
@@ -694,6 +730,35 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
     setFormShowDietary((prod as any).showDietary !== false);
     setFormShowDelivery((prod as any).showDelivery !== false);
     setFormShowSpecialInstructions((prod as any).showSpecialInstructions !== false);
+    // Load extended feature toggles (12B-5)
+    setFormShowRatings((prod as any).showRatings !== false);
+    setFormShowBadges((prod as any).showBadges !== false);
+    setFormShowSizeSelector((prod as any).showSizeSelector !== false);
+    setFormShowDeliveryDate((prod as any).showDeliveryDate !== false);
+    setFormShowDeliverySlot((prod as any).showDeliverySlot !== false);
+    setFormShowReviews((prod as any).showReviews !== false);
+    setFormShowFaq((prod as any).showFaq !== false);
+    setFormShowRelatedProducts((prod as any).showRelatedProducts !== false);
+    setFormShowCheckoutOptions((prod as any).showCheckoutOptions !== false);
+    // Load dietary attributes (12B-5)
+    const loadedDietary = Array.isArray((prod as any).dietaryAttributes)
+      ? (prod as any).dietaryAttributes
+      : null;
+    if (loadedDietary) {
+      const merged = DEFAULT_DIETARY_ATTRIBUTES.map((d) => {
+        const match = loadedDietary.find((x: any) => x.key === d.key);
+        return match ? { ...d, enabled: !!match.enabled, showOnStorefront: !!match.showOnStorefront } : { ...d };
+      });
+      for (const custom of loadedDietary.filter((x: any) => x.isCustom || !DEFAULT_DIETARY_ATTRIBUTES.some((d) => d.key === x.key))) {
+        if (!merged.some((m) => m.key === custom.key)) {
+          merged.push({ key: custom.key, label: custom.label || 'Custom', enabled: true, showOnStorefront: custom.showOnStorefront !== false, isCustom: true });
+        }
+      }
+      setFormDietaryAttributes(merged);
+    } else {
+      setFormDietaryAttributes(DEFAULT_DIETARY_ATTRIBUTES.map((d) => ({ ...d })));
+    }
+    setFormCustomDietaryLabel('');
     setIsAddModalOpen(true);
   };
 
@@ -843,6 +908,22 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
             show_dietary: formShowDietary ? 1 : 0,
             show_delivery: formShowDelivery ? 1 : 0,
             show_special_instructions: formShowSpecialInstructions ? 1 : 0,
+            show_ratings: formShowRatings ? 1 : 0,
+            show_badges: formShowBadges ? 1 : 0,
+            show_size_selector: formShowSizeSelector ? 1 : 0,
+            show_delivery_date: formShowDeliveryDate ? 1 : 0,
+            show_delivery_slot: formShowDeliverySlot ? 1 : 0,
+            show_reviews: formShowReviews ? 1 : 0,
+            show_faq: formShowFaq ? 1 : 0,
+            show_related_products: formShowRelatedProducts ? 1 : 0,
+            show_checkout_options: formShowCheckoutOptions ? 1 : 0,
+            dietary_json: (formDietaryAttributes as DietaryAttribute[]).map((d) => ({
+              key: d.key,
+              label: d.label,
+              enabled: d.enabled,
+              showOnStorefront: d.showOnStorefront,
+              isCustom: !!d.isCustom,
+            })),
           }),
         });
         if (!res.ok) {
@@ -1542,19 +1623,28 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
           <div className="pt-4 border-t border-[var(--border)]">
             <h4 className="text-xs font-bold text-[var(--text-main)] uppercase tracking-wider mb-3 flex items-center gap-1.5">
               <Settings className="w-3.5 h-3.5 text-[var(--primary)]" />
-              Product Page Sections (Show/Hide on Storefront)
+              Storefront Feature Controls (Show/Hide on Storefront)
             </h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               {[
                 { key: 'showGallery', label: 'Product Gallery', icon: ImageIcon2, state: formShowGallery, setState: setFormShowGallery },
                 { key: 'showVideo', label: 'Product Video', icon: Menu, state: formShowVideo, setState: setFormShowVideo },
+                { key: 'showRatings', label: 'Ratings & Reviews (count)', icon: Star, state: formShowRatings, setState: setFormShowRatings },
+                { key: 'showBadges', label: 'Badges', icon: Award, state: formShowBadges, setState: setFormShowBadges },
+                { key: 'showSizeSelector', label: 'Size Selector', icon: LayoutDashboard, state: formShowSizeSelector, setState: setFormShowSizeSelector },
                 { key: 'showFlavour', label: 'Flavour Selector', icon: SparklesIcon, state: formShowFlavour, setState: setFormShowFlavour },
                 { key: 'showCustomize', label: 'Customize Cake', icon: MessageSquare, state: formShowCustomize, setState: setFormShowCustomize },
                 { key: 'showDesignUpload', label: 'Design Upload', icon: UploadIcon, state: formShowDesignUpload, setState: setFormShowDesignUpload },
                 { key: 'showAddons', label: 'Add-ons', icon: Tag, state: formShowAddons, setState: setFormShowAddons },
                 { key: 'showDietary', label: 'Dietary Info', icon: EyeIcon, state: formShowDietary, setState: setFormShowDietary },
-                { key: 'showDelivery', label: 'Delivery Options', icon: LayoutDashboard, state: formShowDelivery, setState: setFormShowDelivery },
+                { key: 'showDelivery', label: 'Delivery Options', icon: Truck, state: formShowDelivery, setState: setFormShowDelivery },
+                { key: 'showDeliveryDate', label: 'Delivery Date', icon: Calendar, state: formShowDeliveryDate, setState: setFormShowDeliveryDate },
+                { key: 'showDeliverySlot', label: 'Delivery Slot', icon: Clock, state: formShowDeliverySlot, setState: setFormShowDeliverySlot },
                 { key: 'showSpecialInstructions', label: 'Special Instructions', icon: Settings, state: formShowSpecialInstructions, setState: setFormShowSpecialInstructions },
+                { key: 'showReviews', label: 'Reviews Tab', icon: Star, state: formShowReviews, setState: setFormShowReviews },
+                { key: 'showFaq', label: 'FAQ', icon: HelpCircle, state: formShowFaq, setState: setFormShowFaq },
+                { key: 'showRelatedProducts', label: 'Related Products', icon: Layers, state: formShowRelatedProducts, setState: setFormShowRelatedProducts },
+                { key: 'showCheckoutOptions', label: 'Checkout Options', icon: ShoppingBag, state: formShowCheckoutOptions, setState: setFormShowCheckoutOptions },
               ].map((item) => (
                 <label key={item.key} className="flex items-center justify-between p-3 rounded-xl border bg-[var(--bg-surface)] cursor-pointer transition-all hover:border-[var(--border-strong)]">
                   <div className="flex items-center gap-2">
@@ -1570,6 +1660,107 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
                   </div>
                 </label>
               ))}
+            </div>
+          </div>
+
+          {/* Dietary Attributes */}
+          <div className="pt-4 border-t border-[var(--border)]">
+            <h4 className="text-xs font-bold text-[var(--text-main)] uppercase tracking-wider mb-1 flex items-center gap-1.5">
+              <Leaf className="w-3.5 h-3.5 text-emerald-600" />
+              Dietary Attributes
+            </h4>
+            <p className="text-[10px] text-[var(--text-muted)] mb-3">
+              Enable attributes that apply to this product. Only enabled attributes with &ldquo;Show on Storefront&rdquo; checked appear as chips on the product page.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              {formDietaryAttributes.map((attr, idx) => (
+                <div key={attr.key} className="flex items-center justify-between gap-2 p-2.5 rounded-xl border bg-[var(--bg-surface)]">
+                  <span className="text-xs font-semibold text-[var(--text-main)] truncate">{attr.label}</span>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <label className="flex items-center gap-1.5 text-[10px] text-[var(--text-muted)] cursor-pointer" title="Applies to this product">
+                      <input
+                        type="checkbox"
+                        checked={attr.enabled}
+                        onChange={(e) => {
+                          const next = [...formDietaryAttributes];
+                          next[idx] = { ...next[idx], enabled: e.target.checked };
+                          setFormDietaryAttributes(next);
+                        }}
+                        className="w-3.5 h-3.5 rounded accent-[var(--primary)]"
+                      />
+                      Enabled
+                    </label>
+                    <label className="flex items-center gap-1.5 text-[10px] text-[var(--text-muted)] cursor-pointer" title="Show chip on storefront">
+                      <input
+                        type="checkbox"
+                        checked={attr.showOnStorefront}
+                        onChange={(e) => {
+                          const next = [...formDietaryAttributes];
+                          next[idx] = { ...next[idx], showOnStorefront: e.target.checked };
+                          setFormDietaryAttributes(next);
+                        }}
+                        className="w-3.5 h-3.5 rounded accent-[var(--primary)]"
+                      />
+                      Show
+                    </label>
+                    {attr.isCustom && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = formDietaryAttributes.filter((_, i) => i !== idx);
+                          setFormDietaryAttributes(next);
+                        }}
+                        className="text-rose-500 hover:text-rose-600 transition-colors cursor-pointer"
+                        aria-label={`Remove ${attr.label}`}
+                        title="Remove this custom attribute"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex items-center gap-2 mt-3">
+              <input
+                type="text"
+                value={formCustomDietaryLabel}
+                onChange={(e) => setFormCustomDietaryLabel(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const label = formCustomDietaryLabel.trim();
+                    if (!label) return;
+                    const key = `custom_${label.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`;
+                    if (formDietaryAttributes.some((d) => d.key === key)) return;
+                    setFormDietaryAttributes((prev) => [
+                      ...prev,
+                      { key, label, enabled: true, showOnStorefront: true, isCustom: true },
+                    ]);
+                    setFormCustomDietaryLabel('');
+                  }
+                }}
+                placeholder="Add custom dietary attribute (e.g. Keto)"
+                className="flex-1 px-3 py-2 text-xs rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const label = formCustomDietaryLabel.trim();
+                  if (!label) return;
+                  const key = `custom_${label.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`;
+                  if (formDietaryAttributes.some((d) => d.key === key)) return;
+                  setFormDietaryAttributes((prev) => [
+                    ...prev,
+                    { key, label, enabled: true, showOnStorefront: true, isCustom: true },
+                  ]);
+                  setFormCustomDietaryLabel('');
+                }}
+                className="px-3 py-2 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border)] text-xs font-semibold text-[var(--text-main)] hover:border-[var(--primary)] transition-colors cursor-pointer flex items-center gap-1"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Add
+              </button>
             </div>
           </div>
 

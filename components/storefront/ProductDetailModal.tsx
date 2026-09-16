@@ -413,25 +413,25 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
             
             {/* Badges Overlay */}
             <div className="absolute top-3 left-3 flex flex-col gap-2 pointer-events-none z-10">
-              {product.eggless && (
+              {product.showBadges !== false && product.eggless && (
                 <div className="bg-[var(--success-light)] text-[var(--success)] border border-[var(--success)]/20 px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center gap-1 shadow-sm backdrop-blur-sm">
                   <Leaf className="w-3 h-3" />
                   <span>100% Eggless</span>
                 </div>
               )}
-              {product.badges?.includes('Bestseller') && (
+              {product.showBadges !== false && product.badges?.includes('Bestseller') && (
                 <div className="bg-amber-500 text-white px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center gap-1 shadow-sm">
                   <Award className="w-3 h-3" />
                   <span>Bestseller</span>
                 </div>
               )}
-              {product.badges?.includes('Chef Choice') && (
+              {product.showBadges !== false && product.badges?.includes('Chef Choice') && (
                 <div className="bg-purple-500 text-white px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center gap-1 shadow-sm">
                   <Star className="w-3 h-3" />
                   <span>Chef's Pick</span>
                 </div>
               )}
-              {savingsPercent > 0 && (
+              {product.showBadges !== false && savingsPercent > 0 && (
                 <div className="bg-rose-500 text-white px-2.5 py-1 rounded-full text-[10px] font-bold shadow-sm">
                   Save {savingsPercent}%
                 </div>
@@ -605,10 +605,10 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   {product.name}
                 </h2>
                 <div className="mt-2 flex items-center gap-3 flex-wrap">
-                  {typeof product.rating === 'number' && product.rating > 0 ? (
+                  {product.showRatings !== false && typeof product.rating === 'number' && product.rating > 0 ? (
                     <StarRating rating={product.rating} showValue count={product.reviewCount || 0} />
                   ) : (
-                    <span className="text-xs text-[var(--text-subtle)]">No ratings yet</span>
+                    product.showRatings !== false && <span className="text-xs text-[var(--text-subtle)]">No ratings yet</span>
                   )}
                   <span className="text-xs text-[var(--success)] font-bold bg-[var(--success-light)] px-2 py-0.5 rounded-full flex items-center gap-1">
                     <BadgeCheck className="w-3 h-3" />
@@ -647,6 +647,28 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
               </p>
             </div>
 
+            {/* Dietary Attributes */}
+            {product.showDietary !== false && (() => {
+              if (!Array.isArray(product.dietaryAttributes)) return null;
+              const visible = product.dietaryAttributes.filter((d) => d.enabled && d.showOnStorefront);
+              if (visible.length === 0) return null;
+              return (
+                <div className="mt-3">
+                  <div className="flex flex-wrap gap-2">
+                    {visible.map((d) => (
+                      <span
+                        key={d.key}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 text-[10px] font-semibold border border-emerald-200 dark:border-emerald-800"
+                      >
+                        <Leaf className="w-3 h-3" />
+                        {d.label}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* SKU & Tags */}
             <div className="mt-2 flex items-center gap-3 text-[10px] text-[var(--text-muted)]">
               <span>SKU: <span className="font-bold text-[var(--text-main)]">{product.sku}</span></span>
@@ -665,9 +687,9 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
             <div className="flex items-center gap-1 border-b border-[var(--border)] mt-4 mb-4 overflow-x-auto">
               {[
                 { id: 'details', label: 'Customize' },
-                { id: 'delivery', label: 'Delivery' },
+                ...(product.showDelivery !== false ? [{ id: 'delivery', label: 'Delivery' }] : []),
                 { id: 'description', label: 'Description' },
-                { id: 'reviews', label: product.reviewCount && product.reviewCount > 0 ? `Reviews (${product.reviewCount})` : 'Reviews' },
+                ...(product.showReviews !== false ? [{ id: 'reviews', label: product.reviewCount && product.reviewCount > 0 ? `Reviews (${product.reviewCount})` : 'Reviews' }] : []),
               ].map((tab) => (
                 <button
                   key={tab.id}
@@ -688,7 +710,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
             {activeTab === 'details' && (
               <div className="space-y-5">
                 {/* Weight Options */}
-                {product.weightOptions && product.weightOptions.length > 0 && (
+                {product.showSizeSelector !== false && product.weightOptions && product.weightOptions.length > 0 && (
                   <div>
                     <label className="block text-xs font-bold text-[var(--text-main)] uppercase tracking-wider mb-2 flex items-center gap-1.5">
                       <Package className="w-3.5 h-3.5 text-[var(--primary)]" />
@@ -900,21 +922,23 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                         </div>
 
                         {/* Customer Instructions */}
-                        <div>
-                          <label htmlFor="customer-instructions-input" className="block text-xs font-bold text-[var(--text-main)] uppercase tracking-wider mb-1.5 flex items-center justify-between">
-                            <span>Customer Instructions</span>
-                            <span className="text-[10px] font-normal text-[var(--text-muted)] normal-case">Optional</span>
-                          </label>
-                          <textarea
-                            id="customer-instructions-input"
-                            rows={2}
-                            maxLength={200}
-                            value={customerInstructions}
-                            onChange={(e) => setCustomerInstructions(e.target.value)}
-                            placeholder="Describe what you want..."
-                            className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--primary)] resize-none transition-all"
-                          />
-                        </div>
+                        {product.showSpecialInstructions !== false && (
+                          <div>
+                            <label htmlFor="customer-instructions-input" className="block text-xs font-bold text-[var(--text-main)] uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                              <span>Customer Instructions</span>
+                              <span className="text-[10px] font-normal text-[var(--text-muted)] normal-case">Optional</span>
+                            </label>
+                            <textarea
+                              id="customer-instructions-input"
+                              rows={2}
+                              maxLength={200}
+                              value={customerInstructions}
+                              onChange={(e) => setCustomerInstructions(e.target.value)}
+                              placeholder="Describe what you want..."
+                              className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--primary)] resize-none transition-all"
+                            />
+                          </div>
+                        )}
 
                         {/* Customer Design Upload */}
                         {isDesignUploadAllowed && (
@@ -1119,82 +1143,88 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
               </div>
             )}
 
-            {activeTab === 'delivery' && (
+            {activeTab === 'delivery' && product.showDelivery !== false && (
               <div className="space-y-4">
                 {/* Delivery Date */}
-                <div>
-                  <label className="block text-xs font-bold text-[var(--text-main)] uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                    <Calendar className="w-3.5 h-3.5 text-[var(--primary)]" />
-                    Select Delivery Date
-                  </label>
-                  <input
-                    type="date"
-                    min={minDeliveryDate}
-                    value={deliveryDate}
-                    onChange={(e) => setDeliveryDate(e.target.value)}
-                    className="w-full px-4 py-3 text-sm rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--primary)] transition-all"
-                  />
-                  <p className="text-[10px] text-[var(--text-muted)] mt-1">📅 Minimum 2 days advance booking required</p>
-                </div>
+                {product.showDeliveryDate !== false && (
+                  <div>
+                    <label className="block text-xs font-bold text-[var(--text-main)] uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                      <Calendar className="w-3.5 h-3.5 text-[var(--primary)]" />
+                      Select Delivery Date
+                    </label>
+                    <input
+                      type="date"
+                      min={minDeliveryDate}
+                      value={deliveryDate}
+                      onChange={(e) => setDeliveryDate(e.target.value)}
+                      className="w-full px-4 py-3 text-sm rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--primary)] transition-all"
+                    />
+                    <p className="text-[10px] text-[var(--text-muted)] mt-1">📅 Minimum 2 days advance booking required</p>
+                  </div>
+                )}
 
                 {/* Delivery Slots */}
-                <div>
-                  <label className="block text-xs font-bold text-[var(--text-main)] uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                    <Truck className="w-3.5 h-3.5 text-emerald-600" />
-                    Choose Delivery Slot
-                  </label>
-                  <div className="space-y-2">
-                    {DELIVERY_SLOTS.map((slot, idx) => (
-                      <label
-                        key={idx}
-                        onClick={() => setSelectedDeliverySlot(idx)}
-                        className={`flex items-center justify-between p-3 rounded-xl border-2 cursor-pointer transition-all ${
-                          selectedDeliverySlot === idx
-                            ? 'bg-[var(--primary-light)] border-[var(--primary)] shadow-sm'
-                            : 'bg-[var(--bg-surface)] border-[var(--border)] hover:bg-[var(--bg-subtle)]'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className="text-lg">{slot.icon}</span>
-                          <div>
-                            <div className="text-xs font-bold text-[var(--text-main)]">{slot.label}</div>
-                            <div className="text-[10px] text-[var(--text-muted)]">{slot.time}</div>
+                {product.showDeliverySlot !== false && (
+                  <div>
+                    <label className="block text-xs font-bold text-[var(--text-main)] uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                      <Truck className="w-3.5 h-3.5 text-emerald-600" />
+                      Choose Delivery Slot
+                    </label>
+                    <div className="space-y-2">
+                      {DELIVERY_SLOTS.map((slot, idx) => (
+                        <label
+                          key={idx}
+                          onClick={() => setSelectedDeliverySlot(idx)}
+                          className={`flex items-center justify-between p-3 rounded-xl border-2 cursor-pointer transition-all ${
+                            selectedDeliverySlot === idx
+                              ? 'bg-[var(--primary-light)] border-[var(--primary)] shadow-sm'
+                              : 'bg-[var(--bg-surface)] border-[var(--border)] hover:bg-[var(--bg-subtle)]'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <span className="text-lg">{slot.icon}</span>
+                            <div>
+                              <div className="text-xs font-bold text-[var(--text-main)]">{slot.label}</div>
+                              <div className="text-[10px] text-[var(--text-muted)]">{slot.time}</div>
+                            </div>
                           </div>
-                        </div>
-                        <div className="text-right">
-                          {slot.price === 0 ? (
-                            <span className="text-xs font-bold text-emerald-600">FREE</span>
-                          ) : (
-                            <span className="text-xs font-bold text-[var(--primary)]">+₹{slot.price}</span>
-                          )}
-                        </div>
-                      </label>
-                    ))}
+                          <div className="text-right">
+                            {slot.price === 0 ? (
+                              <span className="text-xs font-bold text-emerald-600">FREE</span>
+                            ) : (
+                              <span className="text-xs font-bold text-[var(--primary)]">+₹{slot.price}</span>
+                            )}
+                          </div>
+                        </label>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Gift Wrap Option */}
-                <div className="p-4 rounded-xl bg-gradient-to-r from-rose-50 to-pink-50 dark:from-rose-950/20 dark:to-pink-950/20 border border-rose-200 dark:border-rose-800">
-                  <label className="flex items-center justify-between cursor-pointer">
-                    <div className="flex items-center gap-3">
-                      <span className="text-2xl">🎁</span>
-                      <div>
-                        <div className="text-xs font-bold text-[var(--text-main)]">Premium Gift Wrapping</div>
-                        <div className="text-[10px] text-[var(--text-muted)]">Beautiful ribbon & handmade tag</div>
+                {product.showCheckoutOptions !== false && (
+                  <div className="p-4 rounded-xl bg-gradient-to-r from-rose-50 to-pink-50 dark:from-rose-950/20 dark:to-pink-950/20 border border-rose-200 dark:border-rose-800">
+                    <label className="flex items-center justify-between cursor-pointer">
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">🎁</span>
+                        <div>
+                          <div className="text-xs font-bold text-[var(--text-main)]">Premium Gift Wrapping</div>
+                          <div className="text-[10px] text-[var(--text-muted)]">Beautiful ribbon & handmade tag</div>
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs font-bold text-[var(--primary)]">+₹149</span>
-                      <div className={`w-10 h-6 rounded-full transition-all cursor-pointer ${
-                        giftWrap ? 'bg-[var(--primary)]' : 'bg-[var(--border)]'
-                      }`} onClick={() => setGiftWrap(!giftWrap)}>
-                        <div className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${
-                          giftWrap ? 'translate-x-5' : 'translate-x-0.5'
-                        }`} />
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs font-bold text-[var(--primary)]">+₹149</span>
+                        <div className={`w-10 h-6 rounded-full transition-all cursor-pointer ${
+                          giftWrap ? 'bg-[var(--primary)]' : 'bg-[var(--border)]'
+                        }`} onClick={() => setGiftWrap(!giftWrap)}>
+                          <div className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                            giftWrap ? 'translate-x-5' : 'translate-x-0.5'
+                          }`} />
+                        </div>
                       </div>
-                    </div>
-                  </label>
-                </div>
+                    </label>
+                  </div>
+                )}
 
                 {/* Delivery Info */}
                 <div className="p-4 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border)] space-y-3">
@@ -1324,7 +1354,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
               </div>
             )}
 
-            {activeTab === 'reviews' && (
+            {activeTab === 'reviews' && product.showReviews !== false && (
               <ReviewSection
                 productId={product.id}
                 productName={product.name}

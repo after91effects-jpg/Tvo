@@ -58,6 +58,38 @@ export interface FlavourOption {
   showOnStorefront: boolean;
 }
 
+export interface DietaryAttribute {
+  key: string;
+  label: string;
+  enabled: boolean;
+  showOnStorefront: boolean;
+  isCustom?: boolean;
+}
+
+export const DEFAULT_DIETARY_ATTRIBUTES: DietaryAttribute[] = [
+  { key: 'eggless', label: 'Eggless', enabled: false, showOnStorefront: true },
+  { key: 'contains_egg', label: 'Contains Egg', enabled: false, showOnStorefront: true },
+  { key: 'vegetarian', label: 'Vegetarian', enabled: false, showOnStorefront: true },
+  { key: 'vegan', label: 'Vegan', enabled: false, showOnStorefront: true },
+  { key: 'jain', label: 'Jain', enabled: false, showOnStorefront: true },
+  { key: 'dairy_free', label: 'Dairy-Free', enabled: false, showOnStorefront: true },
+  { key: 'contains_dairy', label: 'Contains Dairy', enabled: false, showOnStorefront: true },
+  { key: 'gluten_free', label: 'Gluten-Free', enabled: false, showOnStorefront: true },
+  { key: 'contains_gluten', label: 'Contains Gluten', enabled: false, showOnStorefront: true },
+  { key: 'nut_free', label: 'Nut-Free', enabled: false, showOnStorefront: true },
+  { key: 'contains_nuts', label: 'Contains Nuts', enabled: false, showOnStorefront: true },
+  { key: 'sugar_free', label: 'Sugar-Free', enabled: false, showOnStorefront: true },
+  { key: 'no_added_sugar', label: 'No Added Sugar', enabled: false, showOnStorefront: true },
+  { key: 'low_sugar', label: 'Low Sugar', enabled: false, showOnStorefront: true },
+  { key: 'diabetic_friendly', label: 'Diabetic-Friendly', enabled: false, showOnStorefront: true },
+  { key: 'soy_free', label: 'Soy-Free', enabled: false, showOnStorefront: true },
+  { key: 'contains_soy', label: 'Contains Soy', enabled: false, showOnStorefront: true },
+  { key: 'preservative_free', label: 'Preservative-Free', enabled: false, showOnStorefront: true },
+  { key: 'alcohol_free', label: 'Alcohol-Free', enabled: false, showOnStorefront: true },
+  { key: 'halal', label: 'Halal', enabled: false, showOnStorefront: true },
+  { key: 'custom', label: 'Custom', enabled: false, showOnStorefront: true },
+];
+
 export interface WeightOption {
   label: string; // e.g. "0.5 kg", "1.0 kg", "1.5 kg", "2.0 kg"
   weightKg: number;
@@ -140,6 +172,20 @@ export interface Product {
   showDesignUpload?: boolean;
   showCustomerDesignUpload?: boolean;
   showAddons?: boolean;
+  showDietary?: boolean;
+  showDelivery?: boolean;
+  showDeliveryDate?: boolean;
+  showDeliverySlot?: boolean;
+  showSpecialInstructions?: boolean;
+  showRatings?: boolean;
+  showBadges?: boolean;
+  showSizeSelector?: boolean;
+  showReviews?: boolean;
+  showFaq?: boolean;
+  showRelatedProducts?: boolean;
+  showCheckoutOptions?: boolean;
+  // Dietary
+  dietaryAttributes?: DietaryAttribute[];
 }
 
 export interface AddOn {

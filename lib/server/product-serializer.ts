@@ -4,6 +4,7 @@ import { jsonParseSafe } from './api';
 import { normalizeImageUrl, mediumImageUrl } from '../imageUrl';
 import { stripHtmlAndMetadata, cleanDescription } from '../sanitizeDescription';
 import { getAddons } from './addons-data';
+import { DietaryAttribute, DEFAULT_DIETARY_ATTRIBUTES } from '../types';
 
 function parseFlavourOptions(raw: any): any[] {
   if (!raw) return [];
@@ -13,6 +14,48 @@ function parseFlavourOptions(raw: any): any[] {
   } catch {
     return [];
   }
+}
+
+// Safe, backward-compatible dietary attribute parsing.
+// - Missing/malformed JSON never throws and never guesses attributes.
+// - Legacy products without dietary_json fall back to the `eggless` column.
+// - Unknown keys are preserved with a trimmed label fallback (custom).
+export function parseDietaryAttributes(raw: any, eggless: boolean): DietaryAttribute[] {
+  if (raw) {
+    let parsed: any = null;
+    try {
+      parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    } catch {
+      parsed = null;
+    }
+    if (Array.isArray(parsed)) {
+      const seen = new Set<string>();
+      const result: DietaryAttribute[] = [];
+      for (const item of parsed) {
+        if (!item || typeof item !== 'object') continue;
+        const key = typeof item.key === 'string' && item.key.trim() ? item.key.trim() : `custom_${result.length + 1}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const known = DEFAULT_DIETARY_ATTRIBUTES.find((d) => d.key === key);
+        const label =
+          typeof item.label === 'string' && item.label.trim()
+            ? item.label.trim()
+            : known ? known.label : DEFAULT_DIETARY_ATTRIBUTES.find((d) => d.key === 'custom')?.label || 'Custom';
+        result.push({
+          key,
+          label,
+          enabled: !!item.enabled,
+          showOnStorefront: !!item.showOnStorefront,
+          isCustom: item.isCustom === true || (!!item.enabled && !known),
+        });
+      }
+      return result;
+    }
+  }
+  // Backward-compatible fallback: derive from the legacy eggless flag.
+  return eggless
+    ? [{ key: 'eggless', label: 'Eggless', enabled: true, showOnStorefront: true, isCustom: false }]
+    : DEFAULT_DIETARY_ATTRIBUTES.map((d) => ({ ...d }));
 }
 
 
@@ -138,7 +181,21 @@ export function serializeProduct(row: any) {
     showDesignUpload: row.show_design_upload !== 0,
     showCustomerDesignUpload: row.show_design_upload !== 0,
     showAddons: row.show_addons !== 0,
+    // Extended feature controls
+    showDietary: row.show_dietary !== 0,
+    showDelivery: row.show_delivery !== 0,
+    showDeliveryDate: row.show_delivery_date !== 0,
+    showDeliverySlot: row.show_delivery_slot !== 0,
+    showSpecialInstructions: row.show_special_instructions !== 0,
+    showRatings: row.show_ratings !== 0,
+    showBadges: row.show_badges !== 0,
+    showSizeSelector: row.show_size_selector !== 0,
+    showReviews: row.show_reviews !== 0,
+    showFaq: row.show_faq !== 0,
+    showRelatedProducts: row.show_related_products !== 0,
+    showCheckoutOptions: row.show_checkout_options !== 0,
     addons: getAddons(),
+    dietaryAttributes: parseDietaryAttributes(row.dietary_json, !!row.eggless),
   };
 }
 

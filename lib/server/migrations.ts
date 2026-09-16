@@ -30,6 +30,11 @@ function addTable(ddl: string) {
 }
 
 export function runMigrations() {
+  // Never mutate the on-disk DB during test runs; migrations belong to the
+  // live server boot path only. Tests use synthetic rows and must not dirty
+  // the committed data/tvoflavours.db file.
+  if (process.env.NODE_ENV === 'test') return;
+
   // ---- products: product-management fields (all additive) ----
   addColumn('products', 'visibility', "visibility TEXT DEFAULT 'public'");
   addColumn('products', 'product_type', "product_type TEXT DEFAULT 'simple'");
@@ -50,6 +55,35 @@ export function runMigrations() {
   addColumn('products', 'duplicate_of', 'duplicate_of INTEGER');
   addColumn('products', 'status', "status TEXT DEFAULT 'publish'");
   addColumn('products', 'selling_unit', "selling_unit TEXT");
+
+  // ---- Storefront feature toggles (pre-existing gap: admin writes these but columns were missing) ----
+  addColumn('products', 'show_gallery', 'show_gallery INTEGER DEFAULT 1');
+  addColumn('products', 'show_video', 'show_video INTEGER DEFAULT 0');
+  addColumn('products', 'show_flavour', 'show_flavour INTEGER DEFAULT 1');
+  addColumn('products', 'show_customize', 'show_customize INTEGER DEFAULT 1');
+  addColumn('products', 'show_design_upload', 'show_design_upload INTEGER DEFAULT 0');
+  addColumn('products', 'show_addons', 'show_addons INTEGER DEFAULT 1');
+  addColumn('products', 'show_dietary', 'show_dietary INTEGER DEFAULT 1');
+  addColumn('products', 'show_delivery', 'show_delivery INTEGER DEFAULT 1');
+  addColumn('products', 'show_special_instructions', 'show_special_instructions INTEGER DEFAULT 1');
+  addColumn('products', 'customization_fee', 'customization_fee REAL DEFAULT 0');
+  addColumn('products', 'allow_custom_message', 'allow_custom_message INTEGER DEFAULT 1');
+  addColumn('products', 'allow_custom_design', 'allow_custom_design INTEGER DEFAULT 0');
+  addColumn('products', 'flavour_options_json', 'flavour_options_json TEXT');
+
+  // ---- Phase 12B-5: extended storefront feature controls ----
+  addColumn('products', 'show_ratings', 'show_ratings INTEGER DEFAULT 1');
+  addColumn('products', 'show_badges', 'show_badges INTEGER DEFAULT 1');
+  addColumn('products', 'show_size_selector', 'show_size_selector INTEGER DEFAULT 1');
+  addColumn('products', 'show_delivery_date', 'show_delivery_date INTEGER DEFAULT 1');
+  addColumn('products', 'show_delivery_slot', 'show_delivery_slot INTEGER DEFAULT 1');
+  addColumn('products', 'show_reviews', 'show_reviews INTEGER DEFAULT 1');
+  addColumn('products', 'show_faq', 'show_faq INTEGER DEFAULT 1');
+  addColumn('products', 'show_related_products', 'show_related_products INTEGER DEFAULT 1');
+  addColumn('products', 'show_checkout_options', 'show_checkout_options INTEGER DEFAULT 1');
+
+  // ---- Phase 12B-5: dietary attributes JSON ----
+  addColumn('products', 'dietary_json', 'dietary_json TEXT');
 
   // ---- Auto-infer selling_unit for existing products ----
   if (columnExists('products', 'selling_unit') && columnExists('products', 'variations_json')) {

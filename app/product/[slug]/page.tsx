@@ -143,6 +143,22 @@ export default function ProductPage() {
             // Add-ons & Feature toggles
             addons: Array.isArray(p.addons) ? p.addons : [],
             showAddons: p.showAddons !== false,
+            // Extended feature controls (safe defaults preserve current behavior)
+            showGallery: p.showGallery !== false,
+            showVideo: p.showVideo === true,
+            showRatings: p.showRatings !== false,
+            showBadges: p.showBadges !== false,
+            showSizeSelector: p.showSizeSelector !== false,
+            showDietary: p.showDietary !== false,
+            showDelivery: p.showDelivery !== false,
+            showDeliveryDate: p.showDeliveryDate !== false,
+            showDeliverySlot: p.showDeliverySlot !== false,
+            showSpecialInstructions: p.showSpecialInstructions !== false,
+            showReviews: p.showReviews !== false,
+            showFaq: p.showFaq !== false,
+            showRelatedProducts: p.showRelatedProducts !== false,
+            showCheckoutOptions: p.showCheckoutOptions !== false,
+            dietaryAttributes: Array.isArray(p.dietaryAttributes) ? p.dietaryAttributes : undefined,
           };
           setProduct(normalized);
           addToRecentlyViewed(normalized.id);

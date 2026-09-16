@@ -2,6 +2,7 @@ import { db } from './db';
 import { logAudit, slugify, jsonParseSafe } from './api';
 import { normalizeImageUrl, mediumImageUrl } from '../imageUrl';
 import { listActiveVariants, getVariantStockStatus } from './product-variants';
+import { parseDietaryAttributes } from './product-serializer';
 
 // ============================================================================
 // Shared helpers
@@ -67,7 +68,17 @@ export function serializeAdminProduct(row: any) {
     showAddons: row.show_addons !== 0,
     showDietary: row.show_dietary !== 0,
     showDelivery: row.show_delivery !== 0,
+    showDeliveryDate: row.show_delivery_date !== 0,
+    showDeliverySlot: row.show_delivery_slot !== 0,
     showSpecialInstructions: row.show_special_instructions !== 0,
+    showRatings: row.show_ratings !== 0,
+    showBadges: row.show_badges !== 0,
+    showSizeSelector: row.show_size_selector !== 0,
+    showReviews: row.show_reviews !== 0,
+    showFaq: row.show_faq !== 0,
+    showRelatedProducts: row.show_related_products !== 0,
+    showCheckoutOptions: row.show_checkout_options !== 0,
+    dietaryAttributes: parseDietaryAttributes(row.dietary_json, !!row.eggless),
   };
 }
 
@@ -228,7 +239,7 @@ function buildProductPayload(body: any, existing: any, user: any) {
   }
 
   // JSON fields
-  for (const jf of ['flavours', 'badges', 'tags', 'images_json', 'variations_json', 'attributes_json', 'related_products', 'upsells', 'cross_sells', 'customization_json', 'flavour_options_json']) {
+  for (const jf of ['flavours', 'badges', 'tags', 'images_json', 'variations_json', 'attributes_json', 'related_products', 'upsells', 'cross_sells', 'customization_json', 'flavour_options_json', 'dietary_json']) {
     if (body[jf] !== undefined) {
       if (typeof body[jf] === 'string') payload[jf] = body[jf];
       else payload[jf] = JSON.stringify(body[jf]);
@@ -236,7 +247,7 @@ function buildProductPayload(body: any, existing: any, user: any) {
   }
 
   // Boolean feature toggles
-  for (const bf of ['show_gallery', 'show_video', 'show_flavour', 'show_customize', 'show_design_upload', 'show_addons', 'show_dietary', 'show_delivery', 'show_special_instructions']) {
+  for (const bf of ['show_gallery', 'show_video', 'show_flavour', 'show_customize', 'show_design_upload', 'show_addons', 'show_dietary', 'show_delivery', 'show_special_instructions', 'show_delivery_date', 'show_delivery_slot', 'show_ratings', 'show_badges', 'show_size_selector', 'show_reviews', 'show_faq', 'show_related_products', 'show_checkout_options']) {
     if (body[bf] !== undefined) payload[bf] = body[bf] ? 1 : 0;
   }
 
