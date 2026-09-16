@@ -342,21 +342,32 @@ export function createOrder({ items, body, customerId, generateOrderNumber }: Cr
     const orderNumber = generateOrderNumber();
 
     // 8. Line items JSON
-    const itemsJson = JSON.stringify(lines.map(({ it, prod, unit, addedAddonTotal, validatedAddons }) => ({
-      productId: String(it.productId),
-      name: prod?.name || it.name,
-      sku: prod?.sku || it.sku,
-      qty: it.qty,
-      weight: it.weight || null,
-      flavour: it.flavour || null,
-      messageOnCake: it.messageOnCake || null,
-      addons: validatedAddons,
-      unitPrice: unit,
-      addonTotal: addedAddonTotal,
-      totalPrice: (unit + addedAddonTotal) * it.qty,
-      imageUrl: it.imageUrl || null,
-      sellingUnit: prod?.selling_unit || 'weight',
-    })));
+    const itemsJson = JSON.stringify(lines.map(({ it, prod, unit, addedAddonTotal, validatedAddons }) => {
+      // Safe sanitization: never store base64 data URLs in DB; enforce length limits
+      const safeDesignImage = it.customDesignImage && !String(it.customDesignImage).startsWith('data:')
+        ? String(it.customDesignImage).trim().slice(0, 500)
+        : null;
+
+      return {
+        productId: String(it.productId),
+        name: prod?.name || it.name,
+        sku: prod?.sku || it.sku,
+        qty: it.qty,
+        weight: it.weight || null,
+        flavour: it.flavour || null,
+        flavourPrice: typeof it.flavourPrice === 'number' && it.flavourPrice >= 0 ? it.flavourPrice : 0,
+        messageOnCake: it.messageOnCake ? String(it.messageOnCake).trim().slice(0, 100) : null,
+        customInstructions: it.customInstructions ? String(it.customInstructions).trim().slice(0, 500) : null,
+        customDesignImage: safeDesignImage,
+        customDesignDescription: it.customDesignDescription ? String(it.customDesignDescription).trim().slice(0, 500) : null,
+        addons: validatedAddons,
+        unitPrice: unit,
+        addonTotal: addedAddonTotal,
+        totalPrice: (unit + addedAddonTotal) * it.qty,
+        imageUrl: it.imageUrl || null,
+        sellingUnit: prod?.selling_unit || 'weight',
+      };
+    }));
 
     const info = db.prepare(`INSERT INTO orders
       (order_number, customer_id, session_id, customer_name, customer_phone, customer_email, customer_address, pincode, city,

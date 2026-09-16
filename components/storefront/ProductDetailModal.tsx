@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import {
   ShoppingBag,
   Sparkles,
@@ -54,14 +54,35 @@ interface ProductDetailModalProps {
   onBack?: () => void;
 }
 
-const AVAILABLE_ADD_ONS: AddOn[] = [
-  { id: 'addon-1', name: 'Golden Sparkler Candle', price: 99, category: 'candle' },
-  { id: 'addon-2', name: 'Artisan Handwritten Greeting Card', price: 49, category: 'card' },
-  { id: 'addon-3', name: 'Festive Balloon Bouquet', price: 199, category: 'balloon' },
-  { id: 'addon-4', name: 'Premium Gift Wrapping', price: 149, category: 'wrapping' },
-  { id: 'addon-5', name: 'Photo Topper Print', price: 179, category: 'topper' },
-  { id: 'addon-6', name: 'Cupcake Box (6 pcs)', price: 299, category: 'combo' },
+const DEFAULT_DATABASE_ADDONS: AddOn[] = [
+  { id: '1', name: 'Candles', price: 20, category: 'decor', description: 'Candles add-on' },
+  { id: '2', name: 'Cake Topper', price: 49, category: 'decor', description: 'Cake Topper add-on' },
+  { id: '3', name: 'Greeting Card', price: 29, category: 'gift', description: 'Greeting Card add-on' },
+  { id: '4', name: 'Balloons', price: 99, category: 'decor', description: 'Balloons add-on' },
+  { id: '5', name: 'Flowers', price: 199, category: 'gift', description: 'Flowers add-on' },
+  { id: '6', name: 'Chocolates', price: 149, category: 'gift', description: 'Chocolates add-on' },
+  { id: '7', name: 'Gift Wrap', price: 59, category: 'packaging', description: 'Gift Wrap add-on' },
+  { id: '8', name: 'Premium Packaging', price: 99, category: 'packaging', description: 'Premium Packaging add-on' },
+  { id: '9', name: 'Personalized Message', price: 0, category: 'custom', description: 'Personalized Message add-on' },
+  { id: '10', name: 'Photo Print', price: 49, category: 'custom', description: 'Photo Print add-on' },
+  { id: '11', name: 'Extra Decoration', price: 99, category: 'decor', description: 'Extra Decoration add-on' },
 ];
+
+function getAddonEmoji(name: string, category?: string) {
+  const n = (name || '').toLowerCase();
+  const c = (category || '').toLowerCase();
+  if (n.includes('candle') || c === 'candle') return '🕯️';
+  if (n.includes('card') || c === 'card') return '💌';
+  if (n.includes('balloon') || c === 'balloon') return '🎈';
+  if (n.includes('wrap') || n.includes('packag') || c === 'wrapping' || c === 'packaging') return '🎁';
+  if (n.includes('topper') || c === 'topper') return '👑';
+  if (n.includes('photo') || n.includes('print')) return '📸';
+  if (n.includes('flower') || n.includes('rose')) return '🌸';
+  if (n.includes('choc')) return '🍫';
+  if (n.includes('message')) return '✍️';
+  if (n.includes('decor')) return '✨';
+  return '✨';
+}
 
 const DELIVERY_SLOTS = [
   { label: 'Standard Delivery', time: '9 AM - 1 PM', price: 0, icon: '📦' },
@@ -235,9 +256,16 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
     };
   });
 
+  const availableAddOns: AddOn[] = useMemo(() => {
+    if (Array.isArray(product?.addons) && product.addons.length > 0) {
+      return product.addons;
+    }
+    return DEFAULT_DATABASE_ADDONS;
+  }, [product?.addons]);
+
   const handleToggleAddOn = (addon: AddOn) => {
-    if (selectedAddOns.some((a) => a.id === addon.id)) {
-      setSelectedAddOns((prev) => prev.filter((a) => a.id !== addon.id));
+    if (selectedAddOns.some((a) => a.id === addon.id || a.name === addon.name)) {
+      setSelectedAddOns((prev) => prev.filter((a) => a.id !== addon.id && a.name !== addon.name));
     } else {
       setSelectedAddOns((prev) => [...prev, addon]);
     }
@@ -251,9 +279,10 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   // Maximum order quantity: bounded by available inventory
   const qtyMax = Math.max(1, Math.min(10, product.stock ?? 10));
 
-  // Feature toggles for customization and design upload
+  // Feature toggles for customization, design upload, and celebration add-ons
   const isCustomizationAllowed = product.showCustomization !== false && product.showCustomize !== false;
   const isDesignUploadAllowed = isCustomizationAllowed && product.showCustomerDesignUpload !== false && product.showDesignUpload !== false;
+  const isAddOnsAllowed = product.showAddons !== false && (product as any).show_addons !== 0;
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1004,61 +1033,58 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                 )}
 
                 {/* Add-ons */}
-                <div>
-                  <label className="block text-xs font-bold text-[var(--text-main)] uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                    <Gift className="w-3.5 h-3.5 text-rose-500" />
-                    Celebration Add-ons
-                    <span className="text-[10px] font-normal text-[var(--text-muted)] normal-case">
-                      ({selectedAddOns.length} selected)
-                    </span>
-                  </label>
-                  <div className="space-y-2">
-                    {(showAllAddOns ? AVAILABLE_ADD_ONS : AVAILABLE_ADD_ONS.slice(0, 4)).map((addon) => {
-                      const isSelected = selectedAddOns.some((a) => a.id === addon.id);
-                      return (
-                        <label
-                          key={addon.id}
-                          onClick={() => handleToggleAddOn(addon)}
-                          className={`flex items-center justify-between p-3 rounded-xl border-2 text-xs cursor-pointer transition-all ${
-                            isSelected
-                              ? 'bg-[var(--primary-light)] border-[var(--primary)] shadow-sm'
-                              : 'bg-[var(--bg-surface)] border-[var(--border)] hover:bg-[var(--bg-subtle)] hover:border-[var(--border-strong)]'
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
+                {isAddOnsAllowed && (
+                  <div>
+                    <label className="block text-xs font-bold text-[var(--text-main)] uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                      <Gift className="w-3.5 h-3.5 text-rose-500" />
+                      Celebration Add-ons
+                      <span className="text-[10px] font-normal text-[var(--text-muted)] normal-case">
+                        ({selectedAddOns.length} selected)
+                      </span>
+                    </label>
+                    <div className="space-y-2">
+                      {(showAllAddOns ? availableAddOns : availableAddOns.slice(0, 4)).map((addon) => {
+                        const isSelected = selectedAddOns.some((a) => a.id === addon.id || a.name === addon.name);
+                        return (
+                          <label
+                            key={addon.id || addon.name}
+                            onClick={() => handleToggleAddOn(addon)}
+                            className={`flex items-center justify-between p-3 rounded-xl border-2 text-xs cursor-pointer transition-all ${
                               isSelected
-                                ? 'bg-[var(--primary)] border-[var(--primary)]'
-                                : 'border-[var(--border)]'
-                            }`}>
-                              {isSelected && <Check className="w-3 h-3 text-white" />}
+                                ? 'bg-[var(--primary-light)] border-[var(--primary)] shadow-sm'
+                                : 'bg-[var(--bg-surface)] border-[var(--border)] hover:bg-[var(--bg-subtle)] hover:border-[var(--border-strong)]'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
+                                isSelected
+                                  ? 'bg-[var(--primary)] border-[var(--primary)]'
+                                  : 'border-[var(--border)]'
+                              }`}>
+                                {isSelected && <Check className="w-3 h-3 text-white" />}
+                              </div>
+                              <div>
+                                <span className="font-semibold text-[var(--text-main)]">{addon.name}</span>
+                                <span className="ml-1.5">{getAddonEmoji(addon.name, addon.category)}</span>
+                              </div>
                             </div>
-                            <div>
-                              <span className="font-semibold text-[var(--text-main)]">{addon.name}</span>
-                              {addon.category === 'candle' && <span className="ml-1">🕯️</span>}
-                              {addon.category === 'card' && <span className="ml-1">💌</span>}
-                              {addon.category === 'balloon' && <span className="ml-1">🎈</span>}
-                              {addon.category === 'wrapping' && <span className="ml-1">🎁</span>}
-                              {addon.category === 'topper' && <span className="ml-1">📸</span>}
-                              {addon.category === 'combo' && <span className="ml-1">🧁</span>}
-                            </div>
-                          </div>
-                          <span className="font-bold text-[var(--primary)]">+₹{addon.price}</span>
-                        </label>
-                      );
-                    })}
+                            <span className="font-bold text-[var(--primary)]">+₹{addon.price}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                    {!showAllAddOns && availableAddOns.length > 4 && (
+                      <button
+                        type="button"
+                        onClick={() => setShowAllAddOns(true)}
+                        className="text-[10px] font-bold text-[var(--primary)] hover:underline mt-2 flex items-center gap-1"
+                      >
+                        <Plus className="w-3 h-3" />
+                        Show {availableAddOns.length - 4} more add-ons
+                      </button>
+                    )}
                   </div>
-                  {!showAllAddOns && AVAILABLE_ADD_ONS.length > 4 && (
-                    <button
-                      type="button"
-                      onClick={() => setShowAllAddOns(true)}
-                      className="text-[10px] font-bold text-[var(--primary)] hover:underline mt-2 flex items-center gap-1"
-                    >
-                      <Plus className="w-3 h-3" />
-                      Show {AVAILABLE_ADD_ONS.length - 4} more add-ons
-                    </button>
-                  )}
-                </div>
+                )}
 
                 {/* Quantity Stepper */}
                 <div className="flex items-center gap-4 p-3 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border)]">

@@ -402,18 +402,22 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         },
         specialInstructions: specialInstructions.trim() || undefined,
         items: cartItems.map((item: any) => ({
-          productId: item.product.id,
-          name: item.product.name,
-          sku: item.product.sku,
+          productId: item.product?.id || item.productId,
+          name: item.product?.name || item.name,
+          sku: item.product?.sku || item.sku || '',
           qty: item.quantity,
           price: item.selectedWeight?.price || item.unitPrice || 699,
           weight: item.selectedWeight?.label || (item.product?.sellingUnit === 'piece' ? '1 piece' : '0.5 kg'),
           flavour: item.selectedFlavour || 'Original',
-          messageOnCake: item.messageOnCake,
+          flavourPrice: item.flavourPrice || 0,
+          messageOnCake: item.messageOnCake || null,
+          customInstructions: item.customInstructions || null,
+          customDesignImage: item.customDesignImage || null,
+          customDesignDescription: item.customDesignDescription || null,
           addons: item.addons || item.selectedAddOns || [],
           unitPrice: item.selectedWeight?.price || item.unitPrice || 699,
           totalPrice: (item.selectedWeight?.price || item.unitPrice || 699) * item.quantity,
-          imageUrl: item.product.images?.[0]?.mediumUrl || item.product.images?.[0]?.url || '',
+          imageUrl: item.product?.images?.[0]?.mediumUrl || item.product?.images?.[0]?.url || item.imageUrl || '',
           sellingUnit: item.product?.sellingUnit || 'weight',
         })),
         subtotal,
@@ -454,7 +458,11 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               price: item.unitPrice,
               weight: item.weight || (item.sellingUnit === 'piece' ? '1 piece' : '0.5 kg'),
               flavour: item.flavour || '',
+              flavourPrice: item.flavourPrice || 0,
               messageOnCake: item.messageOnCake || '',
+              customInstructions: item.customInstructions || '',
+              customDesignImage: item.customDesignImage || '',
+              customDesignDescription: item.customDesignDescription || '',
               addons: item.addons || [],
               sellingUnit: item.sellingUnit || 'weight',
             })),
@@ -1149,6 +1157,69 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 </div>
               </div>
             </label>
+          </div>
+        </div>
+
+        {/* Order Items Review */}
+        <div className="p-3.5 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border)] space-y-2 text-xs">
+          <div className="font-bold text-[var(--primary)] uppercase tracking-wider text-[10px] flex items-center justify-between">
+            <span>Order Items Review ({cartItems.length})</span>
+          </div>
+          <div className="divide-y divide-[var(--border)]/60">
+            {cartItems.map((item: any, idx: number) => (
+              <div key={item.id || idx} className="py-2 first:pt-0 last:pb-0 flex items-start gap-2.5">
+                {item.customDesignImage ? (
+                  <a
+                    href={item.customDesignImage}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0"
+                    title="View uploaded design"
+                  >
+                    <img
+                      src={item.customDesignImage}
+                      alt="Custom design"
+                      className="w-10 h-10 rounded-lg object-cover border border-[var(--border)] bg-white"
+                    />
+                  </a>
+                ) : (
+                  <div className="w-10 h-10 rounded-lg bg-[var(--bg-card)] border border-[var(--border)] flex items-center justify-center text-base shrink-0">
+                    🎂
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-[var(--text-main)] truncate text-xs">
+                      {item.product?.name || item.name}
+                    </span>
+                    <span className="font-bold text-[var(--text-main)] text-xs shrink-0 ml-2">
+                      ₹{item.totalPrice}
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-[var(--text-muted)] flex items-center gap-1.5 flex-wrap">
+                    <span>{item.quantity} × {item.selectedWeight?.label || item.weight}</span>
+                    {item.selectedFlavour && (
+                      <span>• {item.selectedFlavour}</span>
+                    )}
+                  </div>
+                  {item.messageOnCake && (
+                    <p className="text-[10px] text-[var(--primary)] italic line-clamp-1 mt-0.5">
+                      Message: &ldquo;{item.messageOnCake}&rdquo;
+                    </p>
+                  )}
+                  {item.customInstructions && (
+                    <p className="text-[10px] text-[var(--text-muted)] line-clamp-1">
+                      Notes: {item.customInstructions}
+                    </p>
+                  )}
+                  {item.customDesignDescription && (
+                    <p className="text-[10px] text-[var(--text-muted)] line-clamp-1">
+                      Design Note: {item.customDesignDescription}
+                    </p>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 

@@ -3,6 +3,7 @@ import path from 'node:path';
 import { jsonParseSafe } from './api';
 import { normalizeImageUrl, mediumImageUrl } from '../imageUrl';
 import { stripHtmlAndMetadata, cleanDescription } from '../sanitizeDescription';
+import { getAddons } from './addons-data';
 
 function parseFlavourOptions(raw: any): any[] {
   if (!raw) return [];
@@ -136,6 +137,8 @@ export function serializeProduct(row: any) {
     showCustomization: row.show_customize !== 0,
     showDesignUpload: row.show_design_upload !== 0,
     showCustomerDesignUpload: row.show_design_upload !== 0,
+    showAddons: row.show_addons !== 0,
+    addons: getAddons(),
   };
 }
 

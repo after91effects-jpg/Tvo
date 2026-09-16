@@ -971,7 +971,7 @@ export const CustomerOrdersView: React.FC<CustomerOrdersViewProps> = ({ orders, 
 
                       {item.addons && item.addons.length > 0 && (
                         <div className="text-[11px] text-[var(--text-subtle)] mt-1">
-                          Add-ons: {item.addons.join(', ')}
+                          Add-ons: {item.addons.map((a: any) => (typeof a === 'string' ? a : (a?.name || String(a)))).join(', ')}
                         </div>
                       )}
                     </div>

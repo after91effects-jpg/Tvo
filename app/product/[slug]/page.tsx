@@ -140,6 +140,9 @@ export default function ProductPage() {
             customizationFee: Number(p.customizationFee) || 0,
             allowCustomMessage: p.allowCustomMessage !== false,
             allowCustomDesign: p.allowCustomDesign === true,
+            // Add-ons & Feature toggles
+            addons: Array.isArray(p.addons) ? p.addons : [],
+            showAddons: p.showAddons !== false,
           };
           setProduct(normalized);
           addToRecentlyViewed(normalized.id);

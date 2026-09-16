@@ -220,10 +220,57 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                         )}
                       </div>
 
-                      {item.messageOnCake && (
-                        <p className="text-[11px] text-[var(--primary)] italic mt-1 line-clamp-1">
-                          &ldquo;{item.messageOnCake}&rdquo;
-                        </p>
+                      {(item.messageOnCake || item.customInstructions || item.customDesignImage || item.customDesignDescription) && (
+                        <div className="mt-2 p-2 rounded-lg bg-[var(--bg-subtle)] border border-[var(--border)] text-[10px] space-y-1">
+                          <div className="font-bold text-[var(--primary)] uppercase tracking-wider text-[9px] flex items-center gap-1">
+                            <span>🎂</span>
+                            <span>Customization</span>
+                          </div>
+
+                          {item.messageOnCake && (
+                            <div className="flex items-start gap-1 text-[var(--text-main)]">
+                              <span className="text-[var(--text-muted)] shrink-0 font-medium">Message:</span>
+                              <span className="italic font-medium line-clamp-1">&ldquo;{item.messageOnCake}&rdquo;</span>
+                            </div>
+                          )}
+
+                          {item.customInstructions && (
+                            <div className="flex items-start gap-1 text-[var(--text-main)]">
+                              <span className="text-[var(--text-muted)] shrink-0 font-medium">Notes:</span>
+                              <span className="line-clamp-2">{item.customInstructions}</span>
+                            </div>
+                          )}
+
+                          {(item.customDesignImage || item.customDesignDescription) && (
+                            <div className="flex items-center gap-2 pt-1 border-t border-[var(--border)]/60">
+                              {item.customDesignImage && (
+                                <a
+                                  href={item.customDesignImage}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="shrink-0 relative group/thumb cursor-pointer"
+                                  title="View reference design"
+                                >
+                                  <img
+                                    src={item.customDesignImage}
+                                    alt="Reference design"
+                                    className="w-8 h-8 rounded object-cover border border-[var(--border)] bg-white"
+                                  />
+                                </a>
+                              )}
+                              <div className="min-w-0 flex-1">
+                                <span className="text-[9px] font-semibold text-[var(--text-main)] block">
+                                  Design Reference Attached
+                                </span>
+                                {item.customDesignDescription && (
+                                  <p className="text-[9px] text-[var(--text-muted)] line-clamp-1">
+                                    {item.customDesignDescription}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       )}
 
                       {item.addons?.length > 0 && (

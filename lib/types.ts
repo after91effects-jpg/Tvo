@@ -139,6 +139,7 @@ export interface Product {
   showCustomization?: boolean;
   showDesignUpload?: boolean;
   showCustomerDesignUpload?: boolean;
+  showAddons?: boolean;
 }
 
 export interface AddOn {
