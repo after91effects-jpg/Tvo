@@ -56,7 +56,8 @@ CREATE TABLE IF NOT EXISTS users (
   role TEXT NOT NULL DEFAULT 'customer',
   status TEXT NOT NULL DEFAULT 'active',
   created_at TEXT DEFAULT (datetime('now')),
-  last_login_at TEXT
+  last_login_at TEXT,
+  firebase_uid TEXT
 );
 
 CREATE TABLE IF NOT EXISTS roles (

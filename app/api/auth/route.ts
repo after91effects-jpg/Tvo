@@ -72,26 +72,31 @@ export async function POST(req: Request) {
     
     if (!email) return err('Firebase token missing email', 400);
 
-    const user = db.prepare('SELECT * FROM users WHERE email=?').get(email) as any;
-    if (!user) return err('No admin account found for this email', 403);
-    if (!isAdminRole(user.role)) return err('Access denied: admin role required', 403);
-    if (user.status === 'inactive' || user.status === 'suspended') return err('Account is inactive', 403);
+    try {
+      const user = db.prepare('SELECT * FROM users WHERE email=?').get(email) as any;
+      if (!user) return err('No admin account found for this email', 403);
+      if (!isAdminRole(user.role)) return err('Access denied: admin role required', 403);
+      if (user.status === 'inactive' || user.status === 'suspended') return err('Account is inactive', 403);
 
-    if (!user.firebase_uid) {
-      db.prepare('UPDATE users SET firebase_uid=? WHERE id=?').run(firebaseUid, user.id);
-    } else if (user.firebase_uid !== firebaseUid) {
-      return err('Account linked to different Firebase user', 403);
+      if (!user.firebase_uid) {
+        db.prepare('UPDATE users SET firebase_uid=? WHERE id=?').run(firebaseUid, user.id);
+      } else if (user.firebase_uid !== firebaseUid) {
+        return err('Account linked to different Firebase user', 403);
+      }
+
+      db.prepare("UPDATE users SET last_login_at=datetime('now') WHERE id=?").run(user.id);
+      const token = signToken({ sub: user.id, role: user.role, email: user.email, name: user.name });
+      logAudit(user, 'ADMIN_LOGIN_SUCCESS', 'Auth', String(user.id));
+      const res = NextResponse.json({
+        user: { id: user.id, name: user.name, email: user.email, role: user.role },
+        admin: true,
+      });
+      res.cookies.set('tvo_auth', token, sessionCookieOptions());
+      return res;
+    } catch (e: any) {
+      logError('admin_login_error', e instanceof Error ? e.message : String(e));
+      return err('An error occurred during admin authentication', 500);
     }
-
-    db.prepare("UPDATE users SET last_login_at=datetime('now') WHERE id=?").run(user.id);
-    const token = signToken({ sub: user.id, role: user.role, email: user.email, name: user.name });
-    logAudit(user, 'ADMIN_LOGIN_SUCCESS', 'Auth', String(user.id));
-    const res = NextResponse.json({
-      user: { id: user.id, name: user.name, email: user.email, role: user.role },
-      admin: true,
-    });
-    res.cookies.set('tvo_auth', token, sessionCookieOptions());
-    return res;
   }
 
   if (action === 'register') {

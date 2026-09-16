@@ -244,6 +244,10 @@ export function runMigrations() {
   addColumn('orders', 'occasion_slug', 'occasion_slug TEXT');
   addColumn('orders', 'occasion_id', 'occasion_id INTEGER');
   addTable(`CREATE INDEX IF NOT EXISTS idx_orders_occasion ON orders(occasion_slug) WHERE occasion_slug IS NOT NULL`);
+
+  // ---- users: auth fields (all additive) ----
+  addColumn('users', 'firebase_uid', 'firebase_uid TEXT');
+  addTable(`CREATE INDEX IF NOT EXISTS idx_users_firebase_uid ON users(firebase_uid) WHERE firebase_uid IS NOT NULL`);
 }
 
 // allow-testing helper
