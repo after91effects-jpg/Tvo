@@ -30,6 +30,9 @@ function getFirebaseAdminConfig() {
   // Remove any trailing newlines
   privateKey = privateKey.trimEnd();
 
+  // Normalize escaped newline characters
+  privateKey = privateKey.replace(/\\n/g, '\n');
+
   return { projectId, clientEmail, privateKey };
 }
 
