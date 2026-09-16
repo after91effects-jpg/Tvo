@@ -94,10 +94,16 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
       ? { label: '1 piece', weightKg: 0, price: product?.price || 699, mrp: product?.regularPrice || 0 }
       : { label: '0.5 kg', weightKg: 0.5, price: product?.price || 699, mrp: product?.regularPrice || 849 })
   );
+  const initialDefaultFlavour =
+    product?.flavourOptions?.find(f => f.isDefault && f.isActive !== false && (f as any).enabled !== false) ||
+    product?.flavourOptions?.find(f => f.isActive !== false && (f as any).enabled !== false) ||
+    product?.flavourOptions?.[0];
   const [selectedFlavour, setSelectedFlavour] = useState<string>(
-    product?.flavours?.[0] || 'Original'
+    initialDefaultFlavour?.name || product?.flavours?.[0] || 'Original'
   );
-  const [selectedFlavourPrice, setSelectedFlavourPrice] = useState<number>(0);
+  const [selectedFlavourPrice, setSelectedFlavourPrice] = useState<number>(
+    initialDefaultFlavour?.additionalPrice || 0
+  );
   const [messageOnCake, setMessageOnCake] = useState<string>('');
   const [selectedAddOns, setSelectedAddOns] = useState<AddOn[]>([]);
   const [isCustomizeOpen, setIsCustomizeOpen] = useState<boolean>(false);
@@ -178,7 +184,10 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
         : { label: '0.5 kg', weightKg: 0.5, price: product.price || 699, mrp: product.regularPrice || 849 });
     setSelectedWeight(initialWeight);
     // Use flavourOptions with pricing if available, fallback to simple flavours
-    const defaultFlavour = product.flavourOptions?.find(f => f.isDefault && f.isActive) || product.flavourOptions?.[0];
+    const defaultFlavour =
+      product.flavourOptions?.find(f => f.isDefault && f.isActive !== false && (f as any).enabled !== false) ||
+      product.flavourOptions?.find(f => f.isActive !== false && (f as any).enabled !== false) ||
+      product.flavourOptions?.[0];
     setSelectedFlavour(defaultFlavour?.name || product.flavours?.[0] || 'Original');
     setSelectedFlavourPrice(defaultFlavour?.additionalPrice || 0);
     setMessageOnCake('');
@@ -194,7 +203,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
     setActiveImageIndex(0);
     setActiveTab('details');
     setDeliveryDate(minDeliveryDate);
-  }, [product?.id, minDeliveryDate]);
+  }, [product?.id, product?.flavourOptions, minDeliveryDate]);
 
   const isEmbedded = variant === 'embedded';
 
@@ -699,65 +708,114 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   </div>
                 )}
 
-                {/* Flavours */}
-                {(product.flavourOptions && product.flavourOptions.length > 0 && product.showFlavour)
-                  ? (
-                    <div>
-                      <label className="block text-xs font-bold text-[var(--text-main)] uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                        <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                        Choose Flavour Profile
-                      </label>
-                      <div className="flex flex-wrap gap-2">
-                        {product.flavourOptions
-                          .filter((fo: FlavourOption) => fo.isActive)
-                          .map((fo: FlavourOption) => (
-                            <button
-                              key={fo.id}
-                              type="button"
-                              onClick={() => {
-                                setSelectedFlavour(fo.name);
-                                setSelectedFlavourPrice(fo.additionalPrice);
-                              }}
-                              className={`px-4 py-2 rounded-xl text-xs font-semibold border-2 transition-all cursor-pointer ${
-                                selectedFlavour === fo.name
-                                  ? 'bg-[var(--primary)] text-white border-[var(--primary)] shadow-md'
-                                  : 'bg-[var(--bg-surface)] text-[var(--text-main)] border-[var(--border)] hover:border-[var(--primary)]/50'
-                              }`}
-                            >
-                              {fo.name}
-                              {fo.additionalPrice > 0 && (
-                                <span className="ml-1.5 text-[10px] font-medium opacity-90">+₹{fo.additionalPrice}</span>
-                              )}
-                            </button>
-                          ))}
+                {/* Flavours Selector */}
+                {product.showFlavour !== false && (() => {
+                  const availableFlavours = (product.flavourOptions || []).filter(
+                    (fo: FlavourOption) => fo.isActive !== false && (fo as any).enabled !== false && fo.showOnStorefront !== false
+                  );
+
+                  if (availableFlavours.length > 0) {
+                    return (
+                      <div>
+                        <label className="block text-xs font-bold text-[var(--text-main)] uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                          <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                          Flavour
+                        </label>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {availableFlavours.map((fo: FlavourOption) => {
+                            const isSelected = selectedFlavour === fo.name;
+                            return (
+                              <button
+                                key={fo.id}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedFlavour(fo.name);
+                                  setSelectedFlavourPrice(fo.additionalPrice || 0);
+                                }}
+                                className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold border-2 transition-all cursor-pointer text-left ${
+                                  isSelected
+                                    ? 'bg-[var(--primary)]/10 text-[var(--text-main)] border-[var(--primary)] shadow-xs'
+                                    : 'bg-[var(--bg-surface)] text-[var(--text-main)] border-[var(--border)] hover:border-[var(--primary)]/40 hover:bg-[var(--bg-subtle)]'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <div
+                                    className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
+                                      isSelected
+                                        ? 'border-[var(--primary)] bg-[var(--primary)]'
+                                        : 'border-[var(--border)] bg-transparent'
+                                    }`}
+                                  >
+                                    {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                                  </div>
+                                  <span className="truncate">{fo.name}</span>
+                                </div>
+                                <span
+                                  className={`ml-2 text-[11px] font-medium shrink-0 ${
+                                    fo.additionalPrice > 0
+                                      ? 'text-[var(--primary)] font-bold'
+                                      : 'text-[var(--text-muted)]'
+                                  }`}
+                                >
+                                  {fo.additionalPrice > 0 ? `+₹${fo.additionalPrice}` : 'Included'}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  )
-                  : product.flavours && product.flavours.length > 1 && product.showFlavour ? (
-                    <div>
-                      <label className="block text-xs font-bold text-[var(--text-main)] uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                        <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                        Choose Flavour Profile
-                      </label>
-                      <div className="flex flex-wrap gap-2">
-                        {product.flavours.map((f) => (
-                          <button
-                            key={f}
-                            type="button"
-                            onClick={() => setSelectedFlavour(f)}
-                            className={`px-4 py-2 rounded-xl text-xs font-semibold border-2 transition-all cursor-pointer ${
-                              selectedFlavour === f
-                                ? 'bg-[var(--primary)] text-white border-[var(--primary)] shadow-md'
-                                : 'bg-[var(--bg-surface)] text-[var(--text-main)] border-[var(--border)] hover:border-[var(--primary)]/50'
-                            }`}
-                          >
-                            {f}
-                          </button>
-                        ))}
+                    );
+                  }
+
+                  if (product.flavours && product.flavours.length > 1) {
+                    return (
+                      <div>
+                        <label className="block text-xs font-bold text-[var(--text-main)] uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                          <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                          Flavour
+                        </label>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {product.flavours.map((f) => {
+                            const isSelected = selectedFlavour === f;
+                            return (
+                              <button
+                                key={f}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedFlavour(f);
+                                  setSelectedFlavourPrice(0);
+                                }}
+                                className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold border-2 transition-all cursor-pointer text-left ${
+                                  isSelected
+                                    ? 'bg-[var(--primary)]/10 text-[var(--text-main)] border-[var(--primary)] shadow-xs'
+                                    : 'bg-[var(--bg-surface)] text-[var(--text-main)] border-[var(--border)] hover:border-[var(--primary)]/40 hover:bg-[var(--bg-subtle)]'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <div
+                                    className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
+                                      isSelected
+                                        ? 'border-[var(--primary)] bg-[var(--primary)]'
+                                        : 'border-[var(--border)] bg-transparent'
+                                    }`}
+                                  >
+                                    {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                                  </div>
+                                  <span className="truncate">{f}</span>
+                                </div>
+                                <span className="ml-2 text-[11px] font-medium text-[var(--text-muted)] shrink-0">
+                                  Included
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  )
-                  : null}
+                    );
+                  }
+
+                  return null;
+                })()}
 
                 {/* Customize Cake Accordion */}
                 {isCustomizationAllowed && (

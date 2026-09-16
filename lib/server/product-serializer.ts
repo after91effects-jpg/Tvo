@@ -16,6 +16,35 @@ function parseFlavourOptions(raw: any): any[] {
 
 
 
+export const DEFAULT_CAKE_FLAVOUR_OPTIONS = [
+  { id: 'flav-belgian-choc', name: 'Belgian Chocolate', additionalPrice: 0, isDefault: true, displayOrder: 1, isActive: true, showOnStorefront: true, enabled: true },
+  { id: 'flav-red-velvet', name: 'Red Velvet', additionalPrice: 50, isDefault: false, displayOrder: 2, isActive: true, showOnStorefront: true, enabled: true },
+  { id: 'flav-vanilla', name: 'Vanilla', additionalPrice: 0, isDefault: false, displayOrder: 3, isActive: true, showOnStorefront: true, enabled: true },
+  { id: 'flav-butterscotch', name: 'Butterscotch', additionalPrice: 0, isDefault: false, displayOrder: 4, isActive: true, showOnStorefront: true, enabled: true },
+  { id: 'flav-black-forest', name: 'Black Forest', additionalPrice: 0, isDefault: false, displayOrder: 5, isActive: true, showOnStorefront: true, enabled: true },
+  { id: 'flav-fresh-strawberry', name: 'Fresh Strawberry', additionalPrice: 80, isDefault: false, displayOrder: 6, isActive: true, showOnStorefront: true, enabled: true },
+];
+
+function isCakeProduct(row: any): boolean {
+  const name = String(row.name || '').toLowerCase();
+  const cat = String(row.category_slug || row.category || '').toLowerCase();
+  const desc = String(row.description || '').toLowerCase();
+
+  // Exclude non-cake categories and products
+  if (/candle|topper|balloon|decor|mould|tool|hamper|cookie|mithai|ladoo|barfi|cupcake|pastry\s*slice/i.test(name)) {
+    return false;
+  }
+  if (/party-supplies|baking-store|hampers-gifts/i.test(cat)) {
+    return false;
+  }
+
+  // Positive cake signals
+  if (name.includes('cake')) return true;
+  if (cat.includes('cake')) return true;
+  if (row.selling_unit === 'weight' && (desc.includes('cake') || desc.includes('sponge') || desc.includes('frosting'))) return true;
+  return false;
+}
+
 export function serializeProduct(row: any) {
   if (!row) return null;
 
@@ -31,11 +60,18 @@ export function serializeProduct(row: any) {
       flavourOptions = legacyFlavours.map((fl: any, idx: number) => ({
         id: `flav_${idx + 1}`,
         name: typeof fl === 'string' ? fl : fl.name,
-        additionalPrice: 0,
+        additionalPrice: typeof fl === 'object' && fl.additionalPrice ? Number(fl.additionalPrice) : 0,
+        isDefault: idx === 0,
+        displayOrder: idx + 1,
+        isActive: true,
+        showOnStorefront: true,
         enabled: true,
-        sortOrder: idx + 1,
       }));
     }
+  }
+
+  if (flavourOptions.length === 0 && isCakeProduct(row)) {
+    flavourOptions = DEFAULT_CAKE_FLAVOUR_OPTIONS.map((f) => ({ ...f }));
   }
 
   return {
@@ -63,7 +99,9 @@ export function serializeProduct(row: any) {
       const finalMedium = mediumExists ? candidateMedium : url;
       return { url, mediumUrl: finalMedium, thumbUrl: finalMedium, isPrimary: true };
     }).filter((i: any) => i.url),
-    flavours: jsonParseSafe(row.flavours, []),
+    flavours: (Array.isArray(jsonParseSafe(row.flavours, [])) && jsonParseSafe(row.flavours, []).length > 0)
+      ? jsonParseSafe(row.flavours, []).map((fl: any) => typeof fl === 'string' ? fl : fl.name)
+      : flavourOptions.map((fo: any) => fo.name),
     flavourOptions,
     badges: jsonParseSafe(row.badges, []),
     tags: jsonParseSafe(row.tags, []),

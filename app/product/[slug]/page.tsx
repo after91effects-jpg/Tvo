@@ -62,6 +62,14 @@ export default function ProductPage() {
           const categorySlug = p.category || p.category_slug || '';
           const tags = Array.isArray(p.tags) ? p.tags : [];
           const flavours = Array.isArray(p.flavours) ? p.flavours : [];
+          let flavourOptionsArr: any[] = [];
+          try {
+            if (Array.isArray(p.flavourOptions)) flavourOptionsArr = p.flavourOptions;
+            else if (p.flavour_options_json) {
+              const parsed = typeof p.flavour_options_json === 'string' ? JSON.parse(p.flavour_options_json) : p.flavour_options_json;
+              flavourOptionsArr = Array.isArray(parsed) ? parsed : [];
+            }
+          } catch { flavourOptionsArr = []; }
           const categories = Array.isArray(p.categories) ? p.categories : (categorySlug ? [categorySlug] : []);
           const subcategories = Array.isArray(p.subcategories) ? p.subcategories : (p.subcategory_slug ? [p.subcategory_slug] : []);
           let images: any[] = [];
@@ -95,7 +103,7 @@ export default function ProductPage() {
             categories,
             subcategories,
             tags,
-            flavours,
+            flavours: flavours.length ? flavours : flavourOptionsArr.map((fo: any) => fo.name),
             eggless: !!p.eggless,
             sellingUnit: p.sellingUnit || 'weight',
             weightOptions: weightOptionsArr.length ? weightOptionsArr.map((w: any) => ({
@@ -121,6 +129,17 @@ export default function ProductPage() {
             published: p.published !== undefined ? !!p.published : true,
             createdAt: p.createdAt || new Date().toISOString(),
             updatedAt: p.updatedAt || new Date().toISOString(),
+            // Flavour options & visibility
+            flavourOptions: flavourOptionsArr,
+            showFlavour: p.showFlavour !== false,
+            // Customization & Design upload
+            showCustomization: p.showCustomization !== false,
+            showCustomize: p.showCustomize !== false,
+            showDesignUpload: p.showDesignUpload !== false,
+            showCustomerDesignUpload: p.showCustomerDesignUpload !== false,
+            customizationFee: Number(p.customizationFee) || 0,
+            allowCustomMessage: p.allowCustomMessage !== false,
+            allowCustomDesign: p.allowCustomDesign === true,
           };
           setProduct(normalized);
           addToRecentlyViewed(normalized.id);
