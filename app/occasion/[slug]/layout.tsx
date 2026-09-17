@@ -7,7 +7,7 @@ import { normalizeImageUrl } from '../../../lib/imageUrl';
 export async function generateMetadata({
   params,
 }: {
-  params: Promise<{ slug: string }> | { slug: string };
+  params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const resolvedParams = await Promise.resolve(params);
   const rawSlug = resolvedParams?.slug || '';

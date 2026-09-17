@@ -257,7 +257,8 @@ export interface CustomerDetails {
   slotSurcharge?: number;
   giftMessage?: string;
   instructions?: string;
-  specialInstructions?: string; // Specific cake toppings, dietary preferences, or allergy notes
+  specialInstructions?: string;
+  tracking_note?: string; // Specific cake toppings, dietary preferences, or allergy notes
 }
 
 export type OrderStatus = 'Order Placed' | 'Baking in Kitchen' | 'Out for Delivery' | 'Delivered' | 'Cancelled';
@@ -275,6 +276,7 @@ export interface Order {
   userId?: string;
   customer: CustomerDetails;
   specialInstructions?: string;
+  tracking_note?: string;
   items: {
     productId: string;
     name: string;

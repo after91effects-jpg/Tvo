@@ -776,14 +776,14 @@ images_json: (formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
     // Load customization
     setFormCustomizationFee((prod as any).customizationFee?.toString() || '0');
     setFormAllowCustomMessage((prod as any).allowCustomMessage !== false);
-    setFormAllowCustomDesign((prod as any).allowCustomDesign === true);
+    setFormAllowCustomDesign((prod as any).allowCustomDesign === true || (prod as any).showDesignUpload === true || (prod as any).showCustomerDesignUpload === true);
     // Load feature toggles
     setFormSameDayEligible((prod as any).sameDayEligible !== false && (prod as any).same_day_eligible !== 0);
     setFormShowGallery((prod as any).showGallery !== false);
     setFormShowVideo((prod as any).showVideo === true);
     setFormShowFlavour((prod as any).showFlavour !== false);
     setFormShowCustomize((prod as any).showCustomize !== false);
-    setFormShowDesignUpload((prod as any).showDesignUpload === true);
+    setFormShowDesignUpload((prod as any).showDesignUpload === true || (prod as any).showCustomerDesignUpload === true || (prod as any).allowCustomDesign === true);
     setFormShowAddons((prod as any).showAddons !== false);
     setFormShowDietary((prod as any).showDietary !== false);
     setFormShowDelivery((prod as any).showDelivery !== false);

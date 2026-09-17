@@ -296,7 +296,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 
   // Feature toggles for customization, design upload, and celebration add-ons
   const isCustomizationAllowed = product.showCustomization !== false && product.showCustomize !== false;
-  const isDesignUploadAllowed = isCustomizationAllowed && product.showCustomerDesignUpload !== false && product.showDesignUpload !== false;
+  const isDesignUploadAllowed = isCustomizationAllowed && product.showCustomerDesignUpload !== false && product.showDesignUpload !== false && (product.showCustomerDesignUpload === true || product.showDesignUpload === true || product.allowCustomDesign === true || (product as any).show_design_upload === 1 || (product as any).allow_custom_design === 1);
   const isAddOnsAllowed = product.showAddons !== false && (product as any).show_addons !== 0;
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -990,9 +990,14 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                         {/* Customer Design Upload */}
                         {isDesignUploadAllowed && (
                           <div className="pt-2 border-t border-[var(--border)]/70 space-y-3">
-                            <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--text-main)] uppercase tracking-wider">
-                              <span role="img" aria-label="palette">🎨</span>
-                              Upload Your Cake Design
+                            <div>
+                              <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--text-main)] uppercase tracking-wider">
+                                <span role="img" aria-label="palette">🎨</span>
+                                Customer Design / Reference Image
+                              </div>
+                              <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
+                                Upload a reference image for your cake design.
+                              </p>
                             </div>
 
                             {/* Hidden accessible file input */}

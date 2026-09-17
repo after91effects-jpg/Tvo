@@ -4,7 +4,7 @@ import { verifyPassword, signToken, hashPassword, getCurrentUser, isAdminRole } 
 import { logAudit } from '../../../lib/server/api';
 import { verifyFirebaseIdToken } from '../../../lib/server/firebaseAdmin';
 import { rateLimitMiddleware } from '../../../lib/server/rateLimit';
-import { logInfo, logWarn } from '../../../lib/server/logger';
+import { logInfo, logWarn, logError } from '../../../lib/server/logger';
 import { withTimeout } from '../../../lib/server/timeout';
 
 export const runtime = 'nodejs';

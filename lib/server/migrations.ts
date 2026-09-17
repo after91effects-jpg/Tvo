@@ -285,6 +285,67 @@ export function runMigrations() {
   // ---- users: auth fields (all additive) ----
   addColumn('users', 'firebase_uid', 'firebase_uid TEXT');
   addTable(`CREATE INDEX IF NOT EXISTS idx_users_firebase_uid ON users(firebase_uid) WHERE firebase_uid IS NOT NULL`);
+
+  // ---- Phase 12B-11: Enable design upload & configure related products for cake products ----
+  try {
+    addTable(`CREATE TABLE IF NOT EXISTS schema_migrations (
+      name TEXT PRIMARY KEY,
+      applied_at TEXT DEFAULT (datetime('now'))
+    )`);
+
+    const alreadyApplied = db.prepare(`SELECT name FROM schema_migrations WHERE name = 'phase12b11_design_upload_and_related'`).get();
+    if (!alreadyApplied) {
+      // 1. Enable customer design upload for customizable cake products
+      db.prepare(`
+        UPDATE products
+        SET show_design_upload = 1, allow_custom_design = 1
+        WHERE show_customize = 1
+          AND (name LIKE '%cake%' OR category_id IN (SELECT id FROM categories WHERE slug LIKE '%cake%'))
+          AND (show_design_upload IS NULL OR show_design_upload = 0)
+      `).run();
+
+      // 2. Populate related_products for cake products if unconfigured
+      const emptyRelatedRows = db.prepare(`
+        SELECT id, category_id FROM products
+        WHERE (related_products IS NULL OR related_products = '' OR related_products = '[]')
+          AND (name LIKE '%cake%' OR category_id IN (SELECT id FROM categories WHERE slug LIKE '%cake%'))
+      `).all() as { id: number; category_id: number }[];
+
+      if (emptyRelatedRows.length > 0) {
+        const getCategoryPeers = db.prepare(`
+          SELECT id, name, slug, sale_price as price, regular_price as regularPrice
+          FROM products
+          WHERE category_id = ? AND id != ? AND published = 1
+          LIMIT 4
+        `);
+        const getTopPeers = db.prepare(`
+          SELECT id, name, slug, sale_price as price, regular_price as regularPrice
+          FROM products
+          WHERE id != ? AND published = 1 AND name LIKE '%cake%'
+          LIMIT 4
+        `);
+        const updateRelated = db.prepare(`UPDATE products SET related_products = ? WHERE id = ?`);
+
+        for (const row of emptyRelatedRows) {
+          let peers = row.category_id ? (getCategoryPeers.all(row.category_id, row.id) as any[]) : [];
+          if (peers.length === 0) {
+            peers = getTopPeers.all(row.id) as any[];
+          }
+          if (peers.length > 0) {
+            updateRelated.run(JSON.stringify(peers.map(p => ({
+              id: String(p.id),
+              name: p.name,
+              slug: p.slug,
+              price: p.price || 0,
+              regularPrice: p.regularPrice || undefined,
+            }))), row.id);
+          }
+        }
+      }
+
+      db.prepare(`INSERT INTO schema_migrations (name) VALUES ('phase12b11_design_upload_and_related')`).run();
+    }
+  } catch {}
 }
 
 // allow-testing helper

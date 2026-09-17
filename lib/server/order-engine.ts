@@ -168,7 +168,7 @@ export function extractPieceCount(labelOrWeight?: string | null): number {
 }
 
 // Resolve + validate every line item against fresh DB reads.
-function buildLineItems(items: any[]): Array<{ it: any; prod: any; unit: number; option: any; addedAddonTotal: number; validatedAddons: any[] }> {
+function buildLineItems(items: any[]): Array<{ it: any; prod: any; unit: number; option: any; addedAddonTotal: number; validatedAddons: any[]; flavourPrice: number }> {
   return items.map((it) => {
     if (!it || !it.productId) throw new OrderInputError('Product not found');
     const prod = db.prepare('SELECT id, name, sku, stock, stock_status, selling_unit, low_stock_threshold, sale_price, regular_price, variations_json, category_id, flavour_options_json, flavours, same_day_eligible FROM products WHERE id=?').get(it.productId) as any;
