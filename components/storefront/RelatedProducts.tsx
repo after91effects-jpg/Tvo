@@ -68,3 +68,4 @@ export const RelatedProducts: React.FC<RelatedProductsProps> = ({ related, onVie
     </div>
   );
 };
+
