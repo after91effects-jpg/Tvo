@@ -114,11 +114,21 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   const { isInWishlist, toggleWishlist } = useWishlist();
   const isWishlisted = product ? isInWishlist(product.id) : false;
 
-  const [selectedWeight, setSelectedWeight] = useState<WeightOption>(
-    product?.weightOptions?.[0] || (product?.sellingUnit === 'piece'
+  const weightOptionsList: WeightOption[] = React.useMemo(() => {
+    if (!product) return [];
+    if (Array.isArray(product.weightOptions)) return product.weightOptions;
+    if (product.weightOptions && Array.isArray((product.weightOptions as any).options)) {
+      return (product.weightOptions as any).options;
+    }
+    return [];
+  }, [product]);
+
+  const [selectedWeight, setSelectedWeight] = useState<WeightOption>(() => {
+    const list = Array.isArray(product?.weightOptions) ? product.weightOptions : (product?.weightOptions as any)?.options;
+    return (list && list[0]) || (product?.sellingUnit === 'piece'
       ? { label: '1 piece', weightKg: 0, price: product?.price || 699, mrp: product?.regularPrice || 0 }
-      : { label: '0.5 kg', weightKg: 0.5, price: product?.price || 699, mrp: product?.regularPrice || 849 })
-  );
+      : { label: '0.5 kg', weightKg: 0.5, price: product?.price || 699, mrp: product?.regularPrice || 849 });
+  });
   const initialDefaultFlavour =
     product?.flavourOptions?.find(f => f.isDefault && f.isActive !== false && (f as any).enabled !== false) ||
     product?.flavourOptions?.find(f => f.isActive !== false && (f as any).enabled !== false) ||
@@ -203,7 +213,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   React.useEffect(() => {
     if (!product) return;
     const initialWeight =
-      product.weightOptions?.[0] ||
+      weightOptionsList[0] ||
       (product.sellingUnit === 'piece'
         ? { label: '1 piece', weightKg: 0, price: product.price || 699, mrp: product.regularPrice || 0 }
         : { label: '0.5 kg', weightKg: 0.5, price: product.price || 699, mrp: product.regularPrice || 849 });
@@ -389,7 +399,9 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
       quantity,
       customerInstructions
     );
-    onClose();
+    if (variant === 'modal') {
+      onClose();
+    }
     if (onOpenCheckout) {
       onOpenCheckout();
     } else {
@@ -757,14 +769,14 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
             {activeTab === 'details' && (
               <div className="space-y-5">
                 {/* Weight Options */}
-                {product.showSizeSelector !== false && product.weightOptions && product.weightOptions.length > 0 && (
+                {product.showSizeSelector !== false && weightOptionsList.length > 0 && (
                   <div>
                     <label className="block text-xs font-bold text-[var(--text-main)] uppercase tracking-wider mb-2 flex items-center gap-1.5">
                       <Package className="w-3.5 h-3.5 text-[var(--primary)]" />
                       {product.sellingUnit === 'piece' ? 'Select Quantity' : 'Select Weight'}
                     </label>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                      {product.weightOptions.map((opt) => {
+                      {weightOptionsList.map((opt) => {
                         const discount = opt.mrp ? Math.round(((opt.mrp - opt.price) / opt.mrp) * 100) : 0;
                         return (
                           <button
@@ -1497,17 +1509,19 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
               <span className="flex items-center gap-1"><BadgeCheck className="w-3 h-3" /> Quality Assured</span>
             </div>
           </div>
+        </div>
 
-          {/* Related Products */}
-          {product.showRelatedProducts !== false && (
+        {/* Related Products — Full width across all 12 columns */}
+        {product.showRelatedProducts !== false && (
+          <div className="col-span-1 lg:col-span-12 w-full">
             <RelatedProducts
               related={product.related}
               onViewProduct={(id: string) => {
                 window.location.href = `/product/${id}`;
               }}
             />
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </Modal>
   );

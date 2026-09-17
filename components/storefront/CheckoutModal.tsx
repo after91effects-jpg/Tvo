@@ -3,6 +3,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
   CreditCard,
+  ShoppingBag,
   MapPin,
   Clock,
   ShieldCheck,
@@ -593,10 +594,31 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Complete Your Bakery Celebration Order"
+      title={cartItems.length === 0 ? "Your Cart" : "Complete Your Bakery Celebration Order"}
       maxWidth="3xl"
     >
-      <form onSubmit={handlePlaceOrder} className="space-y-3 pb-24 sm:pb-4 text-xs">
+      {cartItems.length === 0 ? (
+        <div className="py-12 px-6 flex flex-col items-center justify-center text-center">
+          <div className="w-16 h-16 rounded-full bg-[var(--bg-subtle)] flex items-center justify-center mb-4 text-[var(--text-subtle)]">
+            <ShoppingBag className="w-8 h-8 stroke-1 text-[var(--primary)]" />
+          </div>
+          <h3 className="text-base font-bold text-[var(--text-main)] font-display">
+            Your cart is empty
+          </h3>
+          <p className="text-xs text-[var(--text-muted)] mt-1.5 max-w-sm">
+            Please add handcrafted celebration cakes or bakery treats to your cart before proceeding to checkout.
+          </p>
+          <button
+            type="button"
+            id="checkout-empty-explore-btn"
+            onClick={onClose}
+            className="mt-6 px-6 py-2.5 rounded-xl bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white text-xs font-semibold shadow-md active:scale-95 transition-all cursor-pointer"
+          >
+            Explore Bestselling Cakes
+          </button>
+        </div>
+      ) : (
+        <form onSubmit={handlePlaceOrder} className="space-y-3 pb-24 sm:pb-4 text-xs">
         {errorMessage && (
           <div className="p-3.5 rounded-xl bg-[var(--danger-light)] text-[var(--danger)] text-xs flex items-center gap-2">
             <AlertCircle className="w-4 h-4 shrink-0" />
@@ -1374,6 +1396,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           </div>
         </div>
       </form>
+      )}
     </Modal>
   );
 };

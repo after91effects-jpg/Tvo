@@ -214,10 +214,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onViewProduct
         </div>
 
         {/* Price & Actions footer */}
-        <div className="mt-2.5 sm:mt-4 pt-2 sm:pt-3 border-t border-[var(--border)] flex items-center justify-between gap-1 sm:gap-2">
-          <div className="min-w-0 flex-1">
+        <div className="mt-2.5 sm:mt-4 pt-2 sm:pt-3 border-t border-[var(--border)] flex flex-wrap items-center justify-between gap-1.5 sm:gap-2">
+          <div className="min-w-0">
             <div className="flex items-baseline gap-1 sm:gap-1.5 flex-wrap">
-              <span className="text-sm sm:text-lg font-bold text-[var(--text-main)] font-display">
+              <span className="text-sm sm:text-base md:text-lg font-bold text-[var(--text-main)] font-display">
                 ₹{selectedWeight.price}
               </span>
               {selectedWeight.mrp && selectedWeight.mrp > selectedWeight.price && (
@@ -233,8 +233,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onViewProduct
             )}
           </div>
 
-          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
-            {/* Direct Quick View Button in Footer (Desktop only) */}
+          <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap justify-end">
+            {/* Direct Quick View Button in Footer (Desktop/Tablet) */}
             <button
               id={`quick-view-btn-${product.id}`}
               type="button"
@@ -244,9 +244,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onViewProduct
               }}
               aria-label={`Quick view ${product.name}`}
               title="Quick View & Customize"
-              className="hidden sm:flex p-2 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--primary-light)] text-[var(--text-muted)] hover:text-[var(--primary)] border border-[var(--border)] hover:border-[var(--primary)]/30 transition-all cursor-pointer shadow-xs active:scale-95"
+              className="hidden sm:flex p-1.5 sm:p-2 rounded-lg sm:rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--primary-light)] text-[var(--text-muted)] hover:text-[var(--primary)] border border-[var(--border)] hover:border-[var(--primary)]/30 transition-all cursor-pointer shadow-xs active:scale-95 shrink-0"
             >
-              <Eye className="w-4 h-4" />
+              <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </button>
 
             {/* Quick Add Button */}
@@ -257,7 +257,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onViewProduct
               onClick={handleQuickAdd}
               aria-label={`Add ${product.name} to cart`}
               title="Add to Cart"
-              className={`px-2.5 py-1 sm:px-3 sm:py-2 rounded-lg sm:rounded-xl text-xs font-bold sm:font-semibold flex items-center justify-center gap-1 shadow-xs active:scale-95 transition-all cursor-pointer ${
+              className={`px-2.5 py-1 sm:px-3 sm:py-1.5 md:py-2 rounded-lg sm:rounded-xl text-xs font-bold sm:font-semibold flex items-center justify-center gap-1 shadow-xs active:scale-95 transition-all cursor-pointer shrink-0 ${
                 isOutOfStock
                   ? 'bg-stone-200 dark:bg-stone-800 text-stone-400 cursor-not-allowed border border-transparent'
                   : isAdding
@@ -281,7 +281,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onViewProduct
               )}
             </button>
 
-            {/* Quick Buy Button (Desktop only) */}
+            {/* Quick Buy Button (Desktop/Tablet) */}
             <button
               id={`quick-buy-${product.id}`}
               type="button"
@@ -289,7 +289,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onViewProduct
               onClick={handleQuickBuy}
               aria-label={`Quick buy ${product.name}`}
               title="Quick Buy & Instant Checkout"
-              className={`hidden sm:flex px-3 py-2 rounded-xl text-white text-xs font-bold items-center gap-1.5 shadow-xs active:scale-95 transition-all whitespace-nowrap ${
+              className={`hidden md:flex px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-white text-[11px] sm:text-xs font-bold items-center gap-1 shadow-xs active:scale-95 transition-all whitespace-nowrap shrink-0 ${
                 isOutOfStock
                   ? 'bg-stone-300 dark:bg-stone-800 cursor-not-allowed'
                   : 'bg-gradient-to-r from-[#FF2B6D] via-[#FF3B77] to-[#E61D52] hover:brightness-110 cursor-pointer'
@@ -297,12 +297,12 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onViewProduct
             >
               {isBuying ? (
                 <>
-                  <Check className="w-3.5 h-3.5 animate-in zoom-in" />
+                  <Check className="w-3 h-3 sm:w-3.5 sm:h-3.5 animate-in zoom-in" />
                   <span>Buying...</span>
                 </>
               ) : (
                 <>
-                  <Zap className="w-3.5 h-3.5 fill-current" />
+                  <Zap className="w-3 h-3 sm:w-3.5 sm:h-3.5 fill-current" />
                   <span>Quick Buy</span>
                 </>
               )}
