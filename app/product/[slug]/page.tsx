@@ -138,8 +138,13 @@ export default function ProductPage() {
             })(),
             rating: typeof p.rating === 'number' ? p.rating : 0,
             reviewCount: p.reviewCount || 0,
-            stock: p.stock ?? 10,
-            stockStatus: p.stockStatus || (p.stock > 0 ? 'in_stock' : 'out_of_stock'),
+            stock: p.stock ?? 0,
+            stockStatus: (p.manage_stock === 0 || p.enable_stock === 0)
+              ? "in_stock"
+              : (p.stockStatus || (p.stock > 0 ? "in_stock" : "out_of_stock")),
+            trackInventory: p.manage_stock !== 0 && p.enable_stock !== 0,
+            manageStock: p.manage_stock ?? 1,
+            lowStockThreshold: p.low_stock_threshold ?? 5,
             badges,
             published: p.published !== undefined ? !!p.published : true,
             createdAt: p.createdAt || new Date().toISOString(),

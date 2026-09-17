@@ -34,7 +34,9 @@ import {
   Trash2,
   RefreshCw,
   AlertCircle,
+  AlertTriangle,
 } from 'lucide-react';
+import { isProductOutOfStock, isProductLowStock } from '../../lib/inventory';
 import { validateImageFile } from '../../lib/uploadValidation';
 import { optimizeImageFile } from '../../lib/imageOptimizer';
 import { Product, WeightOption, AddOn, FlavourOption } from '../../lib/types';
@@ -113,6 +115,8 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 }) => {
   const { addToCart, setIsCartOpen } = useCart();
   const { isInWishlist, toggleWishlist } = useWishlist();
+  const isOutOfStock = isProductOutOfStock(product);
+  const isLowStock = isProductLowStock(product);
   const isWishlisted = product ? isInWishlist(product.id) : false;
 
   const weightOptionsList: WeightOption[] = React.useMemo(() => {
@@ -302,8 +306,11 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   const giftWrapPrice = giftWrap ? 149 : 0;
   const itemUnitPrice = selectedWeight.price + selectedFlavourPrice + addOnsTotal + deliveryCharge + giftWrapPrice;
 
-  // Maximum order quantity: bounded by available inventory
-  const qtyMax = Math.max(1, Math.min(10, product.stock ?? 10));
+  // Maximum order quantity: bounded by available inventory if tracking is enabled
+  const tracking = product?.trackInventory ?? (product?.manageStock !== undefined ? Boolean(product.manageStock) : ((product as any)?.manage_stock !== undefined ? Boolean((product as any)?.manage_stock) : true));
+  const qtyMax = tracking
+    ? Math.max(1, Math.min(10, typeof product?.stock === "number" ? product.stock : 10))
+    : 10;
 
   // Feature toggles for customization, design upload, and celebration add-ons
   const isCustomizationAllowed = product.showCustomization !== false && product.showCustomize !== false;
@@ -371,6 +378,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   };
 
   const handleAddToCart = () => {
+    if (isOutOfStock) return;
     addToCart(
       product,
       selectedWeight,
@@ -388,6 +396,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   };
 
   const handleBuyNow = () => {
+    if (isOutOfStock) return;
     addToCart(
       product,
       selectedWeight,
@@ -669,10 +678,24 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   ) : (
                     product.showRatings !== false && <span className="text-xs text-[var(--text-subtle)]">No ratings yet</span>
                   )}
-                  <span className="text-xs text-[var(--success)] font-bold bg-[var(--success-light)] px-2 py-0.5 rounded-full flex items-center gap-1">
-                    <BadgeCheck className="w-3 h-3" />
-                    In Stock ({product.stock} left)
-                  </span>
+                  {isOutOfStock ? (
+                    <span className="text-xs text-rose-600 font-bold bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/40 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                      <X className="w-3 h-3" />
+                      Out of Stock
+                    </span>
+                  ) : isLowStock ? (
+                    <span className="text-xs text-amber-600 font-bold bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/40 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3" />
+                      Low Stock (Only {product.stock} left!)
+                    </span>
+                  ) : (
+                    <span className="text-xs text-[var(--success)] font-bold bg-[var(--success-light)] px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                      <BadgeCheck className="w-3 h-3" />
+                      {product.trackInventory === false || (product as any).manageStock === 0 || (product as any).manage_stock === 0
+                        ? "In Stock"
+                        : `In Stock (${product.stock} left)`}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
@@ -1484,10 +1507,17 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <button
                 type="button"
+                disabled={isOutOfStock}
                 onClick={handleAddToCart}
-                className="py-3.5 px-4 rounded-xl border-2 border-[var(--primary)] text-[var(--primary)] hover:bg-[var(--primary-light)] text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer"
+                className={`py-3.5 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                  isOutOfStock
+                    ? "border-2 border-stone-300 dark:border-stone-800 bg-stone-100 dark:bg-stone-900 text-stone-400 dark:text-stone-600 cursor-not-allowed"
+                    : "border-2 border-[var(--primary)] text-[var(--primary)] hover:bg-[var(--primary-light)] cursor-pointer"
+                }`}
               >
-                {isAdded ? (
+                {isOutOfStock ? (
+                  <span>Out of Stock</span>
+                ) : isAdded ? (
                   <>
                     <Check className="w-4 h-4" />
                     <span>Added to Cart ✓</span>
@@ -1502,11 +1532,22 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 
               <button
                 type="button"
+                disabled={isOutOfStock}
                 onClick={handleBuyNow}
-                className="py-3.5 px-4 rounded-xl bg-gradient-to-r from-[var(--primary)] to-[var(--primary-hover)] hover:brightness-110 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all cursor-pointer"
+                className={`py-3.5 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-lg transition-all ${
+                  isOutOfStock
+                    ? "bg-stone-300 dark:bg-stone-800 text-stone-500 dark:text-stone-600 cursor-not-allowed shadow-none"
+                    : "bg-gradient-to-r from-[var(--primary)] to-[var(--primary-hover)] hover:brightness-110 text-white active:scale-95 cursor-pointer"
+                }`}
               >
-                <Zap className="w-4 h-4" />
-                <span>Buy Now - ₹{itemUnitPrice * quantity}</span>
+                {isOutOfStock ? (
+                  <span>Unavailable</span>
+                ) : (
+                  <>
+                    <Zap className="w-4 h-4" />
+                    <span>Buy Now - ₹{itemUnitPrice * quantity}</span>
+                  </>
+                )}
               </button>
             </div>
 

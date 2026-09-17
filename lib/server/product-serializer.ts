@@ -209,8 +209,13 @@ export function serializeProduct(row: any) {
     regularPrice: row.regular_price,
     salePrice: row.sale_price,
     price: row.sale_price ?? row.regular_price,
-    stock: row.stock,
-    stockStatus: row.stock_status,
+    stock: row.stock ?? 0,
+    stockStatus: (row.manage_stock === 0 || row.enable_stock === 0)
+      ? "in_stock"
+      : (row.stock_status || (row.stock <= 0 ? "out_of_stock" : (row.stock <= (row.low_stock_threshold ?? 5) ? "low_stock" : "in_stock"))),
+    trackInventory: row.manage_stock !== 0 && row.enable_stock !== 0,
+    manageStock: row.manage_stock !== 0 && row.enable_stock !== 0,
+    lowStockThreshold: row.low_stock_threshold ?? 5,
     weightOptions: jsonParseSafe(row.variations_json, []),
     images: (() => {
       const arr = jsonParseSafe(row.images_json, []).map((u: any) => {

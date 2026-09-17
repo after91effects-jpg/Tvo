@@ -48,7 +48,9 @@ import {
   Leaf,
   Film,
   ArrowLeft,
+  Package,
 } from 'lucide-react';
+import { computeStockStatus, isProductOutOfStock, isProductLowStock, validateInventoryInput } from '../../lib/inventory';
 import { Product, WeightOption, FlavourOption, DuplicateStrategy, ImportSummary, DietaryAttribute, DEFAULT_DIETARY_ATTRIBUTES, ProductImage, ProductVideo } from '../../lib/types';
 import { logAuditEvent } from '../../lib/audit';
 import { useAuth } from '../../context/AuthContext';
@@ -96,6 +98,7 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedDietary, setSelectedDietary] = useState('all');
+  const [selectedStockFilter, setSelectedStockFilter] = useState<'all' | 'in_stock' | 'low_stock' | 'out_of_stock' | 'not_tracked'>('all');
 
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
@@ -124,7 +127,9 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
   const [formEggless, setFormEggless] = useState(true);
   const [formPrice, setFormPrice] = useState('699');
   const [formMrp, setFormMrp] = useState('849');
+  const [formTrackInventory, setFormTrackInventory] = useState(true);
   const [formStock, setFormStock] = useState('30');
+  const [formLowStockThreshold, setFormLowStockThreshold] = useState('5');
   const [formFlavours, setFormFlavours] = useState('Dark Chocolate, Truffle');
   const [formTags, setFormTags] = useState('Bestseller, Birthday, Chocolate');
   const [formBadges, setFormBadges] = useState('Bestseller, Eggless');
@@ -685,7 +690,9 @@ images_json: (formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
     setFormEggless(true);
     setFormPrice('699');
     setFormMrp('849');
+    setFormTrackInventory(true);
     setFormStock('25');
+    setFormLowStockThreshold('5');
     setFormFlavours('Belgian Dark Chocolate, Hazelnut Truffle');
     setFormTags('Bestseller, Truffle, Birthday');
     setFormBadges('Bestseller, Eggless');
@@ -752,7 +759,9 @@ images_json: (formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
     setFormEggless(prod.eggless);
     setFormPrice(prod.weightOptions?.[0]?.price?.toString() || '699');
     setFormMrp(prod.weightOptions?.[0]?.mrp?.toString() || '849');
+    setFormTrackInventory(prod.trackInventory ?? (prod.manageStock !== undefined ? Boolean(prod.manageStock) : ((prod as any).manage_stock !== undefined ? Boolean((prod as any).manage_stock) : true)));
     setFormStock(prod.stock?.toString() || '25');
+    setFormLowStockThreshold(prod.lowStockThreshold?.toString() || (prod as any).low_stock_threshold?.toString() || '5');
     setFormFlavours(prod.flavours?.join(', ') || '');
     setFormTags(prod.tags?.join(', ') || '');
     setFormBadges(prod.badges?.join(', ') || '');
@@ -852,11 +861,19 @@ images_json: (formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
       const parsedStock = parseInt(formStock, 10);
       const priceNum = Number.isFinite(parsedPrice) ? Math.max(0, parsedPrice) : 699;
       const mrpNum = Number.isFinite(parsedMrp) ? Math.max(0, parsedMrp) : Math.round(priceNum * 1.2);
-      const stockNum = Number.isFinite(parsedStock) ? Math.max(0, parsedStock) : 20;
+      const invValidation = validateInventoryInput(formStock, formLowStockThreshold, formTrackInventory);
+      if (!invValidation.valid) {
+        setErrorMessage(invValidation.error || "Invalid inventory configuration");
+        setIsSaving(false);
+        return;
+      }
+      const stockNum = invValidation.quantity;
+      const thresholdNum = invValidation.threshold;
+      const derivedStockStatus = computeStockStatus(stockNum, thresholdNum, formTrackInventory);
 
       if (formSellingUnitType === 'custom' && !formCustomSellingUnit.trim()) {
         setErrorMessage('Custom selling unit cannot be empty');
-        setIsSubmitting(false);
+        setIsSaving(false);
         return;
       }
       const isWeight = isWeightSellingUnit(formSellingUnitType === 'custom' ? formCustomSellingUnit : formSellingUnitValue);
@@ -934,7 +951,10 @@ images_json: (formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
         rating: editingProduct?.rating ?? 0,
         reviewCount: editingProduct?.reviewCount ?? 0,
         stock: stockNum,
-        stockStatus: stockNum > 0 ? 'in_stock' : 'out_of_stock',
+        stockStatus: derivedStockStatus,
+        trackInventory: formTrackInventory,
+        manageStock: formTrackInventory ? 1 : 0,
+        lowStockThreshold: thresholdNum,
         badges: formBadges.split(',').map((s) => s.trim()).filter(Boolean),
         published: formPublished,
         seoTitle: `${formName.trim()} | TVO Flavours Bakery`,
@@ -957,7 +977,14 @@ images_json: (formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
             regular_price: mrpNum,
             sale_price: priceNum,
             stock: stockNum,
-            stock_status: stockNum > 0 ? 'in_stock' : 'out_of_stock',
+            stock_status: derivedStockStatus,
+            stockStatus: derivedStockStatus,
+            trackInventory: formTrackInventory,
+            manage_stock: formTrackInventory ? 1 : 0,
+            manageStock: formTrackInventory ? 1 : 0,
+            enable_stock: formTrackInventory ? 1 : 0,
+            low_stock_threshold: thresholdNum,
+            lowStockThreshold: thresholdNum,
             published: formPublished ? 1 : 0,
             category_id: categoryIdMap[formCategory] || undefined,
             short_description: productPayload.shortDescription,
@@ -1232,6 +1259,27 @@ images_json: (formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
     }
   };
 
+  // Inventory counts for quick filtering
+  const inStockCount = products.filter((p) => {
+    const tracking = p.trackInventory ?? (p.manageStock !== undefined ? Boolean(p.manageStock) : ((p as any).manage_stock !== undefined ? Boolean((p as any).manage_stock) : true));
+    return tracking && !isProductOutOfStock(p) && !isProductLowStock(p);
+  }).length;
+
+  const lowStockCount = products.filter((p) => {
+    const tracking = p.trackInventory ?? (p.manageStock !== undefined ? Boolean(p.manageStock) : ((p as any).manage_stock !== undefined ? Boolean((p as any).manage_stock) : true));
+    return tracking && isProductLowStock(p);
+  }).length;
+
+  const outOfStockCount = products.filter((p) => {
+    const tracking = p.trackInventory ?? (p.manageStock !== undefined ? Boolean(p.manageStock) : ((p as any).manage_stock !== undefined ? Boolean((p as any).manage_stock) : true));
+    return tracking && isProductOutOfStock(p);
+  }).length;
+
+  const notTrackedCount = products.filter((p) => {
+    const tracking = p.trackInventory ?? (p.manageStock !== undefined ? Boolean(p.manageStock) : ((p as any).manage_stock !== undefined ? Boolean((p as any).manage_stock) : true));
+    return !tracking;
+  }).length;
+
   // Filtered list
   const filteredProducts = products.filter((p) => {
     const matchesSearch =
@@ -1245,7 +1293,21 @@ images_json: (formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
       (selectedDietary === 'eggless' && p.eggless) ||
       (selectedDietary === 'egg' && !p.eggless);
 
-    return matchesSearch && matchesCategory && matchesDietary;
+    let matchesStock = true;
+    if (selectedStockFilter !== 'all') {
+      const tracking = p.trackInventory ?? (p.manageStock !== undefined ? Boolean(p.manageStock) : ((p as any).manage_stock !== undefined ? Boolean((p as any).manage_stock) : true));
+      if (selectedStockFilter === 'in_stock') {
+        matchesStock = tracking && !isProductOutOfStock(p) && !isProductLowStock(p);
+      } else if (selectedStockFilter === 'low_stock') {
+        matchesStock = tracking && isProductLowStock(p);
+      } else if (selectedStockFilter === 'out_of_stock') {
+        matchesStock = tracking && isProductOutOfStock(p);
+      } else if (selectedStockFilter === 'not_tracked') {
+        matchesStock = !tracking;
+      }
+    }
+
+    return matchesSearch && matchesCategory && matchesDietary && matchesStock;
   });
 
   return (
@@ -1353,6 +1415,48 @@ images_json: (formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
           <option value="eggless">100% Eggless</option>
           <option value="egg">Contains Egg</option>
         </select>
+
+        {/* Stock Status Filter */}
+        <select
+          value={selectedStockFilter}
+          onChange={(e) => setSelectedStockFilter(e.target.value as any)}
+          className="px-3 py-2 text-xs rounded-xl border border-[var(--border)] bg-[var(--bg-subtle)] text-[var(--text-main)] focus:outline-none font-medium"
+        >
+          <option value="all">All Stock Status ({products.length})</option>
+          <option value="in_stock">In Stock ({inStockCount})</option>
+          <option value="low_stock">Low Stock ({lowStockCount})</option>
+          <option value="out_of_stock">Out of Stock ({outOfStockCount})</option>
+          <option value="not_tracked">Not Tracked ({notTrackedCount})</option>
+        </select>
+      </div>
+
+      {/* Quick Stock Filter Pills */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
+        {[
+          { key: "all", label: "All Products", count: products.length },
+          { key: "in_stock", label: "In Stock", count: inStockCount },
+          { key: "low_stock", label: "Low Stock", count: lowStockCount },
+          { key: "out_of_stock", label: "Out of Stock", count: outOfStockCount },
+          { key: "not_tracked", label: "Not Tracked", count: notTrackedCount },
+        ].map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => setSelectedStockFilter(tab.key as any)}
+            className={`px-3 py-1.5 rounded-xl border font-semibold flex items-center gap-1.5 transition-all whitespace-nowrap cursor-pointer ${
+              selectedStockFilter === tab.key
+                ? "bg-[var(--primary)] text-white border-[var(--primary)] shadow-xs"
+                : "bg-[var(--bg-surface)] text-[var(--text-muted)] hover:text-[var(--text-main)] border-[var(--border)]"
+            }`}
+          >
+            <span>{tab.label}</span>
+            <span className={`px-1.5 py-0.5 text-[10px] rounded-full font-mono ${
+              selectedStockFilter === tab.key ? "bg-white/20 text-white" : "bg-[var(--bg-subtle)] text-[var(--text-subtle)]"
+            }`}>
+              {tab.count}
+            </span>
+          </button>
+        ))}
       </div>
 
       {/* Products Table */}
@@ -1443,17 +1547,41 @@ images_json: (formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
 
                     {/* Stock */}
                     <td className="py-3.5 px-4">
-                      <span
-                        className={`inline-block px-2 py-0.5 rounded-md text-[11px] font-semibold ${
-                          prod.stock > 10
-                            ? 'text-[var(--text-main)] bg-[var(--bg-subtle)]'
-                            : prod.stock > 0
-                            ? 'text-amber-600 bg-amber-500/10'
-                            : 'text-[var(--danger)] bg-[var(--danger-light)]'
-                        }`}
-                      >
-                        {prod.stock} {getSellingUnitLabel(prod.sellingUnit)} in stock
-                      </span>
+                      {(() => {
+                        const tracking = prod.trackInventory ?? (prod.manageStock !== undefined ? Boolean(prod.manageStock) : ((prod as any).manage_stock !== undefined ? Boolean((prod as any).manage_stock) : true));
+                        const unitLabel = getSellingUnitLabel(prod.sellingUnit);
+                        if (!tracking) {
+                          return (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold text-stone-500 bg-stone-100 dark:bg-stone-900 border border-stone-200 dark:border-stone-800">
+                              Not Tracked
+                            </span>
+                          );
+                        }
+                        const outOfStock = isProductOutOfStock(prod);
+                        const lowStock = isProductLowStock(prod);
+                        if (outOfStock) {
+                          return (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold text-rose-600 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/40">
+                              <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                              Out of Stock
+                            </span>
+                          );
+                        }
+                        if (lowStock) {
+                          return (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold text-amber-600 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/40">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                              Low Stock ({prod.stock} {unitLabel} left)
+                            </span>
+                          );
+                        }
+                        return (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/40">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                            {prod.stock} {unitLabel} in stock
+                          </span>
+                        );
+                      })()}
                     </td>
 
                     {/* Published */}

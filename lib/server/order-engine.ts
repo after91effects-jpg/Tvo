@@ -172,15 +172,18 @@ export function extractPieceCount(labelOrWeight?: string | null): number {
 function buildLineItems(items: any[]): Array<{ it: any; prod: any; unit: number; option: any; addedAddonTotal: number; validatedAddons: any[]; flavourPrice: number }> {
   return items.map((it) => {
     if (!it || !it.productId) throw new OrderInputError('Product not found');
-    const prod = db.prepare('SELECT id, name, sku, stock, stock_status, selling_unit, low_stock_threshold, sale_price, regular_price, variations_json, category_id, flavour_options_json, flavours, same_day_eligible FROM products WHERE id=?').get(it.productId) as any;
+    const prod = db.prepare('SELECT id, name, sku, stock, stock_status, selling_unit, low_stock_threshold, manage_stock, enable_stock, sale_price, regular_price, variations_json, category_id, flavour_options_json, flavours, same_day_eligible FROM products WHERE id=?').get(it.productId) as any;
     if (!prod) throw new OrderInputError('Product not found');
     const qty = it.qty;
     // quantity must be a positive integer
     if (typeof qty !== 'number' || !Number.isFinite(qty) || !Number.isInteger(qty) || qty < 1) {
       throw new OrderInputError(`Invalid quantity for ${prod.name}. Quantity must be a positive whole number.`);
     }
-    if (prod.stock_status === 'out_of_stock' || prod.stock <= 0) {
-      throw new OrderInputError(`${prod.name} is currently out of stock`);
+    const manageStock = prod.manage_stock !== 0 && prod.enable_stock !== 0;
+    if (manageStock) {
+      if (prod.stock_status === 'out_of_stock' || prod.stock <= 0) {
+        throw new OrderInputError(`${prod.name} is currently out of stock`);
+      }
     }
     const { unit, option } = resolveVariation(prod, it.weight);
     if (unit < 0) {
@@ -189,8 +192,12 @@ function buildLineItems(items: any[]): Array<{ it: any; prod: any; unit: number;
     const isPiece = isPieceOrDiscreteUnit(prod.selling_unit);
     const pieceMultiplier = isPiece ? extractPieceCount(it.weight || option?.label || option?.value) : 1;
     const unitsNeeded = qty * pieceMultiplier;
-    if (prod.stock < unitsNeeded) {
-      throw new OrderInputError(`Only ${prod.stock} ${isPiece ? 'pieces' : 'left'} in stock for ${prod.name}`);
+    if (manageStock) {
+      const optionStock = (option && typeof option.stock === 'number') ? option.stock : null;
+      const effectiveStock = optionStock !== null ? optionStock : prod.stock;
+      if (effectiveStock < unitsNeeded) {
+        throw new OrderInputError(`Only ${effectiveStock} ${isPiece ? 'pieces' : 'left'} in stock for ${prod.name}`);
+      }
     }
     const addons = Array.isArray(it.addons) ? it.addons : [];
     let addedAddonTotal = 0;
@@ -451,6 +458,11 @@ export function createOrder({ items, body, customerId, generateOrderNumber }: Cr
 
     // 9. Reserve stock atomically (oversell protection with SQL AND stock >= ?)
     for (const line of lines) {
+      const manageStock = line.prod.manage_stock !== 0 && line.prod.enable_stock !== 0;
+      if (!manageStock) {
+        // Untracked inventory products do not deduct or block orders
+        continue;
+      }
       const isPiece = isPieceOrDiscreteUnit(line.prod.selling_unit);
       const pieceMultiplier = isPiece ? extractPieceCount(line.it.weight || line.option?.label || line.option?.value) : 1;
       const deductQty = line.it.qty * pieceMultiplier;

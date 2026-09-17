@@ -167,6 +167,9 @@ export interface Product {
   reviewCount: number;
   stock: number;
   stockStatus: 'in_stock' | 'out_of_stock' | 'low_stock';
+  trackInventory?: boolean;
+  manageStock?: boolean | number;
+  lowStockThreshold?: number;
   badges: string[]; // e.g. ["Bestseller", "Eggless", "Chef's Special", "New"]
   published: boolean;
   bestseller?: boolean;

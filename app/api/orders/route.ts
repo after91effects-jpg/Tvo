@@ -146,7 +146,9 @@ export async function PUT(req: Request) {
       for (const it of lineItems) {
         if (!it || !it.productId) continue;
         const qty = Number(it.qty) || 1;
-        const prod = db.prepare('SELECT selling_unit FROM products WHERE id=?').get(it.productId) as any;
+        const prod = db.prepare('SELECT selling_unit, manage_stock, enable_stock FROM products WHERE id=?').get(it.productId) as any;
+        const manageStock = prod ? (prod.manage_stock !== 0 && prod.enable_stock !== 0) : true;
+        if (!manageStock) continue; // Skip restock for untracked inventory
         const isPiece = isPieceOrDiscreteUnit(it.sellingUnit || prod?.selling_unit);
         const pieceMultiplier = isPiece ? extractPieceCount(it.weight) : 1;
         const restockQty = qty * pieceMultiplier;

@@ -35,5 +35,27 @@ export async function POST(req: Request) {
     }
     return ok({ ok: true });
   }
-  return err('Unknown action');
+  if (action === "validate") {
+    const items = Array.isArray(body.items) ? body.items : [];
+    const issues = [];
+    for (const it of items) {
+      if (!it || !it.productId) continue;
+      const prod = db.prepare("SELECT id, name, stock, stock_status, manage_stock, enable_stock, selling_unit FROM products WHERE id=?").get(it.productId) as any;
+      if (!prod) {
+        issues.push({ productId: it.productId, name: it.name || "Product", requestedQty: it.quantity || 1, availableStock: 0, message: `${it.name || "Product"} is no longer available.` });
+        continue;
+      }
+      const manageStock = prod.manage_stock !== 0 && prod.enable_stock !== 0;
+      if (!manageStock) continue;
+      const requestedQty = Number(it.quantity) || 1;
+      if (prod.stock_status === "out_of_stock" || prod.stock <= 0) {
+        issues.push({ productId: prod.id, name: prod.name, requestedQty, availableStock: 0, message: `${prod.name} is currently out of stock.` });
+      } else if (requestedQty > prod.stock) {
+        issues.push({ productId: prod.id, name: prod.name, requestedQty, availableStock: prod.stock, message: `Only ${prod.stock} left in stock for ${prod.name}.` });
+      }
+    }
+    return ok({ valid: issues.length === 0, issues });
+  }
+
+  return err("Unknown action");
 }

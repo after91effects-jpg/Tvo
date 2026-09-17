@@ -256,7 +256,7 @@ describe("PHASE 12B Final End-to-End Customer Purchase Flow", () => {
     expect(item.customInstructions).toContain("less cream");
     expect(item.customDesignImage).toBe("/uploads/custom-designs/design_1789639790426_44db6ad40fa5.webp");
     expect(item.customDesignDescription).toBe("Tiered floral piped border reference");
-    expect(item.addons.length).toBe(2);
-    expect(item.addons[0].name).toBe("Musical Rotating Candle");
+    expect(item.addons?.length).toBe(2);
+    expect(item.addons?.[0].name).toBe("Musical Rotating Candle");
   });
 });

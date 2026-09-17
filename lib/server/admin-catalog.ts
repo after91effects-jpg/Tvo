@@ -10,9 +10,12 @@ import { parseDietaryAttributes, parseVideos } from './product-serializer';
 // ============================================================================
 export function serializeAdminProduct(row: any) {
   if (!row) return null;
+  const manageStock = row.manage_stock !== 0 && row.enable_stock !== 0;
   const stock = row.stock ?? 0;
   const threshold = row.low_stock_threshold ?? 5;
-  const stockStatus = row.stock_status || (stock <= 0 ? 'out_of_stock' : (stock <= threshold ? 'low_stock' : 'in_stock'));
+  const stockStatus = !manageStock
+    ? 'in_stock'
+    : (row.stock_status || (stock <= 0 ? 'out_of_stock' : (stock <= threshold ? 'low_stock' : 'in_stock')));
   let variantCount = 0;
   let activeVariantCount = 0;
   let lowStockIndicator = false;
@@ -23,11 +26,16 @@ export function serializeAdminProduct(row: any) {
       const vs = getVariantStockStatus(row.id);
       lowStockIndicator = vs !== 'in_stock';
     } else {
-      lowStockIndicator = stockStatus !== 'in_stock';
+      lowStockIndicator = manageStock && (stockStatus !== 'in_stock');
     }
-  } catch { variantCount = 0; activeVariantCount = 0; lowStockIndicator = stockStatus !== 'in_stock'; }
+  } catch { variantCount = 0; activeVariantCount = 0; lowStockIndicator = manageStock && (stockStatus !== 'in_stock'); }
   return {
     ...row,
+    manageStock: manageStock ? 1 : 0,
+    manage_stock: manageStock ? 1 : 0,
+    trackInventory: manageStock,
+    lowStockThreshold: threshold,
+    low_stock_threshold: threshold,
     id: String(row.id),
     images: (() => {
       const parsed = jsonParseSafe(row.images_json, []);
@@ -420,11 +428,24 @@ function buildProductPayload(body: any, existing: any, user: any) {
   if (body.allow_custom_design !== undefined) {
     payload.allow_custom_design = body.allow_custom_design ? 1 : 0;
   }
+  // Inventory tracking (manage_stock)
+  if (body.trackInventory !== undefined || body.manage_stock !== undefined || body.manageStock !== undefined) {
+    const track = body.trackInventory !== undefined
+      ? Boolean(body.trackInventory)
+      : (body.manageStock !== undefined ? Boolean(body.manageStock) : Boolean(body.manage_stock));
+    payload.manage_stock = track ? 1 : 0;
+    payload.enable_stock = track ? 1 : 0;
+  }
+
   if (body.stock !== undefined) {
     const newStock = toStock(body.stock);
     const oldStock = existing?.stock ?? 0;
     payload.stock = newStock;
-    const derivedStatus = newStock <= 0 ? 'out_of_stock' : (existing?.low_stock_threshold && newStock <= existing.low_stock_threshold ? 'low_stock' : 'in_stock');
+    const threshold = payload.low_stock_threshold ?? existing?.low_stock_threshold ?? 5;
+    const track = payload.manage_stock !== undefined ? payload.manage_stock === 1 : (existing ? (existing.manage_stock !== 0 && existing.enable_stock !== 0) : true);
+    const derivedStatus = !track
+      ? 'in_stock'
+      : (newStock <= 0 ? 'out_of_stock' : (newStock <= threshold ? 'low_stock' : 'in_stock'));
     payload.stock_status = body.stock_status || derivedStatus;
     if (existing && newStock !== oldStock && user) {
       db.prepare(`INSERT INTO stock_history (product_id, change_amount, type, note, user_id, user_name) VALUES (?,?,?,?,?,?)`)
@@ -506,7 +527,7 @@ export function quickEdit(body: any, user: any) {
   const existing = db.prepare('SELECT * FROM products WHERE id=?').get(id) as any;
   if (!existing) throw new Error('Product not found');
   // Only allow safe fields through quick edit.
-  const safe = ['name', 'sku', 'regular_price', 'sale_price', 'stock', 'category_id', 'brand_id', 'status', 'published', 'featured', 'stock_status', 'product_type', 'selling_unit'];
+  const safe = ['name', 'sku', 'regular_price', 'sale_price', 'stock', 'low_stock_threshold', 'manage_stock', 'category_id', 'brand_id', 'status', 'published', 'featured', 'stock_status', 'product_type', 'selling_unit'];
   const payload: any = {};
   const allow = safe.filter((k) => body[k] !== undefined);
   // Validate sku uniqueness if changing

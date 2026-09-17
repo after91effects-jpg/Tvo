@@ -1,5 +1,6 @@
 'use client';
 import { getSellingUnitLabel, isPieceOrDiscreteUnit } from '../../lib/sellingUnit';
+import { isProductOutOfStock, isProductLowStock } from '../../lib/inventory';
 
 import React, { useState } from 'react';
 import { ShoppingBag, Star, Check, Sparkles, Flame, Eye, Heart, Zap } from 'lucide-react';
@@ -30,7 +31,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onViewProduct
   const [isAdding, setIsAdding] = useState(false);
   const [isBuying, setIsBuying] = useState(false);
 
-  const isOutOfStock = product.stockStatus === 'out_of_stock' || (typeof product.stock === 'number' && product.stock <= 0);
+  const isOutOfStock = isProductOutOfStock(product);
+  const isLowStock = isProductLowStock(product);
 
   const handleQuickAdd = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -128,6 +130,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onViewProduct
               {badge}
             </span>
           ))}
+          {isLowStock && !isOutOfStock && (
+            <span className="px-1.5 sm:px-2 py-0.5 rounded-md bg-amber-500 text-white text-[9px] sm:text-[10px] font-bold tracking-wide shadow-xs flex items-center gap-1">
+              <span>Only {product.stock} left</span>
+            </span>
+          )}
           {product.showBadges !== false && product.eggless && (
             <span className="px-1.5 sm:px-2 py-0.5 rounded-md bg-[var(--success-light)] text-[var(--success)] border border-[var(--success)]/20 text-[9px] sm:text-[10px] font-bold flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-[var(--success)]" />
