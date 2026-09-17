@@ -1,4 +1,5 @@
 'use client';
+import { getSellingUnitLabel, isPieceOrDiscreteUnit } from '../../lib/sellingUnit';
 
 import React, { useState, useMemo, useEffect } from 'react';
 import {
@@ -419,7 +420,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           sku: item.product?.sku || item.sku || '',
           qty: item.quantity,
           price: item.selectedWeight?.price || item.unitPrice || 699,
-          weight: item.selectedWeight?.label || (item.product?.sellingUnit === 'piece' ? '1 piece' : '0.5 kg'),
+          weight: item.selectedWeight?.label || (isPieceOrDiscreteUnit(item.product?.sellingUnit) ? '1 piece' : '0.5 kg'),
           flavour: item.selectedFlavour || 'Original',
           flavourPrice: item.flavourPrice || 0,
           messageOnCake: item.messageOnCake || null,
@@ -430,7 +431,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           unitPrice: item.selectedWeight?.price || item.unitPrice || 699,
           totalPrice: (item.selectedWeight?.price || item.unitPrice || 699) * item.quantity,
           imageUrl: item.product?.images?.[0]?.mediumUrl || item.product?.images?.[0]?.url || item.imageUrl || '',
-          sellingUnit: item.product?.sellingUnit || 'weight',
+          sellingUnit: getSellingUnitLabel(item.product?.sellingUnit) || 'kg',
         })),
         subtotal,
         deliveryFee,
@@ -475,7 +476,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               customDesignImage: item.customDesignImage || '',
               customDesignDescription: item.customDesignDescription || '',
               addons: item.addons || [],
-              sellingUnit: item.sellingUnit || 'weight',
+              sellingUnit: getSellingUnitLabel(item.sellingUnit) || 'kg',
             })),
             customer: {
               name: recipientName.trim(),
@@ -1090,6 +1091,11 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                         <span>• Flavour: <strong className="text-[var(--text-main)]">{item.selectedFlavour}</strong></span>
                       )}
                       {item.flavourPrice > 0 && <span>(+₹{item.flavourPrice})</span>}
+                      {getSellingUnitLabel(item.product?.sellingUnit || item.sellingUnit) && (
+                        <span className="text-[var(--text-subtle)] font-medium">
+                          (₹{item.unitPrice || item.selectedWeight?.price} / {getSellingUnitLabel(item.product?.sellingUnit || item.sellingUnit)})
+                        </span>
+                      )}
                     </div>
 
                     {item.messageOnCake && (

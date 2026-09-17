@@ -1,4 +1,5 @@
 'use client';
+import { getSellingUnitLabel } from '../../lib/sellingUnit';
 
 import React, { useState } from 'react';
 import { X, ShoppingBag, Plus, Minus, Trash2, Tag, ArrowRight, Sparkles, Check } from 'lucide-react';
@@ -216,6 +217,11 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                         {item.product.eggless && (
                           <span className="text-[var(--success)] font-medium flex items-center gap-0.5">
                             • Eggless
+                          </span>
+                        )}
+                        {item.product.sellingUnit && (
+                          <span className="bg-[var(--bg-subtle)] px-1.5 py-0.5 rounded text-[10px] text-[var(--text-muted)] font-medium">
+                            Unit: {getSellingUnitLabel(item.product.sellingUnit)}
                           </span>
                         )}
                       </div>

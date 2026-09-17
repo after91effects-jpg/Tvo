@@ -967,6 +967,9 @@ export const CustomerOrdersView: React.FC<CustomerOrdersViewProps> = ({ orders, 
                       <div className="font-bold text-xs text-[var(--text-main)]">{item.name}</div>
                       <div className="text-[11px] text-[var(--text-muted)] mt-0.5">
                         Weight: {item.weight} • Flavour: {item.flavour} • Qty: {item.qty}
+                        {item.sellingUnit && (
+                          <span> • Unit: <strong className="text-[var(--text-main)] font-semibold">{typeof item.sellingUnit === 'object' ? (item.sellingUnit as any).value : item.sellingUnit}</strong></span>
+                        )}
                       </div>
 
                       {item.messageOnCake && (

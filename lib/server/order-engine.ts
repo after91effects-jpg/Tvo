@@ -1,3 +1,4 @@
+import { getSellingUnitLabel, isPieceOrDiscreteUnit } from '../sellingUnit';
 import { db } from './db';
 
 export class OrderInputError extends Error {}
@@ -185,7 +186,7 @@ function buildLineItems(items: any[]): Array<{ it: any; prod: any; unit: number;
     if (unit < 0) {
       throw new OrderInputError(`Invalid or unavailable size/option selected for ${prod.name}`);
     }
-    const isPiece = prod.selling_unit === 'piece';
+    const isPiece = isPieceOrDiscreteUnit(prod.selling_unit);
     const pieceMultiplier = isPiece ? extractPieceCount(it.weight || option?.label || option?.value) : 1;
     const unitsNeeded = qty * pieceMultiplier;
     if (prod.stock < unitsNeeded) {
@@ -423,7 +424,7 @@ export function createOrder({ items, body, customerId, generateOrderNumber }: Cr
         addonTotal: addedAddonTotal,
         totalPrice: (unit + flavourPrice + addedAddonTotal) * it.qty,
         imageUrl: it.imageUrl || null,
-        sellingUnit: prod?.selling_unit || 'weight',
+        sellingUnit: it.sellingUnit ? getSellingUnitLabel(it.sellingUnit) : (prod?.selling_unit ? getSellingUnitLabel(prod.selling_unit) : 'kg'),
       };
     }));
 
@@ -450,7 +451,7 @@ export function createOrder({ items, body, customerId, generateOrderNumber }: Cr
 
     // 9. Reserve stock atomically (oversell protection with SQL AND stock >= ?)
     for (const line of lines) {
-      const isPiece = line.prod.selling_unit === 'piece';
+      const isPiece = isPieceOrDiscreteUnit(line.prod.selling_unit);
       const pieceMultiplier = isPiece ? extractPieceCount(line.it.weight || line.option?.label || line.option?.value) : 1;
       const deductQty = line.it.qty * pieceMultiplier;
       const r = db.prepare(

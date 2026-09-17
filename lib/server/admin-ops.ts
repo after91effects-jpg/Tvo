@@ -1,3 +1,4 @@
+import { isPieceOrDiscreteUnit } from '../sellingUnit';
 import { logAudit, slugify, jsonParseSafe } from './api';
 import { db } from './db';
 import { hashPassword } from './auth';
@@ -175,7 +176,7 @@ export function cancelOrder(user: User, id: number, reason?: string) {
     run('INSERT INTO order_notes (order_id, author_id, author_name, body, is_internal) VALUES (?,?,?,?,?)', id, user?.id ?? null, user?.name ?? 'admin', `Order cancelled. ${reason || ''}`.trim(), 1);
     for (const it of jsonParseSafe(order.items, [])) {
       const prod = one<Row>('SELECT selling_unit, low_stock_threshold FROM products WHERE id=?', it.productId);
-      const isPiece = (it.sellingUnit || prod?.selling_unit) === 'piece';
+      const isPiece = isPieceOrDiscreteUnit(it.sellingUnit || prod?.selling_unit);
       const pieceMultiplier = isPiece ? extractPieceCount(it.weight) : 1;
       const restockQty = (Number(it.qty) || 0) * pieceMultiplier;
       run(

@@ -1,4 +1,5 @@
 'use client';
+import { getSellingUnitLabel, isPieceOrDiscreteUnit } from '../../lib/sellingUnit';
 
 import React, { useState } from 'react';
 import { ShoppingBag, Star, Check, Sparkles, Flame, Eye, Heart, Zap } from 'lucide-react';
@@ -22,7 +23,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onViewProduct
   const [justToggled, setJustToggled] = useState(false);
 
   const [selectedWeight, setSelectedWeight] = useState<WeightOption>(
-    product.weightOptions?.[0] || (product.sellingUnit === 'piece'
+    product.weightOptions?.[0] || (isPieceOrDiscreteUnit(product.sellingUnit)
       ? { label: '1 piece', weightKg: 0, price: product.price || 699, mrp: product.regularPrice || 0 }
       : { label: '0.5 kg', weightKg: 0.5, price: product.price || 699, mrp: product.regularPrice || 849 })
   );
@@ -206,7 +207,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onViewProduct
                       : 'bg-[var(--bg-subtle)] text-[var(--text-muted)] border-[var(--border)] hover:text-[var(--text-main)]'
                   }`}
                 >
-                  {product.sellingUnit === 'piece' ? w.label : `${w.weightKg} kg`}
+                  {isPieceOrDiscreteUnit(product.sellingUnit) ? w.label : (w.weightKg ? `${w.weightKg} kg` : w.label)}
                 </button>
               ))}
             </div>
@@ -220,6 +221,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onViewProduct
               <span className="text-sm sm:text-base md:text-lg font-bold text-[var(--text-main)] font-display">
                 ₹{selectedWeight.price}
               </span>
+              {getSellingUnitLabel(product.sellingUnit) && (
+                <span className="text-[11px] sm:text-xs font-normal text-[var(--text-muted)] font-sans">
+                  / {getSellingUnitLabel(product.sellingUnit)}
+                </span>
+              )}
               {selectedWeight.mrp && selectedWeight.mrp > selectedWeight.price && (
                 <span className="text-[9px] sm:text-xs text-[var(--text-subtle)] line-through">
                   ₹{selectedWeight.mrp}

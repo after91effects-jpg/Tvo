@@ -1,4 +1,5 @@
 'use client';
+import { normalizeSellingUnit, isPieceOrDiscreteUnit } from '../../../lib/sellingUnit';
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
@@ -90,7 +91,7 @@ export default function ProductPage() {
           const basePrice = Number(p.price ?? p.salePrice ?? p.regularPrice ?? 0);
           const baseMrp = Number(p.regularPrice ?? p.regular_price ?? (basePrice || 0));
           const badges = Array.isArray(p.badges) ? p.badges : [];
-          const isPiece = p.sellingUnit === 'piece';
+          const isPiece = isPieceOrDiscreteUnit(p.sellingUnit);
           const normalized: Product = {
             id: p.id || p.slug,
             slug: p.slug,
@@ -105,7 +106,7 @@ export default function ProductPage() {
             tags,
             flavours: flavours.length ? flavours : flavourOptionsArr.map((fo: any) => fo.name),
             eggless: !!p.eggless,
-            sellingUnit: p.sellingUnit || 'weight',
+            sellingUnit: normalizeSellingUnit(p.sellingUnit),
             weightOptions: weightOptionsArr.length ? weightOptionsArr.map((w: any) => ({
               label: w.label || w.value || `${w.weightKg || 0.5} kg`,
               weightKg: isPiece

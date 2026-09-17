@@ -1,3 +1,4 @@
+import type { StructuredSellingUnit } from './sellingUnit';
 export type DuplicateStrategy = 'skip' | 'update' | 'create_new' | 'overwrite';
 
 export interface ImportSummary {
@@ -151,7 +152,7 @@ export interface Product {
   flavours: string[];
   flavourOptions?: FlavourOption[];
   eggless: boolean;
-  sellingUnit?: 'piece' | 'weight';
+  sellingUnit?: StructuredSellingUnit | string;
   weightOptions: WeightOption[];
   images: ProductImage[];
   videos?: ProductVideo[];
@@ -293,7 +294,7 @@ export interface Order {
     unitPrice: number;
     totalPrice: number;
     imageUrl?: string;
-    sellingUnit?: 'piece' | 'weight';
+    sellingUnit?: StructuredSellingUnit | string;
   }[];
   subtotal: number;
   deliveryFee: number;

@@ -1,3 +1,4 @@
+import { isPieceOrDiscreteUnit } from '../../../lib/sellingUnit';
 import { ok, err, db, generateOrderNumber, jsonParseSafe, getCurrentUser, logAudit } from '../../../lib/server/api';
 import { createOrder, OrderInputError, extractPieceCount } from '../../../lib/server/order-engine';
 import { logError } from '../../../lib/server/logger';
@@ -146,7 +147,7 @@ export async function PUT(req: Request) {
         if (!it || !it.productId) continue;
         const qty = Number(it.qty) || 1;
         const prod = db.prepare('SELECT selling_unit FROM products WHERE id=?').get(it.productId) as any;
-        const isPiece = (it.sellingUnit || prod?.selling_unit) === 'piece';
+        const isPiece = isPieceOrDiscreteUnit(it.sellingUnit || prod?.selling_unit);
         const pieceMultiplier = isPiece ? extractPieceCount(it.weight) : 1;
         const restockQty = qty * pieceMultiplier;
         db.prepare(

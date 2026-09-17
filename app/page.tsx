@@ -1,4 +1,5 @@
 'use client';
+import { normalizeSellingUnit, isPieceOrDiscreteUnit } from '../lib/sellingUnit';
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -135,7 +136,7 @@ function normalizeProductRecord(p: any): Product {
   } catch { weightOptions = []; }
   
   const basePrice = Number(p.price ?? p.salePrice ?? p.regularPrice ?? 0);
-  const isPiece = p.sellingUnit === 'piece';
+  const isPiece = isPieceOrDiscreteUnit(p.sellingUnit);
   const normalizedOptions = weightOptions.length ? weightOptions.map((w: any) => ({
     label: w.label || w.value || `${w.weightKg || 0.5} kg`,
     weightKg: isPiece
@@ -170,7 +171,7 @@ function normalizeProductRecord(p: any): Product {
     reviewCount: p.reviewCount || 0,
     published: p.published !== 0 && p.published !== false,
     eggless: Boolean(p.eggless),
-    sellingUnit: p.sellingUnit || 'weight',
+    sellingUnit: normalizeSellingUnit(p.sellingUnit),
     bestseller: Boolean(p.bestseller),
     newArrival: Boolean(p.newArrival),
     deal: Boolean(p.deal),

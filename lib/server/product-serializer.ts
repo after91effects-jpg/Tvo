@@ -1,3 +1,4 @@
+import { normalizeSellingUnit, isWeightSellingUnit } from '../sellingUnit';
 import fs from 'node:fs';
 import path from 'node:path';
 import { jsonParseSafe } from './api';
@@ -162,7 +163,7 @@ function isCakeProduct(row: any): boolean {
   // Positive cake signals
   if (name.includes('cake')) return true;
   if (cat.includes('cake')) return true;
-  if (row.selling_unit === 'weight' && (desc.includes('cake') || desc.includes('sponge') || desc.includes('frosting'))) return true;
+  if (isWeightSellingUnit(row.selling_unit) && (desc.includes('cake') || desc.includes('sponge') || desc.includes('frosting'))) return true;
   return false;
 }
 
@@ -241,7 +242,7 @@ export function serializeProduct(row: any) {
     badges: jsonParseSafe(row.badges, []),
     tags: jsonParseSafe(row.tags, []),
     eggless: !!row.eggless,
-    sellingUnit: row.selling_unit || 'weight',
+    sellingUnit: normalizeSellingUnit(row.selling_unit),
     featured: !!row.featured,
     bestseller: !!row.bestseller,
     newArrival: !!row.new_arrival,

@@ -1,4 +1,5 @@
 'use client';
+import { getSellingUnitLabel, isPieceOrDiscreteUnit } from '../../lib/sellingUnit';
 
 import React, { useState, useRef, useMemo } from 'react';
 import {
@@ -125,7 +126,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 
   const [selectedWeight, setSelectedWeight] = useState<WeightOption>(() => {
     const list = Array.isArray(product?.weightOptions) ? product.weightOptions : (product?.weightOptions as any)?.options;
-    return (list && list[0]) || (product?.sellingUnit === 'piece'
+    return (list && list[0]) || (isPieceOrDiscreteUnit(product?.sellingUnit)
       ? { label: '1 piece', weightKg: 0, price: product?.price || 699, mrp: product?.regularPrice || 0 }
       : { label: '0.5 kg', weightKg: 0.5, price: product?.price || 699, mrp: product?.regularPrice || 849 });
   });
@@ -214,7 +215,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
     if (!product) return;
     const initialWeight =
       weightOptionsList[0] ||
-      (product.sellingUnit === 'piece'
+      (isPieceOrDiscreteUnit(product.sellingUnit)
         ? { label: '1 piece', weightKg: 0, price: product.price || 699, mrp: product.regularPrice || 0 }
         : { label: '0.5 kg', weightKg: 0.5, price: product.price || 699, mrp: product.regularPrice || 849 });
     setSelectedWeight(initialWeight);
@@ -679,9 +680,16 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
             {/* Price Display */}
             <div className="mt-3 p-3 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border)]">
               <div className="flex items-baseline gap-3">
-                <span className="text-2xl sm:text-3xl font-bold font-display text-[var(--text-main)]">
-                  ₹{(selectedWeight.price + selectedFlavourPrice) * quantity}
-                </span>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-2xl sm:text-3xl font-bold font-display text-[var(--text-main)]">
+                    ₹{(selectedWeight.price + selectedFlavourPrice) * quantity}
+                  </span>
+                  {getSellingUnitLabel(product.sellingUnit) && (
+                    <span className="text-xs sm:text-sm font-medium text-[var(--text-muted)] font-sans">
+                      / {getSellingUnitLabel(product.sellingUnit)}
+                    </span>
+                  )}
+                </div>
                 {selectedWeight.mrp && selectedWeight.mrp > selectedWeight.price && savings > 0 && (
                   <>
                     <span className="text-sm text-[var(--text-subtle)] line-through">
@@ -773,7 +781,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   <div>
                     <label className="block text-xs font-bold text-[var(--text-main)] uppercase tracking-wider mb-2 flex items-center gap-1.5">
                       <Package className="w-3.5 h-3.5 text-[var(--primary)]" />
-                      {product.sellingUnit === 'piece' ? 'Select Quantity' : 'Select Weight'}
+                      {isPieceOrDiscreteUnit(product.sellingUnit) ? 'Select Quantity' : 'Select Weight'}
                     </label>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                       {weightOptionsList.map((opt) => {
@@ -795,10 +803,10 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                               </div>
                             )}
                             <div className="text-xs font-bold text-[var(--text-main)]">
-                              {product.sellingUnit === 'piece' ? opt.label : `${opt.weightKg} kg`}
+                              {isPieceOrDiscreteUnit(product.sellingUnit) ? opt.label : `${opt.weightKg} kg`}
                             </div>
                             <div className="text-[10px] text-[var(--text-muted)] mt-0.5">
-                              {product.sellingUnit === 'piece'
+                              {isPieceOrDiscreteUnit(product.sellingUnit)
                                 ? (() => {
                                     const pc = pieceCountFromLabel(opt.label);
                                     return pc != null ? `${pc} ${pc === 1 ? 'piece' : 'pieces'}` : 'Sold per piece';
@@ -1177,7 +1185,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                 {/* Quantity Stepper */}
                 <div className="flex items-center gap-4 p-3 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border)]">
                   <span className="text-xs font-bold text-[var(--text-main)] uppercase tracking-wider">
-                    Quantity{product.sellingUnit === 'piece' ? ' (Pieces)' : ''}:
+                    Quantity{isPieceOrDiscreteUnit(product.sellingUnit) ? ' (Pieces)' : ''}:
                   </span>
                   <div className="flex items-center border border-[var(--border)] rounded-xl overflow-hidden bg-[var(--bg-surface)]">
                     <button
@@ -1439,7 +1447,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
             {/* Price Summary */}
             <div className="p-3 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border)] space-y-1.5">
               <div className="flex justify-between text-xs text-[var(--text-muted)]">
-                <span>Base Price ({product.sellingUnit === 'piece' ? selectedWeight.label : `${selectedWeight.weightKg} kg`})</span>
+                <span>Base Price ({isPieceOrDiscreteUnit(product.sellingUnit) ? selectedWeight.label : `${selectedWeight.weightKg} kg`})</span>
                 <span>₹{selectedWeight.price}</span>
               </div>
               {selectedFlavourPrice > 0 && (
@@ -1467,7 +1475,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                 </div>
               )}
               <div className="flex justify-between text-xs font-bold text-[var(--text-main)] pt-1.5 border-t border-[var(--border)]">
-                <span>Total ({quantity} {quantity === 1 ? (product.sellingUnit === 'piece' ? 'piece' : 'item') : (product.sellingUnit === 'piece' ? 'pieces' : 'items')})</span>
+                <span>Total ({quantity} {quantity === 1 ? (isPieceOrDiscreteUnit(product.sellingUnit) ? 'piece' : 'item') : (isPieceOrDiscreteUnit(product.sellingUnit) ? 'pieces' : 'items')})</span>
                 <span>₹{itemUnitPrice * quantity}</span>
               </div>
             </div>

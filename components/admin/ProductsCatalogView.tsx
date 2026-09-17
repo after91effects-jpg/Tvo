@@ -1,4 +1,5 @@
 'use client';
+import { PREDEFINED_SELLING_UNITS, normalizeSellingUnit, getSellingUnitLabel, isWeightSellingUnit, StructuredSellingUnit } from '../../lib/sellingUnit';
 
 import React, { useState, useRef, useEffect } from 'react';
 import Papa from 'papaparse';
@@ -135,7 +136,9 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
   const [isImageUploading, setIsImageUploading] = useState(false);
   const [isVideoUploading, setIsVideoUploading] = useState(false);
   const [formPublished, setFormPublished] = useState(true);
-  const [formSellingUnit, setFormSellingUnit] = useState<'piece' | 'weight'>('weight');
+  const [formSellingUnitType, setFormSellingUnitType] = useState<'predefined' | 'custom'>('predefined');
+  const [formSellingUnitValue, setFormSellingUnitValue] = useState<string>('kg');
+  const [formCustomSellingUnit, setFormCustomSellingUnit] = useState<string>('');
   // Flavour Options
   const [formFlavourOptions, setFormFlavourOptions] = useState<FlavourOption[]>([
     { id: 'flav-1', name: 'Original', additionalPrice: 0, isDefault: true, displayOrder: 1, isActive: true, showOnStorefront: true },
@@ -697,7 +700,9 @@ images_json: (formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
     ]);
     setFormVideos([]);
     setFormPublished(true);
-    setFormSellingUnit('weight');
+    setFormSellingUnitType('predefined');
+    setFormSellingUnitValue('kg');
+    setFormCustomSellingUnit('');
     // Reset flavour options
     setFormFlavourOptions([{ id: 'flav-1', name: 'Original', additionalPrice: 0, isDefault: true, displayOrder: 1, isActive: true, showOnStorefront: true }]);
     // Reset customization
@@ -768,7 +773,11 @@ images_json: (formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
       isPrimary: !!v.isPrimary,
     })));
     setFormPublished(prod.published);
-    setFormSellingUnit((prod as any).sellingUnit ?? (prod as any).selling_unit ?? 'weight');
+    const existingUnit = (prod as any).sellingUnit ?? (prod as any).selling_unit;
+    const normUnit = normalizeSellingUnit(existingUnit);
+    setFormSellingUnitType(normUnit.type);
+    setFormSellingUnitValue(normUnit.type === 'predefined' ? normUnit.value : 'custom');
+    setFormCustomSellingUnit(normUnit.type === 'custom' ? normUnit.value : '');
     // Load flavour options
     setFormFlavourOptions((prod as any).flavourOptions?.length
       ? (prod as any).flavourOptions
@@ -845,7 +854,18 @@ images_json: (formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
       const mrpNum = Number.isFinite(parsedMrp) ? Math.max(0, parsedMrp) : Math.round(priceNum * 1.2);
       const stockNum = Number.isFinite(parsedStock) ? Math.max(0, parsedStock) : 20;
 
-      const weightOptions: WeightOption[] = formSellingUnit === 'piece'
+      if (formSellingUnitType === 'custom' && !formCustomSellingUnit.trim()) {
+        setErrorMessage('Custom selling unit cannot be empty');
+        setIsSubmitting(false);
+        return;
+      }
+      const isWeight = isWeightSellingUnit(formSellingUnitType === 'custom' ? formCustomSellingUnit : formSellingUnitValue);
+      const currentUnitLabel = formSellingUnitType === 'custom' ? formCustomSellingUnit.trim() : formSellingUnitValue;
+      const currentSellingUnitObj: StructuredSellingUnit = formSellingUnitType === 'custom'
+        ? { type: 'custom', value: formCustomSellingUnit.trim() }
+        : { type: 'predefined', value: formSellingUnitValue };
+
+      const weightOptions: WeightOption[] = !isWeight
         ? [
             { label: '1 piece', weightKg: 0.1, price: priceNum, mrp: mrpNum, isDefault: true },
             { label: '2 pieces (Pack of 2)', weightKg: 0.2, price: Math.round(priceNum * 1.9), mrp: Math.round(mrpNum * 1.9) },
@@ -895,7 +915,7 @@ images_json: (formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
         tags: formTags.split(',').map((s) => s.trim()).filter(Boolean),
         flavours: formFlavours.split(',').map((s) => s.trim()).filter(Boolean),
         eggless: formEggless,
-        sellingUnit: formSellingUnit,
+        sellingUnit: currentSellingUnitObj,
         weightOptions,
         images: formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
           url: i.url.trim(),
@@ -943,7 +963,7 @@ images_json: (formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
             short_description: productPayload.shortDescription,
             description: productPayload.description,
             eggless: formEggless ? 1 : 0,
-            selling_unit: formSellingUnit,
+            selling_unit: currentSellingUnitObj,
             images_json: productPayload.images,
             variations_json: {
               attribute: 'Select Weight',
@@ -1432,7 +1452,7 @@ images_json: (formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
                             : 'text-[var(--danger)] bg-[var(--danger-light)]'
                         }`}
                       >
-                        {prod.stock} {prod.sellingUnit === 'piece' ? 'pcs in stock' : 'in stock'}
+                        {prod.stock} {getSellingUnitLabel(prod.sellingUnit)} in stock
                       </span>
                     </td>
 
@@ -1529,14 +1549,48 @@ images_json: (formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
                 Selling Unit
               </label>
               <select
-                value={formSellingUnit}
-                onChange={(e) => setFormSellingUnit(e.target.value as 'piece' | 'weight')}
+                id="admin-product-selling-unit-select"
+                value={formSellingUnitType === 'custom' ? 'custom' : formSellingUnitValue}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === 'custom') {
+                    setFormSellingUnitType('custom');
+                  } else {
+                    setFormSellingUnitType('predefined');
+                    setFormSellingUnitValue(val);
+                  }
+                }}
                 className="w-full px-3 py-2 text-xs rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-main)] focus:outline-none font-medium"
               >
-                <option value="weight">By Weight (KG)</option>
-                <option value="piece">By Piece</option>
+                <optgroup label="Predefined Culinary Units">
+                  {PREDEFINED_SELLING_UNITS.map((unit) => (
+                    <option key={unit} value={unit}>
+                      {unit}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="Custom">
+                  <option value="custom">custom (specify below)...</option>
+                </optgroup>
               </select>
             </div>
+
+            {formSellingUnitType === 'custom' && (
+              <div className="animate-in fade-in duration-200">
+                <label className="block text-xs font-semibold text-[var(--text-main)] mb-1">
+                  Custom Unit <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  id="admin-product-custom-unit-input"
+                  type="text"
+                  required
+                  placeholder="e.g. platter, serving, basket"
+                  value={formCustomSellingUnit}
+                  onChange={(e) => setFormCustomSellingUnit(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-main)] focus:outline-none font-medium"
+                />
+              </div>
+            )}
 
             <div>
               <label className="block text-xs font-semibold text-[var(--text-main)] mb-1">
@@ -1557,7 +1611,7 @@ images_json: (formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
 
             <div>
               <label className="block text-xs font-semibold text-[var(--text-main)] mb-1">
-                {formSellingUnit === 'piece' ? 'Base Price per Piece (₹)' : '0.5kg Base Price (₹)'}
+                `Base Price per ${formSellingUnitType === 'custom' ? (formCustomSellingUnit || 'unit') : formSellingUnitValue} (₹)`
               </label>
               <input
                 type="number"
@@ -1571,7 +1625,7 @@ images_json: (formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
 
             <div>
               <label className="block text-xs font-semibold text-[var(--text-main)] mb-1">
-                {formSellingUnit === 'piece' ? 'Regular MRP per Piece (₹)' : '0.5kg Regular MRP (₹)'}
+                `Regular MRP per ${formSellingUnitType === 'custom' ? (formCustomSellingUnit || 'unit') : formSellingUnitValue} (₹)`
               </label>
               <input
                 type="number"
@@ -1586,7 +1640,7 @@ images_json: (formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-[var(--text-main)] mb-1">
-                {formSellingUnit === 'piece' ? 'Inventory Stock Count (Pieces)' : 'Inventory Stock Count (Units)'}
+                `Inventory Stock Count (${formSellingUnitType === 'custom' ? (formCustomSellingUnit || 'unit') : formSellingUnitValue}s)`
               </label>
               <input
                 type="number"

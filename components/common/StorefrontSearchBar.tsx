@@ -1,4 +1,5 @@
 'use client';
+import { getSellingUnitLabel } from '../../lib/sellingUnit';
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
@@ -417,8 +418,8 @@ export const StorefrontSearchBar: React.FC<StorefrontSearchBarProps> = ({
                           </h5>
                           <div className="flex items-center gap-2 text-[11px] text-[var(--text-muted)]">
                             <span className="font-bold text-[var(--text-main)]">₹{prod.weightOptions?.[0]?.price || prod.price || 699}</span>
-                            {prod.sellingUnit === 'piece' && (
-                              <span className="text-[10px] text-[var(--text-subtle)]">({prod.weightOptions?.[0]?.label || 'per piece'})</span>
+                            {getSellingUnitLabel(prod.sellingUnit) && (
+                              <span className="text-[10px] text-[var(--text-subtle)]">/ {getSellingUnitLabel(prod.sellingUnit)}</span>
                             )}
                             {prod.eggless && (
                               <span className="text-[var(--success)] font-medium">• Eggless</span>

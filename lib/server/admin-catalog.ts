@@ -1,3 +1,4 @@
+import { normalizeSellingUnit, validateSellingUnitInput, serializeSellingUnit } from '../sellingUnit';
 import { db } from './db';
 import { logAudit, slugify, jsonParseSafe } from './api';
 import { normalizeImageUrl, mediumImageUrl, isSafeMediaUrl } from '../imageUrl';
@@ -55,7 +56,7 @@ export function serializeAdminProduct(row: any) {
     upsells: jsonParseSafe(row.upsells, []),
     crossSells: jsonParseSafe(row.cross_sells, []),
     customization: jsonParseSafe(row.customization_json, []),
-    sellingUnit: row.selling_unit || 'weight',
+    sellingUnit: normalizeSellingUnit(row.selling_unit),
     categoryName: row.category_name || '',
     categorySlug: row.category_slug || '',
     brandName: row.brand_name || '',
@@ -397,6 +398,16 @@ function buildProductPayload(body: any, existing: any, user: any) {
   // Boolean feature toggles
   for (const bf of ['show_gallery', 'show_video', 'show_flavour', 'show_customize', 'show_design_upload', 'show_addons', 'show_dietary', 'show_delivery', 'show_special_instructions', 'show_delivery_date', 'show_delivery_slot', 'show_ratings', 'show_badges', 'show_size_selector', 'show_reviews', 'show_faq', 'show_related_products', 'show_checkout_options']) {
     if (body[bf] !== undefined) payload[bf] = body[bf] ? 1 : 0;
+  }
+
+  // Validate and normalize selling_unit
+  if (body.selling_unit !== undefined || body.sellingUnit !== undefined) {
+    const rawUnit = body.selling_unit ?? body.sellingUnit;
+    const validated = validateSellingUnitInput(rawUnit);
+    if (!validated.valid) {
+      throw new Error(validated.error || 'Invalid selling unit');
+    }
+    payload.selling_unit = serializeSellingUnit(validated.unit);
   }
 
   // Customization fields

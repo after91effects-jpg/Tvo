@@ -894,6 +894,12 @@ let ordersUrl = '/api/orders';
                               <span>{item.flavour || 'Belgian Dark Truffle'}</span>
                               <span>•</span>
                               <span>Qty: {item.qty || 1}</span>
+                              {item.sellingUnit && (
+                                <>
+                                  <span>•</span>
+                                  <span>Unit: {typeof item.sellingUnit === 'object' ? (item.sellingUnit as any).value : item.sellingUnit}</span>
+                                </>
+                              )}
                             </div>
 
                             {item.messageOnCake && (
