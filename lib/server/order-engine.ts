@@ -73,11 +73,33 @@ function resolveVariation(prod: any, weightLabel?: string): { unit: number; opti
   return { unit: -1, option: null };
 }
 
-function validateSlot(date: string | null | undefined, slotName: string | null | undefined, slotId: string | number | null | undefined): { ok: boolean; error?: string; slot?: any } {
+export function validateSlot(date: string | null | undefined, slotName: string | null | undefined, slotId: string | number | null | undefined): { ok: boolean; error?: string; slot?: any } {
   if (!date) return { ok: false, error: 'Delivery date is required' };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { ok: false, error: 'Invalid delivery date format (YYYY-MM-DD required)' };
   const today = getTodayIST();
   if (date < today) return { ok: false, error: 'Delivery date cannot be in the past' };
+
+  // Check maximum booking days from settings
+  try {
+    const maxDaysRow = db.prepare("SELECT value FROM settings WHERE key='maximum_booking_days'").get() as any;
+    const maxDays = maxDaysRow ? Number(maxDaysRow.value) : 30;
+    if (maxDays > 0) {
+      const todayDate = new Date();
+      todayDate.setHours(0, 0, 0, 0);
+      const maxDate = new Date(todayDate);
+      maxDate.setDate(maxDate.getDate() + maxDays);
+      const [y, m, d] = date.split('-').map(Number);
+      const selectedDate = new Date(y, m - 1, d);
+      if (selectedDate > maxDate) {
+        return { ok: false, error: `Delivery dates can only be booked up to ${maxDays} days in advance` };
+      }
+    }
+  } catch {}
+
+  // Allow Store Pickup
+  if (slotName === 'Store Pickup' || String(slotId) === 'pickup' || (slotName && slotName.toLowerCase().includes('pickup'))) {
+    return { ok: true, slot: { id: 0, name: 'Store Pickup', fee: 0, available: 1 } };
+  }
 
   const blackout = db.prepare('SELECT * FROM blackout_dates WHERE date=?').get(date) as any;
   if (blackout) return { ok: false, error: `We are closed on this date (${blackout.reason || 'Holiday/Maintenance'})` };
@@ -250,8 +272,10 @@ export function createOrder({ items, body, customerId, generateOrderNumber }: Cr
     const stdFeeRow = db.prepare("SELECT value FROM settings WHERE key='standard_delivery_fee'").get() as any;
     const standardDeliveryFee = stdFeeRow ? Number(stdFeeRow.value) : 49;
 
-    const deliveryFee = subtotal >= freeDeliveryThreshold ? 0 : standardDeliveryFee;
-    const slotSurcharge = slotCheck.slot?.fee ? Math.round(Number(slotCheck.slot.fee)) : (Math.round(Number(body.slot_surcharge)) || 0);
+    const isPickup = body.deliveryType === 'pickup' || body.deliverySlot === 'Store Pickup';
+    const deliveryFee = isPickup ? 0 : (subtotal >= freeDeliveryThreshold ? 0 : standardDeliveryFee);
+    const slotSurcharge = isPickup ? 0 : (slotCheck.slot?.fee ? Math.round(Number(slotCheck.slot.fee)) : (Math.round(Number(body.slot_surcharge)) || 0));
+    const deliveryInstructions = (body.deliveryInstructions || body.delivery_instructions || body.orderNotes || '').toString().trim().slice(0, 500);
 
     // 6. Coupon code validation
     let discount = 0;
@@ -372,16 +396,17 @@ export function createOrder({ items, body, customerId, generateOrderNumber }: Cr
     const info = db.prepare(`INSERT INTO orders
       (order_number, customer_id, session_id, customer_name, customer_phone, customer_email, customer_address, pincode, city,
        items, addons, subtotal, discount, coupon_code, delivery_fee, slot_surcharge, tax, total,
-       delivery_date, delivery_slot, delivery_slot_id, status, priority, payment_method, payment_status, timeline, occasion_slug, occasion_id, created_at, updated_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+       delivery_date, delivery_slot, delivery_slot_id, status, priority, payment_method, payment_status, tracking_note, timeline, occasion_slug, occasion_id, created_at, updated_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
       .run(
         orderNumber, customerId, body.session_id || null,
         customerName, phone, customerEmail,
         customerAddress, pincode, city,
         itemsJson, JSON.stringify(body.addons || []),
         subtotal, discount, couponCode, deliveryFee, slotSurcharge, tax, total,
-        body.deliveryDate || null, body.deliverySlot || null, slotCheck.slot?.id ?? (body.deliverySlotId || null),
+        body.deliveryDate || null, body.deliverySlot || (isPickup ? 'Store Pickup' : null), slotCheck.slot?.id ?? (body.deliverySlotId || null),
         'Order Placed', body.priority || 'Normal', body.paymentMethod || 'UPI', 'Pending',
+        deliveryInstructions || null,
         JSON.stringify([{ status: 'Order Placed', created_at: new Date().toISOString() }]),
         body.occasion_slug || body.occasionSlug || null,
         body.occasion_id || body.occasionId || null,
@@ -416,9 +441,10 @@ export function createOrder({ items, body, customerId, generateOrderNumber }: Cr
     }
 
     db.prepare('INSERT INTO order_status_history (order_id, status, note) VALUES (?,?,?)').run(orderId, 'Order Placed', 'Order created');
-    if (body.orderNotes && String(body.orderNotes).trim()) {
+    const noteText = deliveryInstructions || (body.orderNotes && String(body.orderNotes).trim());
+    if (noteText) {
       const t = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='order_notes'").get();
-      if (t) db.prepare('INSERT INTO order_notes (order_id, body, is_internal) VALUES (?,?,0)').run(orderId, String(body.orderNotes).trim());
+      if (t) db.prepare('INSERT INTO order_notes (order_id, body, is_internal) VALUES (?,?,0)').run(orderId, noteText);
     }
     if (couponCode) {
       db.prepare('UPDATE coupons SET uses = COALESCE(uses,0)+1 WHERE code=?').run(couponCode);
