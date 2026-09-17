@@ -145,6 +145,7 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
   const [formAllowCustomMessage, setFormAllowCustomMessage] = useState(true);
   const [formAllowCustomDesign, setFormAllowCustomDesign] = useState(false);
   // Feature Toggles
+  const [formSameDayEligible, setFormSameDayEligible] = useState(true);
   const [formShowGallery, setFormShowGallery] = useState(true);
   const [formShowVideo, setFormShowVideo] = useState(false);
   const [formShowFlavour, setFormShowFlavour] = useState(true);
@@ -704,6 +705,7 @@ images_json: (formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
     setFormAllowCustomMessage(true);
     setFormAllowCustomDesign(false);
     // Reset feature toggles
+    setFormSameDayEligible(true);
     setFormShowGallery(true);
     setFormShowVideo(false);
     setFormShowFlavour(true);
@@ -776,6 +778,7 @@ images_json: (formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
     setFormAllowCustomMessage((prod as any).allowCustomMessage !== false);
     setFormAllowCustomDesign((prod as any).allowCustomDesign === true);
     // Load feature toggles
+    setFormSameDayEligible((prod as any).sameDayEligible !== false && (prod as any).same_day_eligible !== 0);
     setFormShowGallery((prod as any).showGallery !== false);
     setFormShowVideo((prod as any).showVideo === true);
     setFormShowFlavour((prod as any).showFlavour !== false);
@@ -967,6 +970,7 @@ images_json: (formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
             customization_fee: Number(formCustomizationFee) || 0,
             allow_custom_message: formAllowCustomMessage ? 1 : 0,
             allow_custom_design: formAllowCustomDesign ? 1 : 0,
+            same_day_eligible: formSameDayEligible ? 1 : 0,
             show_gallery: formShowGallery ? 1 : 0,
             show_video: formShowVideo ? 1 : 0,
             show_flavour: formShowFlavour ? 1 : 0,
@@ -2021,40 +2025,87 @@ images_json: (formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
               <Settings className="w-3.5 h-3.5 text-[var(--primary)]" />
               Storefront Feature Controls (Show/Hide on Storefront)
             </h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="space-y-3.5">
               {[
-                { key: 'showGallery', label: 'Product Gallery', icon: ImageIcon2, state: formShowGallery, setState: setFormShowGallery },
-                { key: 'showVideo', label: 'Product Video', icon: Menu, state: formShowVideo, setState: setFormShowVideo },
-                { key: 'showRatings', label: 'Ratings & Reviews (count)', icon: Star, state: formShowRatings, setState: setFormShowRatings },
-                { key: 'showBadges', label: 'Badges', icon: Award, state: formShowBadges, setState: setFormShowBadges },
-                { key: 'showSizeSelector', label: 'Size Selector', icon: LayoutDashboard, state: formShowSizeSelector, setState: setFormShowSizeSelector },
-                { key: 'showFlavour', label: 'Flavour Selector', icon: SparklesIcon, state: formShowFlavour, setState: setFormShowFlavour },
-                { key: 'showCustomize', label: 'Customize Cake', icon: MessageSquare, state: formShowCustomize, setState: setFormShowCustomize },
-                { key: 'showDesignUpload', label: 'Design Upload', icon: UploadIcon, state: formShowDesignUpload, setState: setFormShowDesignUpload },
-                { key: 'showAddons', label: 'Add-ons', icon: Tag, state: formShowAddons, setState: setFormShowAddons },
-                { key: 'showDietary', label: 'Dietary Info', icon: EyeIcon, state: formShowDietary, setState: setFormShowDietary },
-                { key: 'showDelivery', label: 'Delivery Options', icon: Truck, state: formShowDelivery, setState: setFormShowDelivery },
-                { key: 'showDeliveryDate', label: 'Delivery Date', icon: Calendar, state: formShowDeliveryDate, setState: setFormShowDeliveryDate },
-                { key: 'showDeliverySlot', label: 'Delivery Slot', icon: Clock, state: formShowDeliverySlot, setState: setFormShowDeliverySlot },
-                { key: 'showSpecialInstructions', label: 'Special Instructions', icon: Settings, state: formShowSpecialInstructions, setState: setFormShowSpecialInstructions },
-                { key: 'showReviews', label: 'Reviews Tab', icon: Star, state: formShowReviews, setState: setFormShowReviews },
-                { key: 'showFaq', label: 'FAQ', icon: HelpCircle, state: formShowFaq, setState: setFormShowFaq },
-                { key: 'showRelatedProducts', label: 'Related Products', icon: Layers, state: formShowRelatedProducts, setState: setFormShowRelatedProducts },
-                { key: 'showCheckoutOptions', label: 'Checkout Options', icon: ShoppingBag, state: formShowCheckoutOptions, setState: setFormShowCheckoutOptions },
-              ].map((item) => (
-                <label key={item.key} className="flex items-center justify-between p-3 rounded-xl border bg-[var(--bg-surface)] cursor-pointer transition-all hover:border-[var(--border-strong)]">
-                  <div className="flex items-center gap-2">
-                    <item.icon className="w-4 h-4 text-[var(--primary)]" />
-                    <span className="text-xs font-medium text-[var(--text-main)]">{item.label}</span>
+                {
+                  title: "STOREFRONT VISIBILITY",
+                  icon: EyeIcon,
+                  items: [
+                    { key: "showGallery", label: "Product Gallery", icon: ImageIcon2, state: formShowGallery, setState: setFormShowGallery },
+                    { key: "showVideo", label: "Product Video", icon: Menu, state: formShowVideo, setState: setFormShowVideo },
+                    { key: "showRatings", label: "Ratings & Reviews", icon: Star, state: formShowRatings, setState: setFormShowRatings },
+                    { key: "showBadges", label: "Badges", icon: Award, state: formShowBadges, setState: setFormShowBadges },
+                  ],
+                },
+                {
+                  title: "PRODUCT OPTIONS",
+                  icon: LayoutDashboard,
+                  items: [
+                    { key: "showSizeSelector", label: "Weight / Size Selector", icon: LayoutDashboard, state: formShowSizeSelector, setState: setFormShowSizeSelector },
+                    { key: "showFlavour", label: "Flavour Selector", icon: SparklesIcon, state: formShowFlavour, setState: setFormShowFlavour },
+                    { key: "showCustomize", label: "Cake Customization", icon: MessageSquare, state: formShowCustomize, setState: setFormShowCustomize },
+                    { key: "showAddons", label: "Product Add-ons", icon: Tag, state: formShowAddons, setState: setFormShowAddons },
+                    { key: "showDietary", label: "Dietary Attributes", icon: EyeIcon, state: formShowDietary, setState: setFormShowDietary },
+                  ],
+                },
+                {
+                  title: "CUSTOMER INPUT",
+                  icon: MessageSquare,
+                  items: [
+                    { key: "showDesignUpload", label: "Customer Design Upload", icon: UploadIcon, state: formShowDesignUpload, setState: setFormShowDesignUpload },
+                    { key: "allowCustomMessage", label: "Cake Message", icon: MessageSquare, state: formAllowCustomMessage, setState: setFormAllowCustomMessage },
+                    { key: "showSpecialInstructions", label: "Customer Instructions", icon: Settings, state: formShowSpecialInstructions, setState: setFormShowSpecialInstructions },
+                  ],
+                },
+                {
+                  title: "DELIVERY",
+                  icon: Truck,
+                  items: [
+                    { key: "showDeliveryDate", label: "Delivery Date", icon: Calendar, state: formShowDeliveryDate, setState: setFormShowDeliveryDate },
+                    { key: "showDeliverySlot", label: "Delivery Time / Slot", icon: Clock, state: formShowDeliverySlot, setState: setFormShowDeliverySlot },
+                    { key: "sameDayEligible", label: "Same-Day Delivery", icon: Clock, state: formSameDayEligible, setState: setFormSameDayEligible },
+                    { key: "showDelivery", label: "Store Pickup / Notice", icon: Truck, state: formShowDelivery, setState: setFormShowDelivery },
+                  ],
+                },
+                {
+                  title: "DISCOVERY",
+                  icon: Layers,
+                  items: [
+                    { key: "showRelatedProducts", label: "Related Products", icon: Layers, state: formShowRelatedProducts, setState: setFormShowRelatedProducts },
+                    { key: "showReviews", label: "Reviews Tab", icon: Star, state: formShowReviews, setState: setFormShowReviews },
+                    { key: "showFaq", label: "FAQ Tab", icon: HelpCircle, state: formShowFaq, setState: setFormShowFaq },
+                  ],
+                },
+              ].map((group) => (
+                <div key={group.title} className="p-3.5 rounded-2xl border border-[var(--border)] bg-[var(--bg-subtle)]/30 space-y-2.5">
+                  <div className="flex items-center gap-1.5 text-[11px] font-bold text-[var(--primary)] uppercase tracking-wider">
+                    <group.icon className="w-3.5 h-3.5" />
+                    <span>{group.title}</span>
                   </div>
-                  <div className="relative w-10 h-6 rounded-full transition-colors cursor-pointer"
-                    style={{ backgroundColor: item.state ? 'var(--primary)' : 'var(--border)' }}
-                    onClick={() => item.setState(!item.state)}
-                  >
-                    <div className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform"
-                      style={{ transform: item.state ? 'translateX(26px)' : 'translateX(0.5px)' }} />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5">
+                    {group.items.map((item) => (
+                      <label key={item.key} className="flex items-center justify-between p-2.5 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] cursor-pointer transition-all hover:border-[var(--primary)]/40 shadow-xs">
+                        <div className="flex items-center gap-2 min-w-0 pr-2">
+                          <item.icon className="w-3.5 h-3.5 text-[var(--primary)] shrink-0" />
+                          <span className="text-xs font-medium text-[var(--text-main)] truncate">{item.label}</span>
+                        </div>
+                        <div
+                          className="relative w-9 h-5 rounded-full transition-colors cursor-pointer shrink-0"
+                          style={{ backgroundColor: item.state ? "var(--primary)" : "var(--border)" }}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            item.setState(!item.state);
+                          }}
+                        >
+                          <div
+                            className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform shadow-xs"
+                            style={{ left: item.state ? "18px" : "2px" }}
+                          />
+                        </div>
+                      </label>
+                    ))}
                   </div>
-                </label>
+                </div>
               ))}
             </div>
           </div>

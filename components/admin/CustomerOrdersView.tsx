@@ -902,6 +902,12 @@ export const CustomerOrdersView: React.FC<CustomerOrdersViewProps> = ({ orders, 
                   <Clock className="w-3 h-3" />
                   <span>Slot: {selectedOrder.deliverySlot} ({selectedOrder.deliveryDate})</span>
                 </div>
+                {(selectedOrder.tracking_note || selectedOrder.customer?.instructions || selectedOrder.specialInstructions) && (
+                  <div className="text-[11px] text-[var(--text-muted)] mt-1.5 flex items-start gap-1.5">
+                    <Truck className="w-3.5 h-3.5 text-[var(--primary)] shrink-0 mt-0.5" />
+                    <span><strong>Delivery Notes:</strong> {selectedOrder.tracking_note || selectedOrder.customer?.instructions || selectedOrder.specialInstructions}</span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -966,6 +972,34 @@ export const CustomerOrdersView: React.FC<CustomerOrdersViewProps> = ({ orders, 
                       {item.messageOnCake && (
                         <div className="mt-1.5 p-2 rounded-lg bg-[var(--primary-light)] text-[var(--primary)] text-xs font-semibold">
                           Piped Inscription: &ldquo;{item.messageOnCake}&rdquo;
+                        </div>
+                      )}
+
+                      {item.customInstructions && (
+                        <div className="mt-1.5 p-2 rounded-lg bg-[var(--bg-subtle)] border border-[var(--border)] text-xs text-[var(--text-main)]">
+                          <span className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block mb-0.5">Chef Instructions</span>
+                          {item.customInstructions}
+                        </div>
+                      )}
+
+                      {item.customDesignImage && (
+                        <div className="mt-1.5 p-2 rounded-lg bg-[var(--bg-subtle)] border border-[var(--border)] flex items-start gap-2.5">
+                          <a href={item.customDesignImage} target="_blank" rel="noopener noreferrer" className="shrink-0 group">
+                            <img
+                              src={item.customDesignImage}
+                              alt="Customer design reference"
+                              className="w-14 h-14 rounded-lg object-cover border border-[var(--border)] group-hover:opacity-90 transition-opacity bg-white"
+                            />
+                            <span className="text-[9px] text-[var(--primary)] font-medium block text-center mt-0.5">View full</span>
+                          </a>
+                          <div className="text-xs text-[var(--text-main)] min-w-0">
+                            <span className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block mb-0.5">Customer Design Reference</span>
+                            {item.customDesignDescription ? (
+                              <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">{item.customDesignDescription}</p>
+                            ) : (
+                              <span className="text-[10px] text-[var(--text-muted)] italic">Design reference uploaded by customer</span>
+                            )}
+                          </div>
                         </div>
                       )}
 

@@ -118,10 +118,19 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     return formatDateYMD(max);
   }, [now]);
 
-  // Generate quick date options (Today, Tomorrow, +2, +3 days)
+  // Check if same-day delivery is allowed for the cart
+  const isSameDayEligible = useMemo(() => {
+    return !cartItems.some((item: any) => {
+      const prod = item.product || item;
+      return prod?.allowSameDayDelivery === false || prod?.sameDayDelivery === false;
+    });
+  }, [cartItems]);
+
+  // Generate quick date options (Today if eligible, Tomorrow, +2, +3 days)
   const quickDates = useMemo(() => {
     const dates = [];
-    for (let i = 0; i < 4; i++) {
+    const startOffset = isSameDayEligible ? 0 : 1;
+    for (let i = startOffset; i < startOffset + 4; i++) {
       const d = new Date(now);
       d.setDate(d.getDate() + i);
       const ymd = formatDateYMD(d);
@@ -136,7 +145,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       });
     }
     return dates;
-  }, [now]);
+  }, [now, isSameDayEligible]);
 
   // Section Accordion State
   const [activeSection, setActiveSection] = useState<SectionId | null>('contact');
@@ -360,7 +369,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       }
     }
 
-    if (!deliveryDate) {
+    const isDeliveryDateRequired = cartItems.some((item: any) => {
+      const prod = item.product || item;
+      return prod?.showDeliveryDate !== false && prod?.showDelivery !== false;
+    });
+
+    if (isDeliveryDateRequired && !deliveryDate) {
       setActiveSection('delivery');
       setErrorMessage('Please select a delivery date.');
       return;

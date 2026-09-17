@@ -171,7 +171,7 @@ export function extractPieceCount(labelOrWeight?: string | null): number {
 function buildLineItems(items: any[]): Array<{ it: any; prod: any; unit: number; option: any; addedAddonTotal: number; validatedAddons: any[] }> {
   return items.map((it) => {
     if (!it || !it.productId) throw new OrderInputError('Product not found');
-    const prod = db.prepare('SELECT id, name, sku, stock, stock_status, selling_unit, low_stock_threshold, sale_price, regular_price, variations_json, category_id FROM products WHERE id=?').get(it.productId) as any;
+    const prod = db.prepare('SELECT id, name, sku, stock, stock_status, selling_unit, low_stock_threshold, sale_price, regular_price, variations_json, category_id, flavour_options_json, flavours, same_day_eligible FROM products WHERE id=?').get(it.productId) as any;
     if (!prod) throw new OrderInputError('Product not found');
     const qty = it.qty;
     // quantity must be a positive integer
@@ -199,7 +199,41 @@ function buildLineItems(items: any[]): Array<{ it: any; prod: any; unit: number;
       addedAddonTotal += p;
       return { id: dbAddon ? dbAddon.id : ad.id, name: dbAddon ? dbAddon.name : ad.name, price: p };
     });
-    return { it, prod, unit, option, addedAddonTotal, validatedAddons };
+
+    // Authoritative flavour price validation from server product configuration
+    let flavourPrice = 0;
+    if (it.flavour) {
+      const targetFlavour = String(it.flavour).trim().toLowerCase();
+      let matched = false;
+      if (prod.flavour_options_json) {
+        try {
+          const opts = JSON.parse(prod.flavour_options_json);
+          if (Array.isArray(opts)) {
+            const found = opts.find((o: any) => o && o.name && String(o.name).trim().toLowerCase() === targetFlavour);
+            if (found) {
+              matched = true;
+              flavourPrice = typeof found.additionalPrice === "number" && found.additionalPrice > 0 ? found.additionalPrice : 0;
+            }
+          }
+        } catch {}
+      }
+      if (!matched && prod.flavours) {
+        try {
+          const legacy = JSON.parse(prod.flavours);
+          if (Array.isArray(legacy)) {
+            const found = legacy.find((o: any) => {
+              const n = typeof o === "string" ? o : o?.name;
+              return n && String(n).trim().toLowerCase() === targetFlavour;
+            });
+            if (found && typeof found === "object" && typeof found.additionalPrice === "number" && found.additionalPrice > 0) {
+              flavourPrice = found.additionalPrice;
+            }
+          }
+        } catch {}
+      }
+    }
+
+    return { it, prod, unit, option, addedAddonTotal, validatedAddons, flavourPrice };
   });
 }
 
@@ -262,7 +296,7 @@ export function createOrder({ items, body, customerId, generateOrderNumber }: Cr
     // 4. Compute subtotal (server-side authoritative, does NOT trust client prices)
     let subtotal = 0;
     for (const line of lines) {
-      subtotal += (line.unit + line.addedAddonTotal) * line.it.qty;
+      subtotal += (line.unit + line.flavourPrice + line.addedAddonTotal) * line.it.qty;
     }
     subtotal = Math.round(subtotal);
 
@@ -366,7 +400,7 @@ export function createOrder({ items, body, customerId, generateOrderNumber }: Cr
     const orderNumber = generateOrderNumber();
 
     // 8. Line items JSON
-    const itemsJson = JSON.stringify(lines.map(({ it, prod, unit, addedAddonTotal, validatedAddons }) => {
+    const itemsJson = JSON.stringify(lines.map(({ it, prod, unit, addedAddonTotal, validatedAddons, flavourPrice }) => {
       // Safe sanitization: never store base64 data URLs in DB; enforce length limits
       const safeDesignImage = it.customDesignImage && !String(it.customDesignImage).startsWith('data:')
         ? String(it.customDesignImage).trim().slice(0, 500)
@@ -379,15 +413,15 @@ export function createOrder({ items, body, customerId, generateOrderNumber }: Cr
         qty: it.qty,
         weight: it.weight || null,
         flavour: it.flavour || null,
-        flavourPrice: typeof it.flavourPrice === 'number' && it.flavourPrice >= 0 ? it.flavourPrice : 0,
+        flavourPrice: flavourPrice,
         messageOnCake: it.messageOnCake ? String(it.messageOnCake).trim().slice(0, 100) : null,
         customInstructions: it.customInstructions ? String(it.customInstructions).trim().slice(0, 500) : null,
         customDesignImage: safeDesignImage,
         customDesignDescription: it.customDesignDescription ? String(it.customDesignDescription).trim().slice(0, 500) : null,
         addons: validatedAddons,
-        unitPrice: unit,
+        unitPrice: unit + flavourPrice,
         addonTotal: addedAddonTotal,
-        totalPrice: (unit + addedAddonTotal) * it.qty,
+        totalPrice: (unit + flavourPrice + addedAddonTotal) * it.qty,
         imageUrl: it.imageUrl || null,
         sellingUnit: prod?.selling_unit || 'weight',
       };

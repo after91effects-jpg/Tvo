@@ -404,10 +404,13 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
     ? Math.round(((selectedWeight.mrp - selectedWeight.price) / selectedWeight.mrp) * 100)
     : 0;
 
+  const hasMediaLeft = product.showGallery !== false || (product.showVideo !== false && videos.length > 0);
+
   return (
     <Modal isOpen={isOpen || isEmbedded} onClose={onClose} maxWidth="5xl" embedded={isEmbedded}>
       <div className={`grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8 ${isEmbedded ? '' : 'max-h-[85vh] overflow-y-auto pr-1'}`}>
         {/* Left: Image Gallery & Trust Badges */}
+        {hasMediaLeft && (
         <div className="lg:col-span-5 space-y-4">
           {product.showGallery !== false && (
             <>
@@ -627,9 +630,10 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
             </div>
           </div>
         </div>
+        )}
 
         {/* Right: Product Info & Customization */}
-        <div className="lg:col-span-7 flex flex-col justify-between space-y-4">
+        <div className={`${hasMediaLeft ? "lg:col-span-7" : "lg:col-span-12 max-w-3xl mx-auto w-full"} flex flex-col justify-between space-y-4`}>
           <div>
             {/* Breadcrumb & Category */}
             <div className="flex items-center gap-2 text-[10px] text-[var(--text-muted)] mb-2">
