@@ -202,6 +202,7 @@ function normalizeProductRecord(p: any): Product {
     showFaq: p.showFaq !== false,
     showRelatedProducts: p.showRelatedProducts !== false,
     showCheckoutOptions: p.showCheckoutOptions !== false,
+    related: p.related || [],
     dietaryAttributes: Array.isArray(p.dietaryAttributes) ? p.dietaryAttributes : undefined,
     createdAt: p.createdAt || new Date().toISOString(),
     updatedAt: p.updatedAt || new Date().toISOString(),

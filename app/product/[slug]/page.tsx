@@ -172,6 +172,7 @@ export default function ProductPage() {
             showFaq: p.showFaq !== false,
             showRelatedProducts: p.showRelatedProducts !== false,
             showCheckoutOptions: p.showCheckoutOptions !== false,
+            related: Array.isArray(p.related) ? p.related : [],
             dietaryAttributes: Array.isArray(p.dietaryAttributes) ? p.dietaryAttributes : undefined,
           };
           setProduct(normalized);
@@ -323,13 +324,14 @@ export default function ProductPage() {
           Back
         </button>
 
-        <ProductDetailModal
+          <ProductDetailModal
           product={product}
           isOpen={true}
           onClose={() => router.back()}
           onOpenCheckout={() => setIsCheckoutOpen(true)}
           variant="embedded"
           onBack={() => router.back()}
+          allProducts={products}
         />
       </main>
 

@@ -4,7 +4,50 @@ import { jsonParseSafe } from './api';
 import { normalizeImageUrl, mediumImageUrl, isSafeMediaUrl } from '../imageUrl';
 import { stripHtmlAndMetadata, cleanDescription } from '../sanitizeDescription';
 import { getAddons } from './addons-data';
-import { DietaryAttribute, DEFAULT_DIETARY_ATTRIBUTES, ProductVideo } from '../types';
+import { DietaryAttribute, DEFAULT_DIETARY_ATTRIBUTES, ProductVideo, RelatedProduct } from '../types';
+
+function parseRelatedProducts(raw: any): RelatedProduct[] {
+  if (!raw) return [];
+  let parsed: any = null;
+  try {
+    parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(parsed)) return [];
+  return parsed
+    .map((item: any) => {
+      // Object entries carry embedded product metadata.
+      if (item && typeof item === 'object') {
+        const id = String(item.id ?? item.product_id ?? '');
+        if (!id) return null;
+        const rawImage =
+          typeof item.image === 'string'
+            ? item.image
+            : typeof item.image_url === 'string'
+              ? item.image_url
+              : typeof item.thumbUrl === 'string'
+                ? item.thumbUrl
+                : '';
+        return {
+          id,
+          name: typeof item.name === 'string' ? item.name : typeof item.product_name === 'string' ? item.product_name : '',
+          slug: typeof item.slug === 'string' ? item.slug : typeof item.product_slug === 'string' ? item.product_slug : '',
+          price: Number(item.price || item.sale_price || item.regular_price || 0),
+          regularPrice: Number(item.regular_price || item.mrp || 0),
+          image: rawImage && isSafeMediaUrl(rawImage) ? rawImage : '',
+        };
+      }
+      // Primitive entries are valid as product-id references (e.g. [1,2,3] or legacy slug strings).
+      if (typeof item === 'number' || typeof item === 'string') {
+        const id = typeof item === 'number' ? String(item) : item.trim();
+        if (!id || (typeof item === 'string' && (item.length === 0 || item.length > 60))) return null;
+        return { id, name: '', slug: '', price: 0, regularPrice: undefined, image: undefined };
+      }
+      return null;
+    })
+    .filter((r) => r !== null && !!r.id) as RelatedProduct[];
+}
 
 function parseFlavourOptions(raw: any): any[] {
   if (!raw) return [];
@@ -242,6 +285,7 @@ export function serializeProduct(row: any) {
     showFaq: row.show_faq !== 0,
     showRelatedProducts: row.show_related_products !== 0,
     showCheckoutOptions: row.show_checkout_options !== 0,
+    related: parseRelatedProducts(row.related_products),
     addons: getAddons(),
     dietaryAttributes: parseDietaryAttributes(row.dietary_json, !!row.eggless),
   };

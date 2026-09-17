@@ -126,6 +126,16 @@ export interface Review {
   createdAt: string;
 }
 
+export interface RelatedProduct {
+  id: string;
+  name: string;
+  slug: string;
+  price: number;
+  regularPrice?: number;
+  image?: string;
+  imageUrl?: string;
+}
+
 export interface Product {
   id: string;
   sku: string;
@@ -194,7 +204,7 @@ export interface Product {
   showFaq?: boolean;
   showRelatedProducts?: boolean;
   showCheckoutOptions?: boolean;
-  // Dietary
+  related?: RelatedProduct[];
   dietaryAttributes?: DietaryAttribute[];
 }
 

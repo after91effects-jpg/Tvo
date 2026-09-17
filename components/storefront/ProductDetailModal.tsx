@@ -41,6 +41,8 @@ import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 import { StarRating } from '../common/StarRating';
 import { ReviewSection } from './ReviewSection';
+import { FaqAccordion } from './FaqAccordion';
+import { RelatedProducts } from './RelatedProducts';
 import { Modal } from '../common/Modal';
 import { stripHtmlAndMetadata, normalizeDescriptionParagraphs } from '../../lib/sanitizeDescription';
 import { handleImageFallback, normalizeImageUrl, DEFAULT_FALLBACK_IMAGE } from '../../lib/imageUrl';
@@ -52,6 +54,7 @@ interface ProductDetailModalProps {
   onOpenCheckout: () => void;
   variant?: 'modal' | 'embedded';
   onBack?: () => void;
+  allProducts?: Product[];
 }
 
 const DEFAULT_DATABASE_ADDONS: AddOn[] = [
@@ -105,6 +108,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   onOpenCheckout,
   variant = 'modal',
   onBack,
+  allProducts = [],
 }) => {
   const { addToCart, setIsCartOpen } = useCart();
   const { isInWishlist, toggleWishlist } = useWishlist();
@@ -137,7 +141,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   const [isUploadingDesign, setIsUploadingDesign] = useState<boolean>(false);
   const designFileInputRef = useRef<HTMLInputElement | null>(null);
   const [quantity, setQuantity] = useState<number>(1);
-  const [activeTab, setActiveTab] = useState<'details' | 'delivery' | 'description' | 'reviews'>('details');
+  const [activeTab, setActiveTab] = useState<'details' | 'delivery' | 'description' | 'reviews' | 'faq'>('details');
   const [activeImageIndex, setActiveImageIndex] = useState<number>(0);
   const [isAdded, setIsAdded] = useState<boolean>(false);
   const [selectedDeliverySlot, setSelectedDeliverySlot] = useState<number>(0);
@@ -728,6 +732,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                 ...(product.showDelivery !== false ? [{ id: 'delivery', label: 'Delivery' }] : []),
                 { id: 'description', label: 'Description' },
                 ...(product.showReviews !== false ? [{ id: 'reviews', label: product.reviewCount && product.reviewCount > 0 ? `Reviews (${product.reviewCount})` : 'Reviews' }] : []),
+                ...(product.showFaq !== false ? [{ id: 'faq', label: 'FAQ' }] : []),
               ].map((tab) => (
                 <button
                   key={tab.id}
@@ -1400,6 +1405,12 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                 initialReviewCount={product.reviewCount}
               />
             )}
+
+            {activeTab === 'faq' && product.showFaq !== false && (
+              <div className="pt-4">
+                <FaqAccordion />
+              </div>
+            )}
           </div>
 
           {/* Action Buttons */}
@@ -1477,6 +1488,20 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
               <span className="flex items-center gap-1"><BadgeCheck className="w-3 h-3" /> Quality Assured</span>
             </div>
           </div>
+
+          {/* Related Products */}
+          {product.showRelatedProducts !== false && (
+            <RelatedProducts
+              related={product.related}
+              allProducts={allProducts}
+              onViewProduct={(id: string) => {
+                const relatedProduct = allProducts.find((p) => p.id === id);
+                if (relatedProduct?.slug) {
+                  window.location.href = `/product/${relatedProduct.slug}`;
+                }
+              }}
+            />
+          )}
         </div>
       </div>
     </Modal>
