@@ -164,6 +164,12 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
   const [formShowFaq, setFormShowFaq] = useState(true);
   const [formShowRelatedProducts, setFormShowRelatedProducts] = useState(true);
   const [formShowCheckoutOptions, setFormShowCheckoutOptions] = useState(true);
+  // Related Products (12B-8)
+  const [formRelatedProducts, setFormRelatedProducts] = useState<string[]>([]);
+  const [relatedSearch, setRelatedSearch] = useState('');
+  const [relatedSearchResults, setRelatedSearchResults] = useState<Product[]>([]);
+  const [relatedLoading, setRelatedLoading] = useState(false);
+  const [relatedSearchError, setRelatedSearchError] = useState('');
   // Dietary Attributes (12B-5)
   const [formDietaryAttributes, setFormDietaryAttributes] = useState<DietaryAttribute[]>(
     () => DEFAULT_DIETARY_ATTRIBUTES.map((d) => ({ ...d }))
@@ -717,6 +723,12 @@ images_json: (formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
     setFormShowFaq(true);
     setFormShowRelatedProducts(true);
     setFormShowCheckoutOptions(true);
+    // Reset related products (12B-8)
+    setFormRelatedProducts([]);
+    setRelatedSearch('');
+    setRelatedSearchResults([]);
+    setRelatedLoading(false);
+    setRelatedSearchError('');
     // Reset dietary attributes (12B-5)
     setFormDietaryAttributes(DEFAULT_DIETARY_ATTRIBUTES.map((d) => ({ ...d })));
     setFormCustomDietaryLabel('');
@@ -783,6 +795,13 @@ images_json: (formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
     setFormShowFaq((prod as any).showFaq !== false);
     setFormShowRelatedProducts((prod as any).showRelatedProducts !== false);
     setFormShowCheckoutOptions((prod as any).showCheckoutOptions !== false);
+    // Load related products (12B-8)
+    const existingRelated = (prod as any).related;
+    if (Array.isArray(existingRelated) && existingRelated.length > 0) {
+      setFormRelatedProducts(existingRelated.map((r: any) => String(r.id)).filter(Boolean));
+    } else {
+      setFormRelatedProducts([]);
+    }
     // Load dietary attributes (12B-5)
     const loadedDietary = Array.isArray((prod as any).dietaryAttributes)
       ? (prod as any).dietaryAttributes
@@ -966,6 +985,7 @@ images_json: (formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
             show_faq: formShowFaq ? 1 : 0,
             show_related_products: formShowRelatedProducts ? 1 : 0,
             show_checkout_options: formShowCheckoutOptions ? 1 : 0,
+            related_products: formRelatedProducts.length > 0 ? JSON.stringify(formRelatedProducts.map((id) => ({ id, name: '', slug: '', price: 0 }))) : [],
             dietary_json: (formDietaryAttributes as DietaryAttribute[]).map((d) => ({
               key: d.key,
               label: d.label,
@@ -2037,6 +2057,110 @@ images_json: (formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
                 </label>
               ))}
             </div>
+          </div>
+
+          {/* Related Products Selector (12B-8) */}
+          <div className="pt-4 border-t border-[var(--border)]">
+            <h4 className="text-xs font-bold text-[var(--text-main)] uppercase tracking-wider mb-1 flex items-center gap-1.5">
+              <Layers className="w-3.5 h-3.5 text-[var(--primary)]" />
+              Related Products
+            </h4>
+            <p className="text-[10px] text-[var(--text-muted)] mb-3">
+              Select related products for this recipe. Other customers will see these suggestions on the product page.
+            </p>
+            <div className="relative mb-3">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-muted)]" />
+              <input
+                type="text"
+                value={relatedSearch}
+                onChange={(e) => {
+                  setRelatedSearch(e.target.value);
+                  setRelatedSearchError('');
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (!relatedSearch.trim()) return;
+                    setRelatedLoading(true);
+                    setRelatedSearchError('');
+                    fetch(`/api/products?search=${encodeURIComponent(relatedSearch.trim())}&limit=20`)
+                      .then((r) => r.json())
+                      .then((data) => {
+                        const products = (data?.products || []).filter((p: Product) =>
+                          !formRelatedProducts.includes(String(p.id)) && String(p.id) !== editingProduct?.id
+                        );
+                        setRelatedSearchResults(products);
+                      })
+                      .catch(() => setRelatedSearchError('Search failed. Try again.'))
+                      .finally(() => setRelatedLoading(false));
+                  }
+                }}
+                placeholder="Search by name or SKU..."
+                className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
+              />
+            </div>
+            {relatedLoading && (
+              <div className="text-xs text-[var(--text-muted)] py-2 flex items-center gap-2">
+                <RefreshCw className="w-3 h-3 animate-spin" /> Searching...
+              </div>
+            )}
+            {relatedSearchError && (
+              <div className="text-xs text-[var(--danger)] py-2">{relatedSearchError}</div>
+            )}
+            {!relatedLoading && !relatedSearchError && relatedSearch.trim() && relatedSearchResults.length === 0 && (
+              <div className="text-xs text-[var(--text-muted)] py-2">No matching products found.</div>
+            )}
+            {!relatedLoading && !relatedSearchError && relatedSearchResults.length > 0 && (
+              <div className="space-y-1.5 mb-3 max-h-40 overflow-y-auto">
+                {relatedSearchResults.map((p) => (
+                  <div key={p.id} className="flex items-center justify-between gap-2 p-2 rounded-lg bg-[var(--bg-surface)] border border-[var(--border)]">
+                    <div className="flex items-center gap-2 min-w-0">
+                      {p.images?.[0]?.url && (
+                        <img src={p.images[0].url} alt="" className="w-7 h-7 rounded object-cover shrink-0" onError={(e) => (e.currentTarget.style.display = 'none')} />
+                      )}
+                      <div className="min-w-0">
+                        <div className="text-xs font-medium text-[var(--text-main)] truncate">{p.name}</div>
+                        <div className="text-[10px] text-[var(--text-muted)]">{p.sku} · ₹{p.price}</div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFormRelatedProducts((prev) => [...prev, String(p.id)]);
+                        setRelatedSearch('');
+                        setRelatedSearchResults([]);
+                      }}
+                      className="shrink-0 px-2 py-1 text-[10px] font-bold rounded bg-[var(--primary)] text-white hover:brightness-110 transition"
+                    >
+                      Add
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {formRelatedProducts.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                {formRelatedProducts.map((id) => {
+                  const relatedProd = relatedSearchResults.find((p) => String(p.id) === id) || (editingProduct as any)?.related?.find((r: any) => String(r.id) === id);
+                  return (
+                    <span key={id} className="inline-flex items-center gap-1 px-2 py-1 bg-[var(--primary)]/10 text-[var(--primary)] text-[10px] font-semibold rounded-lg">
+                      {relatedProd?.name || id}
+                      <button
+                        type="button"
+                        onClick={() => setFormRelatedProducts((prev) => prev.filter((pid) => pid !== id))}
+                        className="hover:text-[var(--danger)] transition"
+                        aria-label={`Remove ${relatedProd?.name || id}`}
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+            {formRelatedProducts.length === 0 && !relatedSearch && (
+              <div className="text-[10px] text-[var(--text-muted)] py-1">No related products selected.</div>
+            )}
           </div>
 
           {/* Dietary Attributes */}

@@ -279,6 +279,42 @@ export function sanitizeVideosPayload(rawVideos: any): any[] {
   return out;
 }
 
+// Validates and sanitizes related product references before persistence.
+// Returns validated product IDs only. Rejects self-references, duplicates,
+// and references to non-existent products. Never throws — returns best-effort list.
+export function validateRelatedProducts(raw: any, currentProductId: number): number[] {
+  if (!raw) return [];
+  let items: any[] = [];
+  try {
+    if (typeof raw === 'string') items = JSON.parse(raw);
+    else if (Array.isArray(raw)) items = raw;
+  } catch { return []; }
+  if (!Array.isArray(items)) return [];
+
+  // Extract candidate IDs from mixed shapes
+  const rawIds: (string | number)[] = items.map((item) => {
+    if (item && typeof item === 'object') {
+      return item.id ?? item.product_id ?? '';
+    }
+    return typeof item === 'number' || typeof item === 'string' ? item : '';
+  }).filter((id) => id !== '' && id !== null && id !== undefined);
+
+  // Remove duplicates and self-references, validate existence
+  const seen = new Set<number>();
+  const validIds: number[] = [];
+  for (const id of rawIds) {
+    const numId = typeof id === 'number' ? id : Number(id);
+    if (!Number.isFinite(numId) || numId <= 0) continue;
+    if (numId === currentProductId) continue; // self-reference
+    if (seen.has(numId)) continue; // duplicate
+    const exists = db.prepare('SELECT 1 FROM products WHERE id=?').get(numId);
+    if (!exists) continue; // invalid/stale reference
+    seen.add(numId);
+    validIds.push(numId);
+  }
+  return validIds;
+}
+
 // Apply core product fields (shared by create/update). Returns an object of
 // validated values for a targeted UPDATE/INSERT. This intentionally never
 // touches importer-managed uniqueness of catalog source.
@@ -339,6 +375,13 @@ function buildProductPayload(body: any, existing: any, user: any) {
       if (typeof body[jf] === 'string') payload[jf] = body[jf];
       else payload[jf] = JSON.stringify(body[jf]);
     }
+  }
+
+  // Validate related_products server-side: reject self-references, duplicates, and stale IDs
+  if (body.related_products !== undefined) {
+    const currentId = existing?.id ?? (body.id ? Number(body.id) : 0);
+    const validIds = validateRelatedProducts(body.related_products, currentId);
+    payload.related_products = JSON.stringify(validIds.map((id) => ({ id: String(id), name: '', slug: '', price: 0 })));
   }
 
   // Server-side media payload sanitization: uploaded files are untrusted.

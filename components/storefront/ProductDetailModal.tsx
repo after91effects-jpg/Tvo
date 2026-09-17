@@ -1493,12 +1493,8 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
           {product.showRelatedProducts !== false && (
             <RelatedProducts
               related={product.related}
-              allProducts={allProducts}
               onViewProduct={(id: string) => {
-                const relatedProduct = allProducts.find((p) => p.id === id);
-                if (relatedProduct?.slug) {
-                  window.location.href = `/product/${relatedProduct.slug}`;
-                }
+                window.location.href = `/product/${id}`;
               }}
             />
           )}
