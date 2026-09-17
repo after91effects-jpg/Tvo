@@ -277,7 +277,7 @@ describe('PHASE 12B-2: Product Customization & Design Upload', () => {
 
       const product = deserializeProduct(americanChocoCakeRow)!;
       const basePrice = 599;
-      const selectedFlavourOption = product.flavourOptions?.find((f: any) => f.name === 'Fresh Strawberry')!;
+      const selectedFlavourOption = (product.flavourOptions || []).find((f: any) => f.name === 'Fresh Strawberry')!;
       expect(selectedFlavourOption.additionalPrice).toBe(80);
 
       const cartItem: CartItem = {
