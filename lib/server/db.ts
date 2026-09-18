@@ -701,6 +701,30 @@ CREATE INDEX IF NOT EXISTS idx_pincodes_zone ON pincodes(zone_id);
 CREATE INDEX IF NOT EXISTS idx_drivers_status ON drivers(status, active);
 CREATE INDEX IF NOT EXISTS idx_product_reviews_pid_status ON product_reviews(product_id, status);
 CREATE INDEX IF NOT EXISTS idx_product_reviews_cust_id ON product_reviews(customer_id);
+
+CREATE TABLE IF NOT EXISTS webhook_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  event_id TEXT UNIQUE,
+  event_type TEXT NOT NULL,
+  payload TEXT NOT NULL,
+  signature TEXT,
+  status TEXT DEFAULT 'processed',
+  error_message TEXT,
+  received_at TEXT DEFAULT (datetime('now')),
+  processed_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS settlements (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  settlement_id TEXT UNIQUE NOT NULL,
+  amount REAL NOT NULL,
+  fee REAL DEFAULT 0,
+  tax REAL DEFAULT 0,
+  status TEXT DEFAULT 'processed',
+  utr TEXT,
+  settled_at TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
 `;
 
 export function initDb() {

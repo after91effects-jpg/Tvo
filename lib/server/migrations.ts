@@ -208,6 +208,47 @@ export function runMigrations() {
       revoked_at TEXT DEFAULT (datetime('now')),
       expires_at INTEGER NOT NULL
     )`);
+
+  // ---- Razorpay Payments Ledger & Reconciliation & Webhooks ----
+  addColumn('payments', 'currency', "currency TEXT DEFAULT 'INR'");
+  addColumn('payments', 'razorpay_order_id', "razorpay_order_id TEXT");
+  addColumn('payments', 'razorpay_payment_id', "razorpay_payment_id TEXT");
+  addColumn('payments', 'captured', "captured INTEGER DEFAULT 0");
+  addColumn('payments', 'refund_status', "refund_status TEXT DEFAULT 'none'");
+  addColumn('payments', 'refunded_amount', "refunded_amount REAL DEFAULT 0");
+  addColumn('payments', 'failure_reason', "failure_reason TEXT");
+  addColumn('payments', 'failure_code', "failure_code TEXT");
+  addColumn('payments', 'event_reference', "event_reference TEXT");
+  addColumn('payments', 'verification_status', "verification_status TEXT DEFAULT 'unverified'");
+  addColumn('payments', 'webhook_status', "webhook_status TEXT DEFAULT 'pending'");
+  addColumn('payments', 'settlement_id', "settlement_id TEXT");
+  addColumn('payments', 'settlement_status', "settlement_status TEXT DEFAULT 'unsettled'");
+  addColumn('payments', 'updated_at', "updated_at TEXT");
+
+  addTable(`CREATE TABLE IF NOT EXISTS webhook_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      event_id TEXT UNIQUE,
+      event_type TEXT NOT NULL,
+      payload TEXT NOT NULL,
+      signature TEXT,
+      status TEXT DEFAULT 'processed',
+      error_message TEXT,
+      received_at TEXT DEFAULT (datetime('now')),
+      processed_at TEXT
+    )`);
+
+  addTable(`CREATE TABLE IF NOT EXISTS settlements (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      settlement_id TEXT UNIQUE NOT NULL,
+      amount REAL NOT NULL,
+      fee REAL DEFAULT 0,
+      tax REAL DEFAULT 0,
+      status TEXT DEFAULT 'processed',
+      utr TEXT,
+      settled_at TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    )`);
+
   // Clean up any stale/orphaned status history that points to deleted orders
   try {
     db.exec("DELETE FROM order_status_history WHERE order_id NOT IN (SELECT id FROM orders)");

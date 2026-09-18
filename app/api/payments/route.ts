@@ -1,129 +1,239 @@
 import { ok, err, db, getCurrentUser, logAudit } from '../../../lib/server/api';
+import {
+  createRazorpayOrder,
+  verifyPaymentSignature,
+  getSafeConfigStatus,
+  getRazorpayKeyId,
+} from '../../../lib/server/razorpay';
 
 export const runtime = 'nodejs';
 
-// Razorpay integration architecture.
-// Real key_id/key_secret live ONLY in server-side env vars, never in the frontend.
-const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || '';
-const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || '';
+export async function GET(req: Request) {
+  // Safe client configuration endpoint (key_id only, zero secrets)
+  const safeConfig = getSafeConfigStatus();
+  return ok({
+    configured: safeConfig.configured,
+    mode: safeConfig.mode,
+    key_id: getRazorpayKeyId() || null,
+  });
+}
 
 export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
-  const action = body.action;
+  const action = body.action || 'create';
   const user = getCurrentUser(req);
 
   try {
-    // Create a Razorpay Order for frontend checkout
-    if (action === 'create') {
-      const order = db.prepare('SELECT * FROM orders WHERE order_number=?').get(body.orderNumber) as any;
+    // -------------------------------------------------------------------------
+    // 1. CREATE PAYMENT ORDER (Server Authoritative)
+    // -------------------------------------------------------------------------
+    if (action === 'create' || action === 'create_order') {
+      const orderNumber = String(body.orderNumber || '').trim();
+      if (!orderNumber) return err('orderNumber is required', 400);
+
+      const order = db.prepare('SELECT * FROM orders WHERE order_number=?').get(orderNumber) as any;
       if (!order) return err('Order not found', 404);
 
-      if (!RAZORPAY_KEY_ID || !RAZORPAY_KEY_SECRET) {
-        // Sandbox mode: no keys configured. Return a simulated payment intent
-        // so the full flow is testable locally. In production, provide env keys.
-        const rzOrderId = `order_sandbox_${Date.now()}`;
-        db.prepare('UPDATE orders SET razorpay_order_id=?, updated_at=datetime(\'now\') WHERE id=?').run(rzOrderId, order.id);
-
-        try {
-          db.prepare(`
-            INSERT INTO payments (order_id, amount, method, status, transaction_id, gateway, meta, created_at)
-            VALUES (?, ?, ?, 'Pending', ?, 'Sandbox', ?, datetime('now'))
-          `).run(
-            order.id,
-            order.total,
-            order.payment_method || 'UPI',
-            rzOrderId,
-            JSON.stringify({ sandbox: true, razorpay_order_id: rzOrderId })
-          );
-        } catch {}
-
-        return ok({
-          key_id: null,
-          order_id: rzOrderId,
-          amount: Math.round(order.total * 100),
-          currency: 'INR',
-          sandbox: true,
-          message: 'Razorpay keys not configured — running in sandbox mode. Set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET to enable live payments.',
-        });
+      if (order.payment_status === 'Paid') {
+        return err('Order has already been paid', 400);
       }
 
-      // Live: ask Razorpay to create an order server-side
-      const res = await fetch('https://api.razorpay.com/v1/orders', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Basic ' + Buffer.from(`${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`).toString('base64'),
-        },
-        body: JSON.stringify({
-          amount: Math.round(order.total * 100),
-          currency: 'INR',
-          receipt: order.order_number,
-        }),
-      });
-      const rz = await res.json();
-      if (!rz.id) return err(rz.error?.description || 'Failed to create payment order', 502);
-      db.prepare('UPDATE orders SET razorpay_order_id=?, updated_at=datetime(\'now\') WHERE id=?').run(rz.id, order.id);
+      const totalAmount = Number(order.total);
+      if (!Number.isFinite(totalAmount) || totalAmount <= 0) {
+        return err('Invalid order total for payment', 400);
+      }
 
+      const amountPaise = Math.round(totalAmount * 100);
+
+      // Check if an existing pending payment attempt can be reused or create new
+      const rzOrder = await createRazorpayOrder({
+        orderNumber: order.order_number,
+        amountPaise,
+        currency: 'INR',
+        notes: {
+          tvo_order_id: String(order.id),
+          customer_name: order.customer_name || '',
+          customer_phone: order.customer_phone || '',
+        },
+      });
+
+      if (rzOrder.error || !rzOrder.id) {
+        return err(rzOrder.error || 'Failed to initialize payment gateway order', 502);
+      }
+
+      // Update order record with generated Razorpay Order ID
+      db.prepare(`
+        UPDATE orders 
+        SET razorpay_order_id=?, updated_at=datetime('now') 
+        WHERE id=?
+      `).run(rzOrder.id, order.id);
+
+      // Record payment attempt in ledger
       try {
         db.prepare(`
-          INSERT INTO payments (order_id, amount, method, status, transaction_id, gateway, meta, created_at)
-          VALUES (?, ?, ?, 'Pending', ?, 'Razorpay', ?, datetime('now'))
+          INSERT INTO payments (
+            order_id, amount, currency, method, status, 
+            razorpay_order_id, transaction_id, gateway, 
+            verification_status, webhook_status, meta, created_at, updated_at
+          )
+          VALUES (?, ?, 'INR', ?, 'Pending', ?, ?, ?, 'unverified', 'pending', ?, datetime('now'), datetime('now'))
+        `).run(
+          order.id,
+          totalAmount,
+          order.payment_method || 'UPI',
+          rzOrder.id,
+          rzOrder.id,
+          rzOrder.sandbox ? 'Sandbox' : 'Razorpay',
+          JSON.stringify({
+            razorpay_order_id: rzOrder.id,
+            sandbox: Boolean(rzOrder.sandbox),
+            created_at: new Date().toISOString(),
+          })
+        );
+      } catch (insertErr) {
+        console.warn('Could not record pending payment row:', insertErr);
+      }
+
+      return ok({
+        key_id: getRazorpayKeyId() || null,
+        order_id: rzOrder.id,
+        amount: rzOrder.amount,
+        currency: rzOrder.currency,
+        sandbox: Boolean(rzOrder.sandbox),
+      });
+    }
+
+    // -------------------------------------------------------------------------
+    // 2. SERVER-SIDE PAYMENT VERIFICATION (Zero Client Trust)
+    // -------------------------------------------------------------------------
+    if (action === 'verify' || action === 'verify_payment') {
+      const orderNumber = String(body.orderNumber || '').trim();
+      const razorpayOrderId = String(body.razorpay_order_id || '').trim();
+      const razorpayPaymentId = String(body.razorpay_payment_id || '').trim();
+      const signature = String(body.razorpay_signature || '').trim();
+
+      if (!orderNumber || !razorpayOrderId || !razorpayPaymentId) {
+        return err('Missing payment verification parameters', 400);
+      }
+
+      const order = db.prepare('SELECT * FROM orders WHERE order_number=?').get(orderNumber) as any;
+      if (!order) return err('Order not found', 404);
+
+      // Verify HMAC-SHA256 signature
+      const sigCheck = verifyPaymentSignature({
+        razorpayOrderId,
+        razorpayPaymentId,
+        signature,
+      });
+
+      if (!sigCheck.valid) {
+        logAudit(user, 'PAYMENT_VERIFY_FAIL', 'Payment', order.order_number, sigCheck.error);
+        return err(sigCheck.error || 'Payment signature verification failed', 403);
+      }
+
+      // Ensure this payment attempt matches the order's recorded razorpay_order_id if present
+      if (order.razorpay_order_id && order.razorpay_order_id !== razorpayOrderId) {
+        logAudit(user, 'PAYMENT_ORDER_MISMATCH', 'Order', order.order_number, `Expected ${order.razorpay_order_id}, got ${razorpayOrderId}`);
+        return err('Razorpay Order ID mismatch', 400);
+      }
+
+      // Advance order status safely
+      const newOrderStatus = order.status === 'Order Placed' ? 'Payment Confirmed' : order.status;
+
+      db.prepare(`
+        UPDATE orders 
+        SET payment_status='Paid', 
+            status=?, 
+            razorpay_order_id=?,
+            razorpay_payment_id=?, 
+            transaction_id=?, 
+            updated_at=datetime('now') 
+        WHERE id=?
+      `).run(newOrderStatus, razorpayOrderId, razorpayPaymentId, razorpayPaymentId, order.id);
+
+      // Insert order status history entry
+      db.prepare(`
+        INSERT INTO order_status_history (order_id, status, note, user_id) 
+        VALUES (?, ?, 'Payment confirmed via verified Razorpay signature', ?)
+      `).run(order.id, newOrderStatus, user?.id ?? null);
+
+      // Update or insert payment row in payments table
+      const existingPay = db.prepare('SELECT id FROM payments WHERE order_id=? AND razorpay_order_id=?').get(order.id, razorpayOrderId) as any;
+      if (existingPay) {
+        db.prepare(`
+          UPDATE payments 
+          SET status='Paid', 
+              captured=1, 
+              razorpay_payment_id=?, 
+              transaction_id=?, 
+              verification_status='verified', 
+              updated_at=datetime('now')
+          WHERE id=?
+        `).run(razorpayPaymentId, razorpayPaymentId, existingPay.id);
+      } else {
+        db.prepare(`
+          INSERT INTO payments (
+            order_id, amount, currency, method, status, 
+            razorpay_order_id, razorpay_payment_id, transaction_id, 
+            gateway, captured, verification_status, meta, created_at, updated_at
+          )
+          VALUES (?, ?, 'INR', ?, 'Paid', ?, ?, ?, ?, 1, 'verified', ?, datetime('now'), datetime('now'))
         `).run(
           order.id,
           order.total,
           order.payment_method || 'UPI',
-          rz.id,
-          JSON.stringify({ razorpay_order_id: rz.id })
+          razorpayOrderId,
+          razorpayPaymentId,
+          razorpayPaymentId,
+          getRazorpayKeyId() ? 'Razorpay' : 'Sandbox',
+          JSON.stringify({ razorpay_order_id: razorpayOrderId, razorpay_payment_id: razorpayPaymentId })
         );
-      } catch {}
+      }
 
-      return ok({ key_id: RAZORPAY_KEY_ID, order_id: rz.id, amount: rz.amount, currency: rz.currency });
+      logAudit(user, 'PAYMENT_SUCCESS', 'Order', order.order_number, `Payment verified: ${razorpayPaymentId}`);
+
+      return ok({
+        ok: true,
+        order_number: order.order_number,
+        payment_status: 'Paid',
+        status: newOrderStatus,
+        transaction_id: razorpayPaymentId,
+      });
     }
 
-    // Server-side payment verification (webhook-safe) — do NOT trust the frontend redirect alone
-    if (action === 'verify') {
-      const order = db.prepare('SELECT * FROM orders WHERE order_number=?').get(body.orderNumber) as any;
-      if (!order) return err('Order not found', 404);
-      const { razorpay_order_id, razorpay_payment_id, signature } = body;
+    // -------------------------------------------------------------------------
+    // 3. RECORD PAYMENT FAILURE OR USER CANCELLATION
+    // -------------------------------------------------------------------------
+    if (action === 'failure' || action === 'record_failure') {
+      const orderNumber = String(body.orderNumber || '').trim();
+      const reason = String(body.reason || 'Payment cancelled or dismissed by customer').slice(0, 255);
+      const code = String(body.code || 'USER_CANCELLED').slice(0, 50);
 
-      if (RAZORPAY_KEY_SECRET) {
-        const crypto = require('node:crypto');
-        const expected = crypto.createHmac('sha256', RAZORPAY_KEY_SECRET)
-          .update(`${razorpay_order_id}|${razorpay_payment_id}`)
-          .digest('hex');
-        if (expected !== signature) {
-          logAudit(user, 'PAYMENT_VERIFY_FAIL', 'Payment', order.order_number);
-          return err('Payment signature verification failed', 403);
+      if (orderNumber) {
+        const order = db.prepare('SELECT id, status, payment_status FROM orders WHERE order_number=?').get(orderNumber) as any;
+        if (order && order.payment_status !== 'Paid') {
+          db.prepare(`
+            UPDATE orders 
+            SET payment_status='Failed', updated_at=datetime('now') 
+            WHERE id=?
+          `).run(order.id);
+
+          db.prepare(`
+            UPDATE payments 
+            SET status='Failed', failure_reason=?, failure_code=?, updated_at=datetime('now')
+            WHERE order_id=? AND status='Pending'
+          `).run(reason, code, order.id);
+
+          logAudit(user, 'PAYMENT_FAILURE', 'Order', orderNumber, reason);
         }
       }
 
-      const newStatus = order.status === 'Order Placed' ? 'Payment Confirmed' : order.status;
-      db.prepare('UPDATE orders SET payment_status=\'Paid\', status=?, razorpay_payment_id=?, transaction_id=?, updated_at=datetime(\'now\') WHERE id=?')
-        .run(newStatus, razorpay_payment_id || null, razorpay_payment_id || null, order.id);
-
-      db.prepare('INSERT INTO order_status_history (order_id, status, note, user_id) VALUES (?,?,?,?)')
-        .run(order.id, 'Payment Confirmed', 'Payment received and verified', user?.id ?? null);
-
-      try {
-        db.prepare(`
-          INSERT INTO payments (order_id, amount, method, status, transaction_id, gateway, meta, created_at)
-          VALUES (?, ?, ?, 'Paid', ?, ?, ?, datetime('now'))
-        `).run(
-          order.id,
-          order.total,
-          order.payment_method || 'UPI',
-          razorpay_payment_id || `txn_${Date.now()}`,
-          RAZORPAY_KEY_ID ? 'Razorpay' : 'Sandbox',
-          JSON.stringify({ razorpay_order_id, razorpay_payment_id, signature })
-        );
-      } catch {}
-
-      logAudit(user, 'PAYMENT_SUCCESS', 'Order', order.order_number);
-      return ok({ ok: true, order_number: order.order_number, payment_status: 'Paid', status: newStatus });
+      return ok({ ok: true, recorded: true });
     }
 
-    return err('Unknown action');
+    return err('Unknown payment action', 400);
   } catch (e: any) {
-    return err(e.message, 500);
+    console.error('Payment API Exception:', e);
+    return err(e.message || 'Internal payment processing error', 500);
   }
 }

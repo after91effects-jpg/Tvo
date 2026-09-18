@@ -17,22 +17,28 @@ import {
   Users,
   ShieldCheck,
   Activity,
-  Wheat,
   Star,
   Truck,
+  Wheat,
+  Megaphone,
+  TrendingUp,
+  CreditCard,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { hasPermission, type Permission } from '../../lib/server/permissions';
 
 export type AdminTab =
   | 'dashboard'
+  | 'analytics'
   | 'products'
   | 'categories'
   | 'ingredients'
   | 'media'
   | 'orders'
+  | 'payments'
   | 'delivery'
   | 'reviews'
+  | 'marketing'
   | 'woocommerce'
   | 'security'
   | 'hamper'
@@ -71,6 +77,13 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       group: 'COMMAND CENTER',
     },
     {
+      id: 'analytics',
+      label: 'Analytics & Reports',
+      icon: <TrendingUp className="w-4 h-4" />,
+      permission: 'view_reports',
+      group: 'COMMAND CENTER',
+    },
+    {
       id: 'products',
       label: 'Products Catalog',
       icon: <Cake className="w-4 h-4" />,
@@ -103,6 +116,13 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       group: 'MARKETING',
     },
     {
+      id: 'marketing',
+      label: 'Marketing & CRM',
+      icon: <Megaphone className="w-4 h-4" />,
+      permission: 'manage_coupons',
+      group: 'MARKETING',
+    },
+    {
       id: 'media',
       label: 'Media & Uploads',
       icon: <ImageIcon className="w-4 h-4" />,
@@ -115,6 +135,13 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       icon: <ShoppingBag className="w-4 h-4" />,
       badge: pendingOrdersCount > 0 ? pendingOrdersCount : undefined,
       permission: 'view_orders',
+      group: 'OPERATIONS',
+    },
+    {
+      id: 'payments',
+      label: 'Payments & Razorpay',
+      icon: <CreditCard className="w-4 h-4" />,
+      permission: 'view_payments',
       group: 'OPERATIONS',
     },
     {

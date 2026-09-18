@@ -33,6 +33,12 @@ export type Permission =
   | 'view_customers'
   | 'edit_customers'
   | 'view_payments'
+  | 'view_payment_details'
+  | 'view_settlements'
+  | 'view_reconciliation'
+  | 'refund_payments'
+  | 'manage_payment_settings'
+  | 'view_payment_reports'
   | 'manage_refunds'
   | 'view_delivery'
   | 'manage_delivery'
@@ -93,7 +99,7 @@ export const ROLES: Record<Role, RoleDefinition> = {
       'view_recipes', 'create_recipes', 'edit_recipes', 'manage_production',
       'view_orders', 'edit_orders', 'update_order_status',
       'view_customers', 'edit_customers',
-      'view_payments', 'manage_refunds',
+      'view_payments', 'view_payment_details', 'view_settlements', 'view_reconciliation', 'refund_payments', 'manage_payment_settings', 'view_payment_reports', 'manage_refunds',
       'view_delivery', 'manage_delivery', 'manage_delivery_zones', 'manage_delivery_slots', 'manage_drivers',
       'manage_festivals', 'manage_campaigns', 'manage_coupons', 'manage_hampers', 'manage_storefront', 'publish_storefront',
       'view_media', 'upload_media', 'edit_media', 'delete_media',

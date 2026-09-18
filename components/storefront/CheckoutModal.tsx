@@ -517,7 +517,6 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       newOrder.orderNumber = serverOrderNumber;
 
       // Payment Flow
-      let paymentConfirmed = paymentMethod === 'cod';
       if (paymentMethod === 'upi_card' && serverOrderNumber) {
         let pay: any = null;
         try {
@@ -527,21 +526,57 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             body: JSON.stringify({ action: 'create', orderNumber: serverOrderNumber }),
           });
           pay = await payRes.json();
-        } catch (payErr) {
-          console.warn('Payment order create failed:', payErr);
+          if (!payRes.ok) {
+            throw new Error(pay?.error || 'Payment gateway initialization failed');
+          }
+        } catch (payErr: any) {
+          setErrorMessage(payErr?.message || 'Could not connect to payment gateway. Please try again.');
+          setIsPlacingOrder(false);
+          return;
         }
 
         if (pay?.order_id) {
-          if (pay.sandbox) {
-            paymentConfirmed = true;
+          if (pay.sandbox && !pay.key_id) {
+            // Local test mode without live keys: simulate server-side verification
+            try {
+              const verifyRes = await fetch('/api/payments', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  action: 'verify',
+                  orderNumber: serverOrderNumber,
+                  razorpay_order_id: pay.order_id,
+                  razorpay_payment_id: `pay_sandbox_${Date.now()}`,
+                  razorpay_signature: 'sandbox_test_sig',
+                }),
+              });
+              const verifyJson = await verifyRes.json();
+              if (verifyJson.ok && verifyJson.payment_status === 'Paid') {
+                clearCart();
+                if (occasionSlug) {
+                  occasionAnalytics.trackOccasionPurchase(occasionSlug, serverOrderNumber, totalAmount);
+                }
+                onOrderSuccess(serverOrderNumber);
+                return;
+              } else {
+                setErrorMessage(verifyJson.error || 'Test payment verification failed');
+                setIsPlacingOrder(false);
+                return;
+              }
+            } catch (vErr: any) {
+              setErrorMessage('Verification failed: ' + vErr.message);
+              setIsPlacingOrder(false);
+              return;
+            }
           } else {
+            // Official Razorpay Checkout Flow
             await loadRazorpayCheckout();
             const rzp = new (window as any).Razorpay({
               key: pay.key_id,
               amount: pay.amount,
-              currency: pay.currency,
+              currency: pay.currency || 'INR',
               name: 'TVO FLAVOURS',
-              description: `Bakery Order #${serverOrderNumber}`,
+              description: `Bakery Celebration Order #${serverOrderNumber}`,
               order_id: pay.order_id,
               prefill: {
                 name: recipientName,
@@ -550,38 +585,84 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               },
               theme: { color: '#e11d48' },
               handler: async (response: any) => {
+                setIsPlacingOrder(true);
+                try {
+                  const verifyRes = await fetch('/api/payments', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      action: 'verify',
+                      orderNumber: serverOrderNumber,
+                      razorpay_order_id: response.razorpay_order_id,
+                      razorpay_payment_id: response.razorpay_payment_id,
+                      razorpay_signature: response.razorpay_signature,
+                    }),
+                  });
+                  const verifyData = await verifyRes.json();
+                  if (verifyRes.ok && verifyData.payment_status === 'Paid') {
+                    clearCart();
+                    if (occasionSlug) {
+                      occasionAnalytics.trackOccasionPurchase(occasionSlug, serverOrderNumber, totalAmount);
+                    }
+                    onOrderSuccess(serverOrderNumber);
+                  } else {
+                    setErrorMessage(verifyData.error || 'Payment signature verification failed. Please contact support if your account was debited.');
+                  }
+                } catch (vErr: any) {
+                  setErrorMessage(vErr.message || 'Error verifying payment with server. Please contact support.');
+                } finally {
+                  setIsPlacingOrder(false);
+                }
+              },
+              modal: {
+                ondismiss: async () => {
+                  setIsPlacingOrder(false);
+                  setErrorMessage('Payment was cancelled or closed. You can retry anytime.');
+                  try {
+                    await fetch('/api/payments', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        action: 'failure',
+                        orderNumber: serverOrderNumber,
+                        reason: 'Customer closed Razorpay checkout modal',
+                        code: 'MODAL_DISMISSED',
+                      }),
+                    });
+                  } catch {}
+                },
+              },
+            });
+
+            rzp.on('payment.failed', async (resp: any) => {
+              setIsPlacingOrder(false);
+              const desc = resp.error?.description || 'Payment was declined by your bank or gateway.';
+              setErrorMessage(desc);
+              try {
                 await fetch('/api/payments', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
-                    action: 'verify',
+                    action: 'failure',
                     orderNumber: serverOrderNumber,
-                    razorpay_order_id: response.razorpay_order_id,
-                    razorpay_payment_id: response.razorpay_payment_id,
-                    razorpay_signature: response.razorpay_signature,
+                    reason: desc,
+                    code: resp.error?.code || 'PAYMENT_FAILED',
                   }),
                 });
-                clearCart();
-                if (occasionSlug) {
-                  occasionAnalytics.trackOccasionPurchase(occasionSlug, serverOrderNumber, totalAmount);
-                }
-                onOrderSuccess(serverOrderNumber);
-              },
-              modal: {
-                ondismiss: () => {
-                  setErrorMessage('Payment was cancelled. You can retry with a different method.');
-                },
-              },
+              } catch {}
             });
+
             rzp.open();
             return;
           }
         } else {
-          paymentConfirmed = true;
+          setErrorMessage('Could not initialize payment order. Please try again.');
+          setIsPlacingOrder(false);
+          return;
         }
       }
 
-      if (paymentConfirmed) {
+      if (paymentMethod === 'cod') {
         clearCart();
         if (occasionSlug) {
           occasionAnalytics.trackOccasionPurchase(occasionSlug, serverOrderNumber, totalAmount);

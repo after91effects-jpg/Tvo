@@ -738,13 +738,14 @@ export const CustomerOrdersView: React.FC<CustomerOrdersViewProps> = ({ orders, 
                 <th className="py-3.5 px-4 font-semibold">Delivery Slot</th>
                 <th className="py-3.5 px-4 font-semibold">Total Amount</th>
                 <th className="py-3.5 px-4 font-semibold">Status</th>
+                <th className="py-3.5 px-4 font-semibold">Payment Status</th>
                 <th className="py-3.5 px-4 font-semibold text-right">Details</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border)] text-[var(--text-main)]">
               {filteredOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-12 text-center text-xs text-[var(--text-muted)]">
+                  <td colSpan={10} className="py-12 text-center text-xs text-[var(--text-muted)]">
                     <div className="max-w-xs mx-auto space-y-3">
                       <div className="w-10 h-10 rounded-full bg-[var(--bg-subtle)] flex items-center justify-center mx-auto text-[var(--text-muted)]">
                         <Calendar className="w-5 h-5" />
@@ -840,6 +841,21 @@ export const CustomerOrdersView: React.FC<CustomerOrdersViewProps> = ({ orders, 
                         >
                           <span className="w-1.5 h-1.5 rounded-full bg-current" />
                           <span>{ord.status}</span>
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        <span
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                            ord.payment_status === 'Paid'
+                              ? 'bg-emerald-500/10 text-emerald-600'
+                              : (ord.payment_status === 'Failed'
+                                  ? 'bg-rose-500/10 text-rose-600'
+                                  : (ord.payment_status === 'Refunded' || ord.payment_status === 'Partially Refunded'
+                                      ? 'bg-purple-500/10 text-purple-600'
+                                      : 'bg-amber-500/10 text-amber-600'))
+                          }`}
+                        >
+                          {ord.payment_status || 'Pending'}
                         </span>
                       </td>
                       <td className="py-3.5 px-4 text-right">
@@ -1052,6 +1068,37 @@ export const CustomerOrdersView: React.FC<CustomerOrdersViewProps> = ({ orders, 
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+
+            {/* Payment & Settlement Summary Card */}
+            <div className="p-4 rounded-2xl bg-[var(--bg-subtle)] border border-[var(--border)] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-subtle)] block">
+                  Payment Lifecycle & Gateway Status
+                </span>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                    (selectedOrder as any).payment_status === 'Paid'
+                      ? 'bg-emerald-500/10 text-emerald-600'
+                      : ((selectedOrder as any).payment_status === 'Failed'
+                          ? 'bg-rose-500/10 text-rose-600'
+                          : 'bg-amber-500/10 text-amber-600')
+                  }`}>
+                    {(selectedOrder as any).payment_status || 'Pending'}
+                  </span>
+                  <span className="font-semibold text-[var(--text-main)]">
+                    Method: {selectedOrder.paymentMethod || (selectedOrder as any).payment_method || 'UPI / Card'}
+                  </span>
+                </div>
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-subtle)] block">
+                  Order Total
+                </span>
+                <span className="text-base font-black text-emerald-600">
+                  ₹{Number(selectedOrder.total).toLocaleString('en-IN')}
+                </span>
               </div>
             </div>
 
