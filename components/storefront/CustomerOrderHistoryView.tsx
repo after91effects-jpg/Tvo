@@ -32,7 +32,9 @@ import {
   PackageCheck,
   HeartHandshake,
   ChefHat,
+  Star,
 } from 'lucide-react';
+import { StarRating } from '../common/StarRating';
 import { Order, OrderStatus, Product, WeightOption, CartItemAddon } from '../../lib/types';
 import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
@@ -122,6 +124,59 @@ export const CustomerOrderHistoryView: React.FC<CustomerOrderHistoryViewProps> =
   const [isCancelling, setIsCancelling] = useState<boolean>(false);
   const [copiedOrderNumber, setCopiedOrderNumber] = useState<string | null>(null);
   const [reorderNotification, setReorderNotification] = useState<string | null>(null);
+
+  // Review Modal State
+  const [reviewingItem, setReviewingItem] = useState<{
+    productId: string | number;
+    productName: string;
+    orderNumber: string;
+  } | null>(null);
+  const [orderReviewRating, setOrderReviewRating] = useState<number>(5);
+  const [orderReviewComment, setOrderReviewComment] = useState<string>('');
+  const [isSubmittingOrderReview, setIsSubmittingOrderReview] = useState<boolean>(false);
+  const [orderReviewSuccess, setOrderReviewSuccess] = useState<string | null>(null);
+  const [orderReviewError, setOrderReviewError] = useState<string | null>(null);
+
+  const handleOrderReviewSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reviewingItem) return;
+    setOrderReviewError(null);
+
+    const comment = orderReviewComment.trim();
+    if (comment.length < 5) {
+      setOrderReviewError('Review comment must be at least 5 characters.');
+      return;
+    }
+
+    try {
+      setIsSubmittingOrderReview(true);
+      const res = await fetch('/api/reviews', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          product_id: reviewingItem.productId,
+          customer_name: user?.name || 'Customer',
+          rating: orderReviewRating,
+          comment,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setOrderReviewError(data?.error || data?.message || 'Failed to submit review.');
+        setIsSubmittingOrderReview(false);
+        return;
+      }
+      setOrderReviewSuccess('Thank you! Your verified order review has been submitted for moderation.');
+      setTimeout(() => {
+        setReviewingItem(null);
+        setOrderReviewSuccess(null);
+      }, 2500);
+    } catch {
+      setOrderReviewError('Connection error. Please try again.');
+    } finally {
+      setIsSubmittingOrderReview(false);
+    }
+  };
 
   // Guest lookup & Login modal fallback
   const [guestEmailLookup, setGuestEmailLookup] = useState<string>('');
@@ -923,13 +978,33 @@ let ordersUrl = '/api/orders';
                           </div>
                         </div>
 
-                        <div className="text-right sm:self-center shrink-0">
+                        <div className="text-right sm:self-center shrink-0 flex flex-col items-end gap-1">
                           <div className="text-xs sm:text-sm font-bold text-[var(--text-main)]">
                             ₹{(item.totalPrice || item.unitPrice * (item.qty || 1)).toLocaleString('en-IN')}
                           </div>
                           <div className="text-[11px] text-[var(--text-muted)]">
                             ₹{item.unitPrice} each
                           </div>
+                          {order.status === 'Delivered' && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setReviewingItem({
+                                  productId: item.productId || (item as any).id,
+                                  productName: item.name,
+                                  orderNumber: order.orderNumber,
+                                });
+                                setOrderReviewRating(5);
+                                setOrderReviewComment('');
+                                setOrderReviewError(null);
+                                setOrderReviewSuccess(null);
+                              }}
+                              className="mt-1 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[var(--primary-light)] text-[var(--primary)] hover:bg-[var(--primary)] hover:text-white text-[10px] font-bold transition-all cursor-pointer"
+                            >
+                              <Star className="w-3 h-3 fill-current" />
+                              <span>Rate & Review</span>
+                            </button>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -1282,6 +1357,97 @@ let ordersUrl = '/api/orders';
                 {isCancelling ? 'Cancelling...' : 'Confirm Cancel'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rate & Review Delivered Item Modal */}
+      {reviewingItem && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-3xl shadow-2xl max-w-lg w-full p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--primary)] block">
+                  Verified Order #{reviewingItem.orderNumber}
+                </span>
+                <h3 className="text-base font-bold text-[var(--text-main)]">
+                  Rate & Review {reviewingItem.productName}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReviewingItem(null)}
+                className="p-1 rounded-lg text-[var(--text-subtle)] hover:text-[var(--text-main)] cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleOrderReviewSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-[var(--text-main)] mb-1">
+                  Your Rating
+                </label>
+                <StarRating
+                  rating={orderReviewRating}
+                  size={26}
+                  interactive
+                  onChange={(r) => setOrderReviewRating(r)}
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-[var(--text-main)]">
+                    Your Review & Celebration Feedback
+                  </label>
+                  <span className="text-[11px] text-[var(--text-subtle)]">
+                    {orderReviewComment.trim().length}/1000
+                  </span>
+                </div>
+                <textarea
+                  value={orderReviewComment}
+                  onChange={(e) => setOrderReviewComment(e.target.value)}
+                  rows={4}
+                  maxLength={1000}
+                  placeholder="Tell us about the flavor, cake texture, freshness, decoration and delivery experience..."
+                  required
+                  className="w-full px-3.5 py-2 text-xs rounded-xl border border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] leading-relaxed"
+                />
+              </div>
+
+              {orderReviewSuccess && (
+                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 text-xs font-semibold flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4 shrink-0" />
+                  <span>{orderReviewSuccess}</span>
+                </div>
+              )}
+
+              {orderReviewError && (
+                <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 text-xs font-semibold flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{orderReviewError}</span>
+                </div>
+              )}
+
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setReviewingItem(null)}
+                  className="flex-1 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--bg-subtle)] text-xs font-semibold text-[var(--text-main)] cursor-pointer"
+                >
+                  Close
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingOrderReview}
+                  className="flex-1 py-2.5 rounded-xl bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white text-xs font-bold cursor-pointer flex items-center justify-center gap-2 shadow-xs disabled:opacity-50"
+                >
+                  <Star className="w-4 h-4 fill-current" />
+                  <span>{isSubmittingOrderReview ? 'Submitting...' : 'Post Verified Review'}</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

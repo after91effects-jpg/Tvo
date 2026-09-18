@@ -294,6 +294,15 @@ export default function ProductPage() {
       : [`${SITE_URL}/images/brand/logo.png`],
     url: canonicalUrl,
     ...(product.sku ? { sku: product.sku } : {}),
+    ...(product.reviewCount && product.rating && product.reviewCount > 0 ? {
+      aggregateRating: {
+        '@type': 'AggregateRating',
+        ratingValue: Number(product.rating.toFixed(1)),
+        reviewCount: product.reviewCount,
+        bestRating: 5,
+        worstRating: 1,
+      },
+    } : {}),
     offers: weightPrices.length > 1 ? {
       '@type': 'AggregateOffer',
       priceCurrency: 'INR',

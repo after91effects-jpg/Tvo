@@ -75,6 +75,7 @@ import { HamperSettingsView } from '../components/admin/HamperSettingsView';
 import { FestivalManagerView } from '../components/admin/FestivalManagerView';
 import { SystemHealthView } from '../components/admin/SystemHealthView';
 import { IngredientMasterView } from '../components/admin/IngredientMasterView';
+import { ReviewModerationView } from '../components/admin/ReviewModerationView';
 
 function normalizeProductRecord(p: any): Product {
   const categorySlug = p.category || p.category_slug || '';
@@ -982,6 +983,8 @@ export default function Home() {
               {adminTab === 'orders' && (
                 <CustomerOrdersView orders={orders} onRefresh={fetchData} />
               )}
+
+              {adminTab === 'reviews' && <ReviewModerationView />}
 
               {adminTab === 'woocommerce' && (
                 <WooCommerceHubView products={products} onRefreshProducts={fetchData} />

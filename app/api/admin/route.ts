@@ -34,7 +34,39 @@ export async function GET(req: Request) {
     if (type === 'addons') return ok({ addons: db.prepare('SELECT * FROM addons').all() });
     if (type === 'settings') return ok({ settings: Object.fromEntries((db.prepare('SELECT key, value FROM settings').all() as { key: string; value: string }[]).map((r) => [r.key, r.value])) });
     if (type === 'audit') return ok({ audit: db.prepare('SELECT * FROM audit_logs ORDER BY id DESC LIMIT 200').all() });
-    if (type === 'reviews') return ok({ reviews: db.prepare('SELECT * FROM product_reviews ORDER BY id DESC LIMIT 300').all() });
+    if (type === 'reviews') {
+      let query = `
+        SELECT pr.*, p.name AS product_name, p.slug AS product_slug, p.images_json AS product_images
+        FROM product_reviews pr
+        LEFT JOIN products p ON pr.product_id = p.id
+      `;
+      const params: any[] = [];
+      const where: string[] = [];
+      if (status && status !== 'all') {
+        where.push('pr.status = ?');
+        params.push(status);
+      }
+      if (search) {
+        where.push('(pr.customer_name LIKE ? OR pr.comment LIKE ? OR p.name LIKE ?)');
+        const s = `%${search}%`;
+        params.push(s, s, s);
+      }
+      if (where.length) query += ' WHERE ' + where.join(' AND ');
+      query += ' ORDER BY pr.id DESC LIMIT 400';
+      const rows = db.prepare(query).all(...params) as any[];
+      const formatted = rows.map((r: any) => {
+        let product_image = null;
+        try {
+          const imgs = JSON.parse(r.product_images || '[]');
+          if (Array.isArray(imgs) && imgs.length > 0) {
+            product_image = typeof imgs[0] === 'string' ? imgs[0] : (imgs[0].url || imgs[0].src || null);
+          }
+        } catch {}
+        const { product_images, ...rest } = r;
+        return { ...rest, product_image };
+      });
+      return ok({ reviews: formatted });
+    }
     if (type === 'catalog_sources') return ok({ ...getCatalogSourceConfig() });
     if (type === 'static_blocks') return ok({ blocks: db.prepare('SELECT * FROM static_blocks').all() });
     if (type === 'testimonials') return ok({ testimonials: db.prepare('SELECT * FROM testimonials').all() });
@@ -279,10 +311,12 @@ export async function POST(req: Request) {
     // ---- REVIEWS moderation ----
     if (type === 'reviews' && action === 'moderate') {
       db.prepare('UPDATE product_reviews SET status=? WHERE id=?').run(body.status, body.id);
+      logAudit(user, 'REVIEW_' + String(body.status).toUpperCase(), 'ProductReview', String(body.id));
       return ok({ ok: true });
     }
     if (type === 'reviews' && action === 'delete') {
       db.prepare('DELETE FROM product_reviews WHERE id=?').run(body.id);
+      logAudit(user, 'REVIEW_DELETE', 'ProductReview', String(body.id));
       return ok({ ok: true });
     }
 

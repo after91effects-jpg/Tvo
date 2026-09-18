@@ -674,6 +674,8 @@ CREATE INDEX IF NOT EXISTS idx_product_variants_sku ON product_variants(sku);
 CREATE INDEX IF NOT EXISTS idx_orders_number ON orders(order_number);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
 CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at);
+CREATE INDEX IF NOT EXISTS idx_product_reviews_pid_status ON product_reviews(product_id, status);
+CREATE INDEX IF NOT EXISTS idx_product_reviews_cust_id ON product_reviews(customer_id);
 `;
 
 export function initDb() {

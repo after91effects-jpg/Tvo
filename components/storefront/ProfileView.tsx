@@ -12,7 +12,11 @@ import {
   Loader2,
   ChevronLeft,
   ShieldCheck,
+  Star,
+  MessageSquare,
+  ExternalLink,
 } from 'lucide-react';
+import { StarRating } from '../common/StarRating';
 import { useAuth } from '../../context/AuthContext';
 
 interface ProfileViewProps {
@@ -44,6 +48,32 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate, onOpenLogi
         : false
     );
   }, [displayName, phone, user]);
+
+  const [customerReviews, setCustomerReviews] = useState<any[]>([]);
+  const [isLoadingReviews, setIsLoadingReviews] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!user) return;
+    let mounted = true;
+    const loadCustomerReviews = async () => {
+      try {
+        setIsLoadingReviews(true);
+        const res = await fetch('/api/reviews?my_reviews=1');
+        const data = await res.json();
+        if (mounted && data.reviews && Array.isArray(data.reviews)) {
+          setCustomerReviews(data.reviews);
+        }
+      } catch {
+        // Ignore
+      } finally {
+        if (mounted) setIsLoadingReviews(false);
+      }
+    };
+    loadCustomerReviews();
+    return () => {
+      mounted = false;
+    };
+  }, [user]);
 
   if (!isAuthReady) {
     // Loading state — auth session is still being restored (no sign-in flash).
@@ -296,6 +326,119 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate, onOpenLogi
             </p>
           </div>
         </div>
+      </div>
+
+      {/* Customer's Celebration Reviews Section */}
+      <div className="mt-8 p-5 sm:p-6 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border)] shadow-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[var(--border)]">
+          <div>
+            <h3 className="text-base font-bold text-[var(--text-main)] flex items-center gap-2">
+              <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
+              My Celebration Reviews
+              <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--bg-subtle)] text-[var(--text-muted)] border border-[var(--border)] font-semibold">
+                {customerReviews.length}
+              </span>
+            </h3>
+            <p className="text-xs text-[var(--text-muted)] mt-1">
+              Feedback and ratings you have shared for your TVO celebration treats.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => onNavigate('orders')}
+            className="px-3 py-1.5 rounded-xl border border-[var(--border)] bg-[var(--bg-subtle)] hover:bg-[var(--bg-surface)] text-xs font-semibold text-[var(--text-main)] flex items-center gap-1.5 transition-all self-start sm:self-auto cursor-pointer"
+          >
+            Review a Delivered Order
+          </button>
+        </div>
+
+        {isLoadingReviews ? (
+          <div className="py-12 flex flex-col items-center justify-center text-center">
+            <Loader2 className="w-6 h-6 animate-spin text-[var(--primary)] mb-2" />
+            <span className="text-xs text-[var(--text-muted)]">Loading your reviews...</span>
+          </div>
+        ) : customerReviews.length === 0 ? (
+          <div className="py-10 text-center flex flex-col items-center justify-center">
+            <div className="w-12 h-12 rounded-2xl bg-[var(--bg-subtle)] text-[var(--text-subtle)] flex items-center justify-center mb-3">
+              <MessageSquare className="w-6 h-6" />
+            </div>
+            <h4 className="text-sm font-semibold text-[var(--text-main)]">No reviews written yet</h4>
+            <p className="text-xs text-[var(--text-muted)] max-w-sm mt-1 mb-4">
+              Share your thoughts on treats you have tasted! You can write a verified review directly from any delivered order in your Order History.
+            </p>
+            <button
+              type="button"
+              onClick={() => onNavigate('orders')}
+              className="px-4 py-2 rounded-xl bg-[var(--primary)] text-white text-xs font-bold hover:bg-[var(--primary-hover)] transition-all cursor-pointer shadow-xs"
+            >
+              View Delivered Orders
+            </button>
+          </div>
+        ) : (
+          <div className="divide-y divide-[var(--border)]">
+            {customerReviews.map((rev) => (
+              <div key={rev.id} className="py-4 first:pt-4 last:pb-0 flex flex-col sm:flex-row gap-4 justify-between items-start">
+                <div className="flex gap-3.5 items-start">
+                  {rev.product_image ? (
+                    <img
+                      src={rev.product_image}
+                      alt={rev.product_name || 'Product'}
+                      className="w-14 h-14 rounded-xl object-cover border border-[var(--border)] shrink-0 bg-[var(--bg-subtle)]"
+                    />
+                  ) : (
+                    <div className="w-14 h-14 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border)] shrink-0 flex items-center justify-center text-xs font-bold text-[var(--text-subtle)]">
+                      TVO
+                    </div>
+                  )}
+                  <div className="space-y-1">
+                    <button
+                      type="button"
+                      onClick={() => rev.product_slug && onNavigate('product', rev.product_slug)}
+                      className="text-sm font-bold text-[var(--text-main)] hover:text-[var(--primary)] transition-colors flex items-center gap-1.5 text-left group cursor-pointer"
+                    >
+                      {rev.product_name || 'Celebration Treat'}
+                      <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </button>
+                    <div className="flex items-center gap-2">
+                      <StarRating rating={rev.rating} size={13} />
+                      <span className="text-xs font-bold text-[var(--text-main)]">{rev.rating}/5</span>
+                      {rev.verified === 1 && (
+                        <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded border border-emerald-500/20">
+                          Verified Order
+                        </span>
+                      )}
+                    </div>
+                    {rev.title && (
+                      <h5 className="text-xs font-bold text-[var(--text-main)] pt-0.5">{rev.title}</h5>
+                    )}
+                    <p className="text-xs text-[var(--text-muted)] leading-relaxed">{rev.comment}</p>
+                    <div className="text-[10px] text-[var(--text-subtle)] pt-1">
+                      Submitted on {new Date(rev.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </div>
+                  </div>
+                </div>
+                <div className="self-start shrink-0">
+                  {rev.status === 'approved' && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[11px] font-bold border border-emerald-500/20">
+                      <CheckCircle className="w-3 h-3" />
+                      Approved & Published
+                    </span>
+                  )}
+                  {rev.status === 'pending' && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[11px] font-bold border border-amber-500/20">
+                      Pending Moderation
+                    </span>
+                  )}
+                  {rev.status === 'rejected' && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400 text-[11px] font-bold border border-rose-500/20">
+                      Needs Revision
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

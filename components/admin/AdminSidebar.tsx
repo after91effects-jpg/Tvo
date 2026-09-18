@@ -18,6 +18,7 @@ import {
   ShieldCheck,
   Activity,
   Wheat,
+  Star,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { hasPermission, type Permission } from '../../lib/server/permissions';
@@ -29,6 +30,7 @@ export type AdminTab =
   | 'ingredients'
   | 'media'
   | 'orders'
+  | 'reviews'
   | 'woocommerce'
   | 'security'
   | 'hamper'
@@ -118,6 +120,13 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       label: 'Ingredient Master',
       icon: <Wheat className="w-4 h-4" />,
       permission: 'view_recipes',
+      group: 'OPERATIONS',
+    },
+    {
+      id: 'reviews',
+      label: 'Customer Reviews',
+      icon: <Star className="w-4 h-4" />,
+      permission: 'view_products',
       group: 'OPERATIONS',
     },
     {
