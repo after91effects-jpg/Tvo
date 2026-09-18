@@ -579,10 +579,10 @@ export const DeliveryManagementView: React.FC = () => {
       <div className="flex flex-wrap gap-2 border-b border-[var(--border)] pb-2">
         <button
           onClick={() => setActiveTab('dispatch')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
             activeTab === 'dispatch'
-              ? 'bg-[var(--gold)] text-black shadow-sm'
-              : 'bg-[var(--surface-secondary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+              ? 'bg-[var(--gold)] text-black shadow-sm font-semibold'
+              : 'bg-[var(--surface-secondary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)]'
           }`}
         >
           <Navigation className="w-4 h-4" />
@@ -590,10 +590,10 @@ export const DeliveryManagementView: React.FC = () => {
         </button>
         <button
           onClick={() => setActiveTab('zones')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
             activeTab === 'zones'
-              ? 'bg-[var(--gold)] text-black shadow-sm'
-              : 'bg-[var(--surface-secondary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+              ? 'bg-[var(--gold)] text-black shadow-sm font-semibold'
+              : 'bg-[var(--surface-secondary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)]'
           }`}
         >
           <MapPin className="w-4 h-4" />
@@ -601,10 +601,10 @@ export const DeliveryManagementView: React.FC = () => {
         </button>
         <button
           onClick={() => setActiveTab('slots')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
             activeTab === 'slots'
-              ? 'bg-[var(--gold)] text-black shadow-sm'
-              : 'bg-[var(--surface-secondary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+              ? 'bg-[var(--gold)] text-black shadow-sm font-semibold'
+              : 'bg-[var(--surface-secondary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)]'
           }`}
         >
           <Clock className="w-4 h-4" />
@@ -612,10 +612,10 @@ export const DeliveryManagementView: React.FC = () => {
         </button>
         <button
           onClick={() => setActiveTab('buffers')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
             activeTab === 'buffers'
-              ? 'bg-[var(--gold)] text-black shadow-sm'
-              : 'bg-[var(--surface-secondary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+              ? 'bg-[var(--gold)] text-black shadow-sm font-semibold'
+              : 'bg-[var(--surface-secondary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)]'
           }`}
         >
           <Sliders className="w-4 h-4" />
@@ -623,10 +623,10 @@ export const DeliveryManagementView: React.FC = () => {
         </button>
         <button
           onClick={() => setActiveTab('drivers')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
             activeTab === 'drivers'
-              ? 'bg-[var(--gold)] text-black shadow-sm'
-              : 'bg-[var(--surface-secondary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+              ? 'bg-[var(--gold)] text-black shadow-sm font-semibold'
+              : 'bg-[var(--surface-secondary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)]'
           }`}
         >
           <Users className="w-4 h-4" />
@@ -646,16 +646,16 @@ export const DeliveryManagementView: React.FC = () => {
               <p className="text-2xl font-bold text-[var(--text-primary)] mt-1">{totalDeliveries}</p>
             </div>
             <div className="bg-[var(--surface-primary)] border border-[var(--border)] p-4 rounded-xl">
-              <span className="text-xs text-amber-500 uppercase tracking-wider">Pending Assignment</span>
-              <p className="text-2xl font-bold text-amber-500 mt-1">{pendingCount}</p>
+              <span className="text-xs text-amber-500 dark:text-amber-400 uppercase tracking-wider font-medium">Pending Assignment</span>
+              <p className="text-2xl font-bold text-amber-500 dark:text-amber-400 mt-1">{pendingCount}</p>
             </div>
             <div className="bg-[var(--surface-primary)] border border-[var(--border)] p-4 rounded-xl">
-              <span className="text-xs text-blue-500 uppercase tracking-wider">Out for Delivery</span>
-              <p className="text-2xl font-bold text-blue-500 mt-1">{outForDeliveryCount}</p>
+              <span className="text-xs text-blue-500 dark:text-blue-400 uppercase tracking-wider font-medium">Out for Delivery</span>
+              <p className="text-2xl font-bold text-blue-500 dark:text-blue-400 mt-1">{outForDeliveryCount}</p>
             </div>
             <div className="bg-[var(--surface-primary)] border border-[var(--border)] p-4 rounded-xl">
-              <span className="text-xs text-emerald-500 uppercase tracking-wider">Delivered</span>
-              <p className="text-2xl font-bold text-emerald-500 mt-1">{deliveredCount}</p>
+              <span className="text-xs text-emerald-500 dark:text-emerald-400 uppercase tracking-wider font-medium">Delivered</span>
+              <p className="text-2xl font-bold text-emerald-500 dark:text-emerald-400 mt-1">{deliveredCount}</p>
             </div>
           </div>
 
@@ -667,10 +667,10 @@ export const DeliveryManagementView: React.FC = () => {
                 <button
                   key={st}
                   onClick={() => setDispatchStatusFilter(st)}
-                  className={`px-3 py-1 rounded-md text-xs font-medium capitalize transition-all ${
+                  className={`px-3 py-1 rounded-md text-xs font-medium capitalize transition-all cursor-pointer ${
                     dispatchStatusFilter === st
-                      ? 'bg-[var(--gold)] text-black'
-                      : 'bg-[var(--surface-primary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                      ? 'bg-[var(--gold)] text-black font-semibold shadow-xs'
+                      : 'bg-[var(--surface-primary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)]'
                   }`}
                 >
                   {st.replace(/_/g, ' ')}
@@ -684,12 +684,12 @@ export const DeliveryManagementView: React.FC = () => {
                 type="date"
                 value={dispatchDateFilter === 'all' ? '' : dispatchDateFilter}
                 onChange={(e) => setDispatchDateFilter(e.target.value || 'all')}
-                className="px-2 py-1 text-xs bg-[var(--surface-primary)] border border-[var(--border)] rounded-md text-[var(--text-primary)]"
+                className="px-2 py-1 text-xs bg-[var(--surface-primary)] border border-[var(--border)] rounded-md text-[var(--text-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)] cursor-pointer"
               />
               {dispatchDateFilter !== 'all' && (
                 <button
                   onClick={() => setDispatchDateFilter('all')}
-                  className="text-xs text-[var(--gold)] hover:underline"
+                  className="text-xs text-[var(--gold)] hover:underline font-semibold cursor-pointer"
                 >
                   Clear
                 </button>
@@ -878,8 +878,10 @@ export const DeliveryManagementView: React.FC = () => {
                     <div className="flex items-start justify-between">
                       <h3 className="font-bold text-base text-[var(--text-primary)]">{zone.name}</h3>
                       <span
-                        className={`px-2 py-0.5 text-[10px] font-semibold rounded-full ${
-                          zone.active ? 'bg-emerald-500/10 text-emerald-500' : 'bg-gray-500/10 text-gray-500'
+                        className={`px-2 py-0.5 text-[10px] font-semibold rounded-full border ${
+                          zone.active
+                            ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+                            : 'bg-zinc-500/15 text-zinc-600 dark:text-zinc-400 border-zinc-500/30'
                         }`}
                       >
                         {zone.active ? 'Active' : 'Inactive'}
@@ -894,7 +896,7 @@ export const DeliveryManagementView: React.FC = () => {
                       </div>
                       <div className="flex justify-between border-b border-[var(--border)] pb-1">
                         <span className="text-[var(--text-muted)]">Free Delivery Over:</span>
-                        <span className="font-semibold text-emerald-500">
+                        <span className="font-semibold text-emerald-600 dark:text-emerald-400">
                           {zone.free_delivery_threshold ? `₹${zone.free_delivery_threshold}` : 'None'}
                         </span>
                       </div>
@@ -925,14 +927,14 @@ export const DeliveryManagementView: React.FC = () => {
                         setEditingZone(zone);
                         setIsZoneModalOpen(true);
                       }}
-                      className="px-2.5 py-1 text-xs border border-[var(--border)] rounded hover:bg-[var(--surface-secondary)] text-[var(--text-secondary)]"
+                      className="px-2.5 py-1 text-xs border border-[var(--border)] rounded hover:bg-[var(--surface-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
                     >
                       <Edit2 className="w-3.5 h-3.5 inline mr-1" />
                       Edit
                     </button>
                     <button
                       onClick={() => handleDeleteZone(zone.id)}
-                      className="px-2.5 py-1 text-xs border border-rose-500/30 text-rose-500 rounded hover:bg-rose-500/10"
+                      className="px-2.5 py-1 text-xs border border-rose-500/30 text-rose-500 hover:text-rose-400 rounded hover:bg-rose-500/10 transition-colors cursor-pointer"
                     >
                       <Trash2 className="w-3.5 h-3.5 inline mr-1" />
                       Delete
@@ -958,12 +960,12 @@ export const DeliveryManagementView: React.FC = () => {
                     placeholder="Search pincode or zone..."
                     value={pincodeSearch}
                     onChange={(e) => setPincodeSearch(e.target.value)}
-                    className="pl-8 pr-3 py-1.5 text-xs bg-[var(--surface-primary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] w-48"
+                    className="pl-8 pr-3 py-1.5 text-xs bg-[var(--surface-primary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder:text-[var(--text-subtle)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)] w-48"
                   />
                 </div>
                 <button
                   onClick={() => setIsBulkPincodeOpen(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--gold)] text-black rounded-lg text-xs font-semibold hover:opacity-90"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--gold)] text-black rounded-lg text-xs font-semibold hover:opacity-90 transition-opacity cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   Bulk Add PINs
@@ -990,10 +992,10 @@ export const DeliveryManagementView: React.FC = () => {
                         <td className="p-3">
                           <button
                             onClick={() => handleTogglePincode(pin)}
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border transition-colors cursor-pointer ${
                               pin.available
-                                ? 'bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20'
-                                : 'bg-rose-500/10 text-rose-500 hover:bg-rose-500/20'
+                                ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/25'
+                                : 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30 hover:bg-rose-500/25'
                             }`}
                           >
                             {pin.available ? 'Serviceable' : 'Suspended'}
@@ -1002,7 +1004,7 @@ export const DeliveryManagementView: React.FC = () => {
                         <td className="p-3 text-right">
                           <button
                             onClick={() => handleDeletePincode(pin.id)}
-                            className="p-1 text-rose-500 hover:text-rose-600"
+                            className="p-1 text-rose-500 hover:text-rose-400 transition-colors cursor-pointer"
                             title="Delete Pincode"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -1050,8 +1052,10 @@ export const DeliveryManagementView: React.FC = () => {
                   <div className="flex items-start justify-between">
                     <h3 className="font-bold text-sm text-[var(--text-primary)]">{slot.name}</h3>
                     <span
-                      className={`px-2 py-0.5 text-[10px] font-semibold rounded-full ${
-                        slot.available ? 'bg-emerald-500/10 text-emerald-500' : 'bg-gray-500/10 text-gray-500'
+                      className={`px-2 py-0.5 text-[10px] font-semibold rounded-full border ${
+                        slot.available
+                          ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+                          : 'bg-zinc-500/15 text-zinc-600 dark:text-zinc-400 border-zinc-500/30'
                       }`}
                     >
                       {slot.available ? 'Active' : 'Inactive'}
@@ -1071,7 +1075,7 @@ export const DeliveryManagementView: React.FC = () => {
                     </div>
                     <div className="flex justify-between border-b border-[var(--border)] pb-1">
                       <span className="text-[var(--text-muted)]">Evening Surcharge:</span>
-                      <span className="font-semibold text-amber-500">
+                      <span className="font-semibold text-amber-600 dark:text-amber-400">
                         {slot.fee > 0 ? `+₹${slot.fee}` : 'Free'}
                       </span>
                     </div>
@@ -1090,7 +1094,7 @@ export const DeliveryManagementView: React.FC = () => {
                       setEditingSlot(slot);
                       setIsSlotModalOpen(true);
                     }}
-                    className="px-2.5 py-1 text-xs border border-[var(--border)] rounded hover:bg-[var(--surface-secondary)] text-[var(--text-secondary)]"
+                    className="px-2.5 py-1 text-xs border border-[var(--border)] rounded hover:bg-[var(--surface-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
                   >
                     <Edit2 className="w-3.5 h-3.5 inline mr-1" />
                     Edit Slot
@@ -1121,7 +1125,7 @@ export const DeliveryManagementView: React.FC = () => {
                       type="number"
                       defaultValue={buf.value}
                       onBlur={(e) => handleSaveBuffer(buf, Number(e.target.value))}
-                      className="w-24 px-2 py-1 bg-[var(--surface-secondary)] border border-[var(--border)] rounded text-sm font-semibold text-[var(--text-primary)]"
+                      className="w-24 px-2 py-1 bg-[var(--surface-secondary)] border border-[var(--border)] rounded text-sm font-semibold text-[var(--text-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
                     />
                     <span className="text-xs text-[var(--text-secondary)]">{buf.unit || 'minutes'}</span>
                   </div>
@@ -1216,12 +1220,12 @@ export const DeliveryManagementView: React.FC = () => {
                         </p>
                       </div>
                       <span
-                        className={`px-2 py-0.5 text-[10px] font-semibold rounded-full capitalize ${
+                        className={`px-2 py-0.5 text-[10px] font-semibold rounded-full border capitalize ${
                           driver.status === 'available'
-                            ? 'bg-emerald-500/10 text-emerald-500'
+                            ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
                             : driver.status === 'on_delivery'
-                            ? 'bg-blue-500/10 text-blue-500'
-                            : 'bg-gray-500/10 text-gray-500'
+                            ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/30'
+                            : 'bg-zinc-500/15 text-zinc-600 dark:text-zinc-400 border-zinc-500/30'
                         }`}
                       >
                         {driver.status.replace(/_/g, ' ')}
@@ -1255,14 +1259,14 @@ export const DeliveryManagementView: React.FC = () => {
                         setEditingDriver(driver);
                         setIsDriverModalOpen(true);
                       }}
-                      className="px-2.5 py-1 text-xs border border-[var(--border)] rounded hover:bg-[var(--surface-secondary)] text-[var(--text-secondary)]"
+                      className="px-2.5 py-1 text-xs border border-[var(--border)] rounded hover:bg-[var(--surface-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
                     >
                       <Edit2 className="w-3.5 h-3.5 inline mr-1" />
                       Edit
                     </button>
                     <button
                       onClick={() => handleDeleteDriver(driver.id)}
-                      className="px-2.5 py-1 text-xs border border-rose-500/30 text-rose-500 rounded hover:bg-rose-500/10"
+                      className="px-2.5 py-1 text-xs border border-rose-500/30 text-rose-500 hover:text-rose-400 rounded hover:bg-rose-500/10 transition-colors cursor-pointer"
                     >
                       <Trash2 className="w-3.5 h-3.5 inline mr-1" />
                       Delete
@@ -1288,66 +1292,66 @@ export const DeliveryManagementView: React.FC = () => {
             </h3>
             <form onSubmit={handleSaveZone} className="space-y-4 text-xs">
               <div>
-                <label className="block text-[var(--text-secondary)] mb-1">Zone Name *</label>
+                <label className="block text-[var(--text-secondary)] mb-1 font-medium">Zone Name *</label>
                 <input
                   type="text"
                   required
                   placeholder="e.g. Gurugram Prime"
                   value={editingZone.name || ''}
                   onChange={(e) => setEditingZone({ ...editingZone, name: e.target.value })}
-                  className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)]"
+                  className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder:text-[var(--text-subtle)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
                 />
               </div>
               <div>
-                <label className="block text-[var(--text-secondary)] mb-1">City / Region</label>
+                <label className="block text-[var(--text-secondary)] mb-1 font-medium">City / Region</label>
                 <input
                   type="text"
                   placeholder="e.g. Gurugram"
                   value={editingZone.city || ''}
                   onChange={(e) => setEditingZone({ ...editingZone, city: e.target.value })}
-                  className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)]"
+                  className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder:text-[var(--text-subtle)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[var(--text-secondary)] mb-1">Base Delivery Fee (₹)</label>
+                  <label className="block text-[var(--text-secondary)] mb-1 font-medium">Base Delivery Fee (₹)</label>
                   <input
                     type="number"
                     value={editingZone.fee ?? 49}
                     onChange={(e) => setEditingZone({ ...editingZone, fee: Number(e.target.value) })}
-                    className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)]"
+                    className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder:text-[var(--text-subtle)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
                   />
                 </div>
                 <div>
-                  <label className="block text-[var(--text-secondary)] mb-1">Free Delivery Min (₹)</label>
+                  <label className="block text-[var(--text-secondary)] mb-1 font-medium">Free Delivery Min (₹)</label>
                   <input
                     type="number"
                     placeholder="e.g. 499"
                     value={editingZone.free_delivery_threshold || ''}
                     onChange={(e) => setEditingZone({ ...editingZone, free_delivery_threshold: e.target.value ? Number(e.target.value) : null })}
-                    className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)]"
+                    className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder:text-[var(--text-subtle)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
                   />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[var(--text-secondary)] mb-1">Min. Order Value (₹)</label>
+                  <label className="block text-[var(--text-secondary)] mb-1 font-medium">Min. Order Value (₹)</label>
                   <input
                     type="number"
                     placeholder="0"
                     value={editingZone.min_order_value || 0}
                     onChange={(e) => setEditingZone({ ...editingZone, min_order_value: Number(e.target.value) })}
-                    className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)]"
+                    className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder:text-[var(--text-subtle)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
                   />
                 </div>
                 <div>
-                  <label className="block text-[var(--text-secondary)] mb-1">Estimated Window</label>
+                  <label className="block text-[var(--text-secondary)] mb-1 font-medium">Estimated Window</label>
                   <input
                     type="text"
                     placeholder="e.g. 60 min"
                     value={editingZone.est_delivery_time || ''}
                     onChange={(e) => setEditingZone({ ...editingZone, est_delivery_time: e.target.value })}
-                    className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)]"
+                    className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder:text-[var(--text-subtle)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
                   />
                 </div>
               </div>
@@ -1357,9 +1361,9 @@ export const DeliveryManagementView: React.FC = () => {
                   id="zoneActiveCheck"
                   checked={editingZone.active !== 0}
                   onChange={(e) => setEditingZone({ ...editingZone, active: e.target.checked ? 1 : 0 })}
-                  className="rounded border-[var(--border)] text-[var(--gold)]"
+                  className="rounded border-[var(--border)] text-[var(--gold)] cursor-pointer"
                 />
-                <label htmlFor="zoneActiveCheck" className="text-[var(--text-primary)] font-medium">
+                <label htmlFor="zoneActiveCheck" className="text-[var(--text-primary)] font-medium cursor-pointer">
                   Active (accepting customer orders)
                 </label>
               </div>
@@ -1367,13 +1371,13 @@ export const DeliveryManagementView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setIsZoneModalOpen(false)}
-                  className="px-4 py-2 border border-[var(--border)] rounded-lg hover:bg-[var(--surface-secondary)] text-[var(--text-secondary)]"
+                  className="px-4 py-2 border border-[var(--border)] rounded-lg hover:bg-[var(--surface-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-[var(--gold)] text-black font-semibold rounded-lg hover:opacity-90"
+                  className="px-4 py-2 bg-[var(--gold)] text-black font-semibold rounded-lg hover:opacity-90 transition-opacity cursor-pointer"
                 >
                   Save Zone
                 </button>
@@ -1392,34 +1396,34 @@ export const DeliveryManagementView: React.FC = () => {
             </h3>
             <form onSubmit={handleSaveDriver} className="space-y-4 text-xs">
               <div>
-                <label className="block text-[var(--text-secondary)] mb-1">Driver Name *</label>
+                <label className="block text-[var(--text-secondary)] mb-1 font-medium">Driver Name *</label>
                 <input
                   type="text"
                   required
                   placeholder="e.g. Ramesh Kumar"
                   value={editingDriver.name || ''}
                   onChange={(e) => setEditingDriver({ ...editingDriver, name: e.target.value })}
-                  className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)]"
+                  className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder:text-[var(--text-subtle)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
                 />
               </div>
               <div>
-                <label className="block text-[var(--text-secondary)] mb-1">Phone Number *</label>
+                <label className="block text-[var(--text-secondary)] mb-1 font-medium">Phone Number *</label>
                 <input
                   type="tel"
                   required
                   placeholder="e.g. +91 98765 43210"
                   value={editingDriver.phone || ''}
                   onChange={(e) => setEditingDriver({ ...editingDriver, phone: e.target.value })}
-                  className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)]"
+                  className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder:text-[var(--text-subtle)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[var(--text-secondary)] mb-1">Vehicle Type</label>
+                  <label className="block text-[var(--text-secondary)] mb-1 font-medium">Vehicle Type</label>
                   <select
                     value={editingDriver.vehicle_type || 'Two Wheeler'}
                     onChange={(e) => setEditingDriver({ ...editingDriver, vehicle_type: e.target.value })}
-                    className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)]"
+                    className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)] [&>option]:bg-[var(--surface-secondary)] [&>option]:text-[var(--text-primary)]"
                   >
                     <option value="Two Wheeler">Two Wheeler (Bike/Scooter)</option>
                     <option value="Van">Delivery Van</option>
@@ -1428,22 +1432,22 @@ export const DeliveryManagementView: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[var(--text-secondary)] mb-1">Vehicle Number</label>
+                  <label className="block text-[var(--text-secondary)] mb-1 font-medium">Vehicle Number</label>
                   <input
                     type="text"
                     placeholder="HR 26 XX 1234"
                     value={editingDriver.vehicle_number || ''}
                     onChange={(e) => setEditingDriver({ ...editingDriver, vehicle_number: e.target.value })}
-                    className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)]"
+                    className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder:text-[var(--text-subtle)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-[var(--text-secondary)] mb-1">Duty Status</label>
+                <label className="block text-[var(--text-secondary)] mb-1 font-medium">Duty Status</label>
                 <select
                   value={editingDriver.status || 'available'}
                   onChange={(e) => setEditingDriver({ ...editingDriver, status: e.target.value as any })}
-                  className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)]"
+                  className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)] [&>option]:bg-[var(--surface-secondary)] [&>option]:text-[var(--text-primary)]"
                 >
                   <option value="available">Available</option>
                   <option value="on_delivery">On Delivery</option>
@@ -1451,13 +1455,13 @@ export const DeliveryManagementView: React.FC = () => {
                 </select>
               </div>
               <div>
-                <label className="block text-[var(--text-secondary)] mb-1">Notes / Instructions</label>
+                <label className="block text-[var(--text-secondary)] mb-1 font-medium">Notes / Instructions</label>
                 <textarea
                   rows={2}
                   placeholder="Notes about driver, route preferences..."
                   value={editingDriver.notes || ''}
                   onChange={(e) => setEditingDriver({ ...editingDriver, notes: e.target.value })}
-                  className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)]"
+                  className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder:text-[var(--text-subtle)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
                 />
               </div>
               <div className="flex items-center gap-2 pt-2">
@@ -1466,9 +1470,9 @@ export const DeliveryManagementView: React.FC = () => {
                   id="driverActiveCheck"
                   checked={editingDriver.active !== 0}
                   onChange={(e) => setEditingDriver({ ...editingDriver, active: e.target.checked ? 1 : 0 })}
-                  className="rounded border-[var(--border)] text-[var(--gold)]"
+                  className="rounded border-[var(--border)] text-[var(--gold)] cursor-pointer"
                 />
-                <label htmlFor="driverActiveCheck" className="text-[var(--text-primary)] font-medium">
+                <label htmlFor="driverActiveCheck" className="text-[var(--text-primary)] font-medium cursor-pointer">
                   Active Driver
                 </label>
               </div>
@@ -1476,13 +1480,13 @@ export const DeliveryManagementView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setIsDriverModalOpen(false)}
-                  className="px-4 py-2 border border-[var(--border)] rounded-lg hover:bg-[var(--surface-secondary)] text-[var(--text-secondary)]"
+                  className="px-4 py-2 border border-[var(--border)] rounded-lg hover:bg-[var(--surface-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-[var(--gold)] text-black font-semibold rounded-lg hover:opacity-90"
+                  className="px-4 py-2 bg-[var(--gold)] text-black font-semibold rounded-lg hover:opacity-90 transition-opacity cursor-pointer"
                 >
                   Save Driver
                 </button>
@@ -1501,68 +1505,68 @@ export const DeliveryManagementView: React.FC = () => {
             </h3>
             <form onSubmit={handleSaveSlot} className="space-y-4 text-xs">
               <div>
-                <label className="block text-[var(--text-secondary)] mb-1">Slot Name *</label>
+                <label className="block text-[var(--text-secondary)] mb-1 font-medium">Slot Name *</label>
                 <input
                   type="text"
                   required
                   placeholder="e.g. Afternoon (01:00 PM - 03:00 PM)"
                   value={editingSlot.name || ''}
                   onChange={(e) => setEditingSlot({ ...editingSlot, name: e.target.value })}
-                  className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)]"
+                  className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder:text-[var(--text-subtle)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[var(--text-secondary)] mb-1">Start Time (24h) *</label>
+                  <label className="block text-[var(--text-secondary)] mb-1 font-medium">Start Time (24h) *</label>
                   <input
                     type="text"
                     required
                     placeholder="13:00"
                     value={editingSlot.start_time || ''}
                     onChange={(e) => setEditingSlot({ ...editingSlot, start_time: e.target.value })}
-                    className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] font-mono"
+                    className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] font-mono placeholder:text-[var(--text-subtle)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
                   />
                 </div>
                 <div>
-                  <label className="block text-[var(--text-secondary)] mb-1">End Time (24h) *</label>
+                  <label className="block text-[var(--text-secondary)] mb-1 font-medium">End Time (24h) *</label>
                   <input
                     type="text"
                     required
                     placeholder="15:00"
                     value={editingSlot.end_time || ''}
                     onChange={(e) => setEditingSlot({ ...editingSlot, end_time: e.target.value })}
-                    className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] font-mono"
+                    className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] font-mono placeholder:text-[var(--text-subtle)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
                   />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[var(--text-secondary)] mb-1">Default Capacity</label>
+                  <label className="block text-[var(--text-secondary)] mb-1 font-medium">Default Capacity</label>
                   <input
                     type="number"
                     value={editingSlot.capacity ?? 20}
                     onChange={(e) => setEditingSlot({ ...editingSlot, capacity: Number(e.target.value) })}
-                    className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)]"
+                    className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder:text-[var(--text-subtle)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
                   />
                 </div>
                 <div>
-                  <label className="block text-[var(--text-secondary)] mb-1">Evening/Special Fee (₹)</label>
+                  <label className="block text-[var(--text-secondary)] mb-1 font-medium">Evening/Special Fee (₹)</label>
                   <input
                     type="number"
                     value={editingSlot.fee ?? 0}
                     onChange={(e) => setEditingSlot({ ...editingSlot, fee: Number(e.target.value) })}
-                    className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)]"
+                    className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder:text-[var(--text-subtle)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-[var(--text-secondary)] mb-1">Same-Day Cut-off Notice (Minutes)</label>
+                <label className="block text-[var(--text-secondary)] mb-1 font-medium">Same-Day Cut-off Notice (Minutes)</label>
                 <input
                   type="number"
                   placeholder="120"
                   value={editingSlot.cutoff_minutes ?? 120}
                   onChange={(e) => setEditingSlot({ ...editingSlot, cutoff_minutes: Number(e.target.value) })}
-                  className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)]"
+                  className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder:text-[var(--text-subtle)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
                 />
                 <p className="text-[10px] text-[var(--text-muted)] mt-1">
                   How many minutes prior to slot start time the customer must place their order (default: 120 min = 2 hours).
@@ -1574,9 +1578,9 @@ export const DeliveryManagementView: React.FC = () => {
                   id="slotActiveCheck"
                   checked={editingSlot.available !== 0}
                   onChange={(e) => setEditingSlot({ ...editingSlot, available: e.target.checked ? 1 : 0 })}
-                  className="rounded border-[var(--border)] text-[var(--gold)]"
+                  className="rounded border-[var(--border)] text-[var(--gold)] cursor-pointer"
                 />
-                <label htmlFor="slotActiveCheck" className="text-[var(--text-primary)] font-medium">
+                <label htmlFor="slotActiveCheck" className="text-[var(--text-primary)] font-medium cursor-pointer">
                   Active Slot
                 </label>
               </div>
@@ -1584,13 +1588,13 @@ export const DeliveryManagementView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setIsSlotModalOpen(false)}
-                  className="px-4 py-2 border border-[var(--border)] rounded-lg hover:bg-[var(--surface-secondary)] text-[var(--text-secondary)]"
+                  className="px-4 py-2 border border-[var(--border)] rounded-lg hover:bg-[var(--surface-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-[var(--gold)] text-black font-semibold rounded-lg hover:opacity-90"
+                  className="px-4 py-2 bg-[var(--gold)] text-black font-semibold rounded-lg hover:opacity-90 transition-opacity cursor-pointer"
                 >
                   Save Slot
                 </button>
@@ -1610,12 +1614,12 @@ export const DeliveryManagementView: React.FC = () => {
             </p>
             <form onSubmit={handleBulkAddPincodes} className="space-y-4 text-xs">
               <div>
-                <label className="block text-[var(--text-secondary)] mb-1">Target Zone *</label>
+                <label className="block text-[var(--text-secondary)] mb-1 font-medium">Target Zone *</label>
                 <select
                   required
                   value={bulkZoneId}
                   onChange={(e) => setBulkZoneId(Number(e.target.value))}
-                  className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)]"
+                  className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)] [&>option]:bg-[var(--surface-secondary)] [&>option]:text-[var(--text-primary)]"
                 >
                   <option value="">Select a zone...</option>
                   {zones.map((z) => (
@@ -1626,27 +1630,27 @@ export const DeliveryManagementView: React.FC = () => {
                 </select>
               </div>
               <div>
-                <label className="block text-[var(--text-secondary)] mb-1">PIN Codes (6 Digits) *</label>
+                <label className="block text-[var(--text-secondary)] mb-1 font-medium">PIN Codes (6 Digits) *</label>
                 <textarea
                   required
                   rows={6}
                   placeholder="122001, 122002&#10;122003&#10;122018"
                   value={bulkPincodesText}
                   onChange={(e) => setBulkPincodesText(e.target.value)}
-                  className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] font-mono"
+                  className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] font-mono placeholder:text-[var(--text-subtle)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
                 />
               </div>
               <div className="flex justify-end gap-2 pt-4">
                 <button
                   type="button"
                   onClick={() => setIsBulkPincodeOpen(false)}
-                  className="px-4 py-2 border border-[var(--border)] rounded-lg hover:bg-[var(--surface-secondary)] text-[var(--text-secondary)]"
+                  className="px-4 py-2 border border-[var(--border)] rounded-lg hover:bg-[var(--surface-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-[var(--gold)] text-black font-semibold rounded-lg hover:opacity-90"
+                  className="px-4 py-2 bg-[var(--gold)] text-black font-semibold rounded-lg hover:opacity-90 transition-opacity cursor-pointer"
                 >
                   Import PINs
                 </button>
@@ -1663,36 +1667,36 @@ export const DeliveryManagementView: React.FC = () => {
             <h3 className="text-lg font-bold text-[var(--text-primary)] mb-4">Add Holiday Blackout Date</h3>
             <form onSubmit={handleAddBlackout} className="space-y-4 text-xs">
               <div>
-                <label className="block text-[var(--text-secondary)] mb-1">Date *</label>
+                <label className="block text-[var(--text-secondary)] mb-1 font-medium">Date *</label>
                 <input
                   type="date"
                   required
                   value={newBlackoutDate}
                   onChange={(e) => setNewBlackoutDate(e.target.value)}
-                  className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)]"
+                  className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)] cursor-pointer"
                 />
               </div>
               <div>
-                <label className="block text-[var(--text-secondary)] mb-1">Closure Reason</label>
+                <label className="block text-[var(--text-secondary)] mb-1 font-medium">Closure Reason</label>
                 <input
                   type="text"
                   placeholder="e.g. Diwali Kitchen Maintenance"
                   value={newBlackoutReason}
                   onChange={(e) => setNewBlackoutReason(e.target.value)}
-                  className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)]"
+                  className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder:text-[var(--text-subtle)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
                 />
               </div>
               <div className="flex justify-end gap-2 pt-4">
                 <button
                   type="button"
                   onClick={() => setIsBlackoutModalOpen(false)}
-                  className="px-4 py-2 border border-[var(--border)] rounded-lg hover:bg-[var(--surface-secondary)] text-[var(--text-secondary)]"
+                  className="px-4 py-2 border border-[var(--border)] rounded-lg hover:bg-[var(--surface-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-[var(--gold)] text-black font-semibold rounded-lg hover:opacity-90"
+                  className="px-4 py-2 bg-[var(--gold)] text-black font-semibold rounded-lg hover:opacity-90 transition-opacity cursor-pointer"
                 >
                   Add Blackout
                 </button>
@@ -1714,11 +1718,11 @@ export const DeliveryManagementView: React.FC = () => {
               Order #{failureModalOrder.order_number} for {failureModalOrder.customer_name}
             </p>
             <div className="space-y-3 text-xs">
-              <label className="block text-[var(--text-secondary)]">Reason for Delivery Failure:</label>
+              <label className="block text-[var(--text-secondary)] font-medium">Reason for Delivery Failure:</label>
               <select
                 value={failureReason}
                 onChange={(e) => setFailureReason(e.target.value)}
-                className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)]"
+                className="w-full px-3 py-2 bg-[var(--surface-secondary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)] [&>option]:bg-[var(--surface-secondary)] [&>option]:text-[var(--text-primary)]"
               >
                 <option value="">Select reason...</option>
                 <option value="Customer unavailable / Phone unanswered">Customer unavailable / Phone unanswered</option>
@@ -1731,14 +1735,14 @@ export const DeliveryManagementView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setFailureModalOrder(null)}
-                  className="px-4 py-2 border border-[var(--border)] rounded-lg hover:bg-[var(--surface-secondary)] text-[var(--text-secondary)]"
+                  className="px-4 py-2 border border-[var(--border)] rounded-lg hover:bg-[var(--surface-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
                   onClick={() => handleStatusChange(failureModalOrder.id, 'failed', failureReason || 'Delivery unfulfilled')}
-                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-lg"
+                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-lg transition-colors cursor-pointer"
                 >
                   Confirm Failed
                 </button>
