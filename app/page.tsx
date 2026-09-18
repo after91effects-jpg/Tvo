@@ -77,6 +77,8 @@ import { SystemHealthView } from '../components/admin/SystemHealthView';
 import { IngredientMasterView } from '../components/admin/IngredientMasterView';
 import { ReviewModerationView } from '../components/admin/ReviewModerationView';
 import { DeliveryManagementView } from '../components/admin/DeliveryManagementView';
+import { MarketingManagerView } from '../components/admin/MarketingManagerView';
+import { AnalyticsReportsView } from '../components/admin/AnalyticsReportsView';
 import { PaymentDashboardView } from '../components/admin/PaymentDashboardView';
 
 function normalizeProductRecord(p: any): Product {
@@ -967,6 +969,8 @@ export default function Home() {
                 />
               )}
 
+              {adminTab === 'analytics' && <AnalyticsReportsView />}
+
               {adminTab === 'products' && (
                 <ProductsCatalogView
                   products={adminProducts}
@@ -991,6 +995,8 @@ export default function Home() {
               {adminTab === 'delivery' && <DeliveryManagementView />}
 
               {adminTab === 'reviews' && <ReviewModerationView />}
+
+              {adminTab === 'marketing' && <MarketingManagerView />}
 
               {adminTab === 'woocommerce' && (
                 <WooCommerceHubView products={products} onRefreshProducts={fetchData} />
