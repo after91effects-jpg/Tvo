@@ -37,6 +37,8 @@ import { CartDrawer } from '../components/cart/CartDrawer';
 import { HeroCarousel } from '../components/storefront/HeroCarousel';
 import { CategoryStories } from '../components/storefront/CategoryStories';
 import { CategoryPills } from '../components/storefront/CategoryPills';
+import { StorefrontFilterBar, SortOption, PriceRangeOption, DietaryOption } from '../components/storefront/StorefrontFilterBar';
+import { isProductOutOfStock } from '../lib/inventory';
 import { CategoryHero } from '../components/storefront/CategoryHero';
 import { ProductCard } from '../components/storefront/ProductCard';
 import { TrustStrip } from '../components/storefront/TrustStrip';
@@ -243,6 +245,23 @@ export default function Home() {
   const [selectedCategorySlug, setSelectedCategorySlug] = useState<string>('all');
   const [selectedSubcategorySlug, setSelectedSubcategorySlug] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
+
+  // Storefront Filter & Sort State
+  const [selectedSort, setSelectedSort] = useState<SortOption>('featured');
+  const [selectedPriceRange, setSelectedPriceRange] = useState<PriceRangeOption>('all');
+  const [selectedDietary, setSelectedDietary] = useState<DietaryOption>('all');
+  const [inStockOnly, setInStockOnly] = useState<boolean>(false);
+
+  const activeFilterCount =
+    (selectedPriceRange !== 'all' ? 1 : 0) +
+    (selectedDietary !== 'all' ? 1 : 0) +
+    (inStockOnly ? 1 : 0);
+
+  const handleClearFilters = () => {
+    setSelectedPriceRange('all');
+    setSelectedDietary('all');
+    setInStockOnly(false);
+  };
 
   // Modals & Drawers
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
@@ -630,15 +649,56 @@ export default function Home() {
   const filteredStoreProductsBase = products.filter((p) => {
     if (!p.published) return false;
     const query = searchQuery.toLowerCase().trim();
+    const queryTokens = query.split(/\s+/).filter(Boolean);
+    const haystack = [
+      p.name,
+      p.sku,
+      p.category,
+      p.subCategory,
+      ...(p.categories || []),
+      ...(p.subcategories || []),
+      ...(p.tags || []),
+      ...(p.flavours || []),
+      p.shortDescription,
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+
     const matchesSearch =
       query === '' ||
-      p.name.toLowerCase().includes(query) ||
-      p.sku?.toLowerCase().includes(query) ||
-      p.shortDescription?.toLowerCase().includes(query) ||
-      p.tags?.some((t) => t.toLowerCase().includes(query)) ||
-      p.flavours?.some((f) => f.toLowerCase().includes(query));
+      haystack.includes(query) ||
+      (queryTokens.length > 1 && queryTokens.every((token) => haystack.includes(token)));
 
     if (!matchesSearch) return false;
+
+    // Price range filter
+    const basePrice = p.weightOptions?.[0]?.price ?? p.price ?? 699;
+    if (selectedPriceRange === 'under-500' && basePrice >= 500) return false;
+    if (selectedPriceRange === '500-1000' && (basePrice < 500 || basePrice > 1000)) return false;
+    if (selectedPriceRange === '1000-2000' && (basePrice < 1000 || basePrice > 2000)) return false;
+    if (selectedPriceRange === 'above-2000' && basePrice <= 2000) return false;
+
+    // Dietary filter
+    if (selectedDietary === 'eggless') {
+      const isEggless = p.eggless || p.tags?.some((t) => t.toLowerCase().includes('eggless'));
+      if (!isEggless) return false;
+    } else if (selectedDietary === 'sugar-free') {
+      const isSugarFree =
+        p.tags?.some((t) => t.toLowerCase().includes('sugar-free') || t.toLowerCase().includes('sugar free')) ||
+        p.dietaryAttributes?.some((d) => d.key === 'sugar-free' || d.label?.toLowerCase().includes('sugar free'));
+      if (!isSugarFree) return false;
+    } else if (selectedDietary === 'gluten-free') {
+      const isGlutenFree =
+        p.tags?.some((t) => t.toLowerCase().includes('gluten-free') || t.toLowerCase().includes('gluten free')) ||
+        p.dietaryAttributes?.some((d) => d.key === 'gluten-free' || d.label?.toLowerCase().includes('gluten free'));
+      if (!isGlutenFree) return false;
+    }
+
+    // In-stock availability filter
+    if (inStockOnly) {
+      if (isProductOutOfStock(p)) return false;
+    }
 
     // Wishlist filter
     if (selectedCategorySlug === 'wishlist') {
@@ -739,17 +799,51 @@ export default function Home() {
     return true;
   });
 
-  // Festival: reorder filtered products to prioritize active occasion products
-  // Occasion products appear first (in occasion priority order), then the rest
+  // Storefront Product Sorting & Occasion Prioritization
   const filteredStoreProducts = React.useMemo(() => {
-    const occasionProductSet = new Set(occasionProductIds.map((id) => String(id)));
-    if (!activeOccasion?.homepageVisibility || occasionError || occasionProductIds.length === 0) {
-      return filteredStoreProductsBase;
-    }
-    // When on "All" category with no search, prioritize occasion products
-    if (selectedCategorySlug === 'all' || !selectedCategorySlug) {
-      if (!searchQuery) {
-        const occasionSorted = [...filteredStoreProductsBase].sort((a, b) => {
+    const list = [...filteredStoreProductsBase];
+
+    // Sorting options
+    if (selectedSort === 'price-asc') {
+      list.sort((a, b) => {
+        const pa = a.weightOptions?.[0]?.price ?? a.price ?? 0;
+        const pb = b.weightOptions?.[0]?.price ?? b.price ?? 0;
+        return pa - pb;
+      });
+    } else if (selectedSort === 'price-desc') {
+      list.sort((a, b) => {
+        const pa = a.weightOptions?.[0]?.price ?? a.price ?? 0;
+        const pb = b.weightOptions?.[0]?.price ?? b.price ?? 0;
+        return pb - pa;
+      });
+    } else if (selectedSort === 'bestseller') {
+      list.sort((a, b) => {
+        const aBest = a.bestseller ? 1 : 0;
+        const bBest = b.bestseller ? 1 : 0;
+        if (aBest !== bBest) return bBest - aBest;
+        return (b.rating || 4.5) - (a.rating || 4.5);
+      });
+    } else if (selectedSort === 'newest') {
+      list.sort((a, b) => {
+        const da = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const db = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return db - da;
+      });
+    } else {
+      // Default: 'featured'
+      // When on "All" category with no search and no custom filter, prioritize occasion products
+      const occasionProductSet = new Set(occasionProductIds.map((id) => String(id)));
+      if (
+        activeOccasion?.homepageVisibility &&
+        !occasionError &&
+        occasionProductIds.length > 0 &&
+        (selectedCategorySlug === 'all' || !selectedCategorySlug) &&
+        !searchQuery &&
+        selectedPriceRange === 'all' &&
+        selectedDietary === 'all' &&
+        !inStockOnly
+      ) {
+        list.sort((a, b) => {
           const aIsIn = occasionProductSet.has(String(a.id)) ? 0 : 1;
           const bIsIn = occasionProductSet.has(String(b.id)) ? 0 : 1;
           if (aIsIn !== bIsIn) return aIsIn - bIsIn;
@@ -758,11 +852,22 @@ export default function Home() {
           if (aIdx >= 0 && bIdx >= 0) return aIdx - bIdx;
           return 0;
         });
-        return occasionSorted;
       }
     }
-    return filteredStoreProductsBase;
-  }, [filteredStoreProductsBase, activeOccasion, occasionProductIds, occasionError, selectedCategorySlug, searchQuery]);
+
+    return list;
+  }, [
+    filteredStoreProductsBase,
+    selectedSort,
+    activeOccasion,
+    occasionProductIds,
+    occasionError,
+    selectedCategorySlug,
+    searchQuery,
+    selectedPriceRange,
+    selectedDietary,
+    inStockOnly,
+  ]);
 
   // Festival occasion products — filtered from already-loaded products by occasion product IDs
   // (ordered by occasion-specific priority from the API, avoiding duplicate product fetches)
@@ -1081,6 +1186,21 @@ export default function Home() {
                     onSelectSubcategory={(subSlug) => setSelectedSubcategorySlug(subSlug)}
                   />
 
+                  {/* Storefront Filter & Sort Toolbar */}
+                  <StorefrontFilterBar
+                    selectedSort={selectedSort}
+                    onSelectSort={setSelectedSort}
+                    selectedPriceRange={selectedPriceRange}
+                    onSelectPriceRange={setSelectedPriceRange}
+                    selectedDietary={selectedDietary}
+                    onSelectDietary={setSelectedDietary}
+                    inStockOnly={inStockOnly}
+                    onToggleInStockOnly={setInStockOnly}
+                    activeFilterCount={activeFilterCount}
+                    onClearFilters={handleClearFilters}
+                    totalResults={filteredStoreProducts.length}
+                  />
+
                   {/* Product Cards Grid */}
                   {isLoading ? (
                     <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-2.5 sm:gap-4 md:gap-6 py-12">
@@ -1106,11 +1226,16 @@ export default function Home() {
                       <p className="text-xs text-[var(--text-muted)] max-w-sm mx-auto">
                         {selectedCategorySlug === 'wishlist'
                           ? 'Click the heart icon on any artisan cake card to save your favorites for later celebration orders.'
-                          : 'No celebration cakes match this filter. Try selecting "All Artisan Recipes" or searching for chocolate.'}
+                          : 'No celebration cakes match this filter. Try selecting "All Artisan Recipes" or resetting your filters.'}
                       </p>
                       <button
-                        onClick={() => setSelectedCategorySlug('all')}
-                        className="px-4 py-2 rounded-xl bg-[var(--primary)] text-white text-xs font-semibold cursor-pointer"
+                        onClick={() => {
+                          setSelectedCategorySlug('all');
+                          setSelectedSubcategorySlug('all');
+                          setSearchQuery('');
+                          handleClearFilters();
+                        }}
+                        className="px-4 py-2 rounded-xl bg-[var(--primary)] text-white text-xs font-semibold cursor-pointer hover:bg-[var(--primary-dark)] transition-colors"
                       >
                         Explore All Cakes
                       </button>

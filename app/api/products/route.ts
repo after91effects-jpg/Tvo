@@ -1,20 +1,13 @@
-import { ok, err, getCurrentUser, isAdminRole } from '../../../lib/server/api';
+import { ok, err, db, getCurrentUser, isAdminRole } from '../../../lib/server/api';
 import { serializeProduct, PRODUCT_BASE_SELECT } from '../../../lib/server/product-serializer';
 import { resolveActiveOccasion, getOccasionBySlug } from '../../../lib/server/occasions';
 
 export const runtime = 'nodejs';
 
-let db: any;
-
-function getDb() {
-  if (!db) db = require('../../../lib/server/db').db;
-  return db;
-}
-
 const BASE_SELECT = PRODUCT_BASE_SELECT;
 
 export async function GET(req: Request) {
-  const data = getDb();
+  const data = db;
   const url = new URL(req.url);
   const search = (url.searchParams.get('search') || '').trim();
   const category = url.searchParams.get('category') || '';
@@ -90,6 +83,26 @@ export async function GET(req: Request) {
       where += ` AND p.stock_status != 'out_of_stock' AND (p.stock > 0 OR p.enable_stock = 0)`;
     }
 
+    const minPrice = parseFloat(url.searchParams.get('min_price') || '');
+    const maxPrice = parseFloat(url.searchParams.get('max_price') || '');
+    const isEggless = url.searchParams.get('eggless') === '1' || url.searchParams.get('eggless') === 'true';
+    const inStock = url.searchParams.get('in_stock') === '1' || url.searchParams.get('in_stock') === 'true';
+
+    if (!isNaN(minPrice)) {
+      where += ` AND COALESCE(p.sale_price, p.regular_price) >= ?`;
+      params.push(minPrice);
+    }
+    if (!isNaN(maxPrice)) {
+      where += ` AND COALESCE(p.sale_price, p.regular_price) <= ?`;
+      params.push(maxPrice);
+    }
+    if (isEggless) {
+      where += ` AND (p.eggless = 1 OR p.tags LIKE '%eggless%')`;
+    }
+    if (inStock) {
+      where += ` AND p.stock_status != 'out_of_stock' AND (p.stock > 0 OR p.enable_stock = 0)`;
+    }
+
     if (search) {
       where += ` AND (p.name LIKE ? OR p.sku LIKE ? OR p.short_description LIKE ? OR p.tags LIKE ?)`;
       const like = `%${search}%`;
@@ -113,7 +126,7 @@ export async function GET(req: Request) {
     const rows = data
       .prepare(`${BASE_SELECT}${joinClause} WHERE ${where} ORDER BY ${orderBy} LIMIT ? OFFSET ?`)
       .all(...params, limit, offset);
-    const count = data.prepare(`SELECT COUNT(*) AS c FROM products p LEFT JOIN categories c ON p.category_id=c.id${joinClause} WHERE ${where}`).get(...params).c;
+    const count = (data.prepare(`SELECT COUNT(*) AS c FROM products p LEFT JOIN categories c ON p.category_id=c.id${joinClause} WHERE ${where}`).get(...params) as any)?.c ?? 0;
     return ok({ products: rows.map(serializeProduct), total: count });
   } catch (e: any) {
     return err(e.message || 'Error fetching products', 500);
