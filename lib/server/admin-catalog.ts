@@ -1,4 +1,5 @@
 import { normalizeSellingUnit, validateSellingUnitInput, serializeSellingUnit } from '../sellingUnit';
+import { validateSkuFormat } from '../sku';
 import { db } from './db';
 import { logAudit, slugify, jsonParseSafe } from './api';
 import { normalizeImageUrl, mediumImageUrl, isSafeMediaUrl } from '../imageUrl';
@@ -335,9 +336,10 @@ function buildProductPayload(body: any, existing: any, user: any) {
 
   // SKU validation + uniqueness (admin may leave as-is on update)
   if (body.sku !== undefined && body.sku !== null) {
-    const sku = String(body.sku).trim();
-    if (!sku) throw new Error('SKU is required');
-    const dup = db.prepare('SELECT id FROM products WHERE sku=? AND id!=?').get(sku, existing?.id ?? -1);
+    const val = validateSkuFormat(body.sku);
+    if (!val.valid) throw new Error(val.error || 'Invalid SKU');
+    const sku = val.normalizedSku;
+    const dup = db.prepare('SELECT id FROM products WHERE lower(sku)=lower(?) AND id!=?').get(sku, existing?.id ?? -1);
     if (dup) throw new Error(`SKU "${sku}" is already used by another product`);
     payload.sku = sku;
   } else if (existing?.sku == null) {
@@ -532,8 +534,10 @@ export function quickEdit(body: any, user: any) {
   const allow = safe.filter((k) => body[k] !== undefined);
   // Validate sku uniqueness if changing
   if (body.sku !== undefined && String(body.sku).trim()) {
-    const s = String(body.sku).trim();
-    if (db.prepare('SELECT id FROM products WHERE sku=? AND id!=?').get(s, id)) throw new Error(`SKU "${s}" already in use`);
+    const val = validateSkuFormat(body.sku);
+    if (!val.valid) throw new Error(val.error || 'Invalid SKU');
+    const s = val.normalizedSku;
+    if (db.prepare('SELECT id FROM products WHERE lower(sku)=lower(?) AND id!=?').get(s, id)) throw new Error(`SKU "${s}" already in use`);
     payload.sku = s;
   }
   for (const k of allow) {

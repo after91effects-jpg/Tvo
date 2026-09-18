@@ -1,5 +1,6 @@
 'use client';
 import { PREDEFINED_SELLING_UNITS, normalizeSellingUnit, getSellingUnitLabel, isWeightSellingUnit, StructuredSellingUnit } from '../../lib/sellingUnit';
+import { normalizeSku, validateSkuFormat, suggestSku } from '../../lib/sku';
 
 import React, { useState, useRef, useEffect } from 'react';
 import Papa from 'papaparse';
@@ -122,6 +123,7 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
   // Form State for Add / Edit
   const [formName, setFormName] = useState('');
   const [formSku, setFormSku] = useState('');
+  const [skuCheckState, setSkuCheckState] = useState<{ checking: boolean; valid: boolean; error?: string }>({ checking: false, valid: true });
   const [formCategory, setFormCategory] = useState('chocolate');
   const [formShortDesc, setFormShortDesc] = useState('');
   const [formDesc, setFormDesc] = useState('');
@@ -684,7 +686,7 @@ images_json: (formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
   const handleOpenAddModal = () => {
     setEditingProduct(null);
     setFormName('');
-    setFormSku(`CONF-REC-${Math.floor(1000 + Math.random() * 9000)}`);
+    setFormSku('');
     setFormCategory('chocolate');
     setFormShortDesc('');
     setFormDesc('');
@@ -749,6 +751,74 @@ images_json: (formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
     setFormCustomDietaryLabel('');
     setIsAddModalOpen(true);
   };
+
+  const handleAutoGenerateSku = async () => {
+    if (!formName.trim()) {
+      setErrorMessage('Please enter a product name first to auto-generate a SKU.');
+      return;
+    }
+    try {
+      setSkuCheckState({ checking: true, valid: true });
+      const res = await fetch('/api/admin/products/sku', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: formName,
+          categorySlug: formCategory,
+          excludeId: editingProduct?.id ? Number(editingProduct.id) : undefined,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data?.suggestedSku) {
+        setFormSku(data.suggestedSku);
+        setSkuCheckState({ checking: false, valid: true });
+      } else {
+        const fallback = suggestSku(formName, formCategory);
+        setFormSku(fallback);
+        setSkuCheckState({ checking: false, valid: true });
+      }
+    } catch {
+      const fallback = suggestSku(formName, formCategory);
+      setFormSku(fallback);
+      setSkuCheckState({ checking: false, valid: true });
+    }
+  };
+
+  useEffect(() => {
+    if (!formSku.trim()) {
+      setSkuCheckState({ checking: false, valid: true });
+      return;
+    }
+    const val = validateSkuFormat(formSku);
+    if (!val.valid) {
+      setSkuCheckState({ checking: false, valid: false, error: val.error });
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        const excludeParam = editingProduct?.id ? `&excludeId=${editingProduct.id}` : '';
+        const res = await fetch(`/api/admin/products/sku?sku=${encodeURIComponent(val.normalizedSku)}${excludeParam}`);
+        const data = await res.json();
+        if (res.ok && data) {
+          if (!data.available) {
+            setSkuCheckState({ checking: false, valid: false, error: data.error || 'SKU is already in use' });
+          } else {
+            setSkuCheckState({ checking: false, valid: true });
+          }
+        }
+      } catch {
+        const dup = products.find(
+          (p) => p.sku && p.sku.toLowerCase() === val.normalizedSku.toLowerCase() && p.id !== editingProduct?.id
+        );
+        if (dup) {
+          setSkuCheckState({ checking: false, valid: false, error: `SKU "${val.normalizedSku}" already used by "${dup.name}"` });
+        } else {
+          setSkuCheckState({ checking: false, valid: true });
+        }
+      }
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [formSku, editingProduct, products]);
 
   const handleOpenEditModal = (prod: Product) => {
     setEditingProduct(prod);
@@ -852,6 +922,11 @@ images_json: (formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
       setErrorMessage('Product name and SKU are mandatory.');
       return;
     }
+    const skuValidation = validateSkuFormat(formSku);
+    if (!skuValidation.valid) {
+      setErrorMessage(skuValidation.error || 'Invalid SKU format.');
+      return;
+    }
 
     try {
       setIsSaving(true);
@@ -924,7 +999,7 @@ images_json: (formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
 
       const productPayload: Product = {
         id: prodId,
-        sku: formSku.trim(),
+        sku: skuValidation.normalizedSku,
         name: formName.trim(),
         slug,
         shortDescription: formShortDesc.trim(),
@@ -1658,17 +1733,55 @@ images_json: (formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-[var(--text-main)] mb-1">
-                SKU (Stock Keeping Unit) *
-              </label>
-              <input
-                type="text"
-                value={formSku}
-                onChange={(e) => setFormSku(e.target.value)}
-                placeholder="CONF-TRUF-01"
-                required
-                className="w-full px-3 py-2 text-xs font-mono rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
-              />
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold text-[var(--text-main)]">
+                  SKU (Stock Keeping Unit) *
+                </label>
+                <button
+                  type="button"
+                  onClick={handleAutoGenerateSku}
+                  className="inline-flex items-center gap-1 text-[11px] font-medium text-[var(--primary)] hover:opacity-80 transition-opacity"
+                  title="Auto-generate a standardized SKU from product name and category"
+                >
+                  <Sparkles className="w-3 h-3" />
+                  Auto-Generate
+                </button>
+              </div>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={formSku}
+                  onChange={(e) => setFormSku(e.target.value.toUpperCase())}
+                  placeholder="e.g. TVO-CHOC-CTC"
+                  required
+                  className={`w-full px-3 py-2 text-xs font-mono rounded-xl border ${
+                    !skuCheckState.valid
+                      ? 'border-red-500 focus:ring-red-400'
+                      : 'border-[var(--border)] focus:ring-[var(--ring)]'
+                  } bg-[var(--bg-surface)] text-[var(--text-main)] focus:outline-none focus:ring-2`}
+                />
+                {skuCheckState.checking && (
+                  <div className="absolute right-3 top-2.5">
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-[var(--text-muted)]" />
+                  </div>
+                )}
+                {!skuCheckState.checking && formSku.trim() && skuCheckState.valid && (
+                  <div className="absolute right-3 top-2.5 text-emerald-600">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                  </div>
+                )}
+                {!skuCheckState.checking && formSku.trim() && !skuCheckState.valid && (
+                  <div className="absolute right-3 top-2.5 text-red-500">
+                    <AlertCircle className="w-3.5 h-3.5" />
+                  </div>
+                )}
+              </div>
+              {formSku.trim() && !skuCheckState.valid && (
+                <p className="text-[11px] text-red-500 mt-1">{skuCheckState.error}</p>
+              )}
+              {formSku.trim() && skuCheckState.valid && (
+                <p className="text-[10px] text-emerald-600 mt-0.5">✓ Valid & Available</p>
+              )}
             </div>
           </div>
 
