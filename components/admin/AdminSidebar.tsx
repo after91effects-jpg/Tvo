@@ -17,6 +17,7 @@ import {
   Users,
   ShieldCheck,
   Activity,
+  Wheat,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { hasPermission, type Permission } from '../../lib/server/permissions';
@@ -25,6 +26,7 @@ export type AdminTab =
   | 'dashboard'
   | 'products'
   | 'categories'
+  | 'ingredients'
   | 'media'
   | 'orders'
   | 'woocommerce'
@@ -112,6 +114,13 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       group: 'OPERATIONS',
     },
     {
+      id: 'ingredients',
+      label: 'Ingredient Master',
+      icon: <Wheat className="w-4 h-4" />,
+      permission: 'view_recipes',
+      group: 'OPERATIONS',
+    },
+    {
       id: 'woocommerce',
       label: 'WooCommerce Hub & CSV',
       icon: <FileSpreadsheet className="w-4 h-4" />,
@@ -163,13 +172,13 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
           if (!hasPerm(item.permission)) return null;
           const isActive = activeTab === item.id;
 
-  const handleClick = () => {
-    if (item.href) {
-      router.push(item.href);
-    } else {
-      onSelectTab(item.id);
-    }
-  };
+          const handleClick = () => {
+            if (item.href) {
+              router.push(item.href);
+            } else {
+              onSelectTab(item.id);
+            }
+          };
 
           return (
             <button

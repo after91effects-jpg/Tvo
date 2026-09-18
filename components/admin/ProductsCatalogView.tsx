@@ -58,6 +58,7 @@ import { Modal } from '../common/Modal';
 import { INITIAL_CATEGORIES } from '../../lib/seedData';
 import { validateImageFile, validateVideoFile } from '../../lib/uploadValidation';
 import { normalizeImageUrl } from '../../lib/imageUrl';
+import { ProductRecipeEditor } from './ProductRecipeEditor';
 
 interface ProductsCatalogViewProps {
   products: Product[];
@@ -2496,6 +2497,16 @@ images_json: (formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
               </button>
             </div>
           </div>
+
+          {/* Product Recipe & Bill of Materials (BOM) Editor */}
+          {editingProduct && !isNaN(Number(editingProduct.id)) && (
+            <ProductRecipeEditor
+              productId={Number(editingProduct.id)}
+              productName={formName || editingProduct.name}
+              basePrice={Number(formPrice) || editingProduct.price || 0}
+              sellingUnit={formSellingUnitType === 'custom' ? (formCustomSellingUnit || 'unit') : formSellingUnitValue}
+            />
+          )}
 
           <div className="flex items-center gap-2 pt-2">
             <input

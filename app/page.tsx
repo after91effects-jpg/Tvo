@@ -72,6 +72,7 @@ import { SecurityAuditLogsView } from '../components/admin/SecurityAuditLogsView
 import { HamperSettingsView } from '../components/admin/HamperSettingsView';
 import { FestivalManagerView } from '../components/admin/FestivalManagerView';
 import { SystemHealthView } from '../components/admin/SystemHealthView';
+import { IngredientMasterView } from '../components/admin/IngredientMasterView';
 
 function normalizeProductRecord(p: any): Product {
   const categorySlug = p.category || p.category_slug || '';
@@ -868,6 +869,8 @@ export default function Home() {
               )}
 
               {adminTab === 'categories' && <CategoryManagerView />}
+
+              {adminTab === 'ingredients' && <IngredientMasterView />}
 
               {adminTab === 'media' && <MediaUploadsView />}
 

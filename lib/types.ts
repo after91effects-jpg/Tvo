@@ -554,3 +554,39 @@ export interface SearchHistoryItem {
   timestamp: string;
   resultCount?: number;
 }
+
+// ---------------------------------------------------------------------------
+// RECIPES & INGREDIENTS (STEP 4)
+// ---------------------------------------------------------------------------
+export interface Ingredient {
+  id: number;
+  name: string;
+  unit: string;
+  stock: number;
+  low_stock_threshold: number;
+  cost_per_unit: number | null;
+  category: string | null;
+  created_at?: string;
+}
+
+export interface RecipeItem {
+  id?: number;
+  product_id: number;
+  ingredient_id: number;
+  quantity: number;
+  unit: string;
+  // Hydrated helper fields
+  ingredient_name?: string;
+  ingredient_unit?: string;
+  ingredient_cost_per_unit?: number | null;
+  ingredient_category?: string | null;
+  ingredient_stock?: number;
+  line_cost?: number;
+}
+
+export interface ProductRecipeSummary {
+  productId: number;
+  items: RecipeItem[];
+  totalCost: number;
+  foodCostPercent: number | null;
+}
