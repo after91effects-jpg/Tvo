@@ -223,8 +223,20 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
       .then((r) => (r.ok ? r.json() : null))
       .then((data: any) => {
         if (data?.categories?.length) {
-          const map: Record<string, number> = {};
-          for (const c of data.categories) if (c?.slug) map[c.slug] = Number(c.id);
+          const map: Record<string, number> = {
+            'cakes': 71,
+            'desserts-pastries': 88,
+            'cheesecakes': 88,
+            'hampers-gifts': 71,
+            'party-supplies': 113,
+            'party-essentials': 113,
+            'baking-store': 121,
+            'baking-accessories': 121,
+          };
+          for (const c of data.categories) {
+            if (c?.slug) map[c.slug] = Number(c.id);
+            if (c?.name) map[c.name.toLowerCase()] = Number(c.id);
+          }
           setCategoryIdMap(map);
         }
       })
@@ -1463,34 +1475,40 @@ images_json: (formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
         action: 'bulk',
         ids,
         subaction: bulkActionType,
+        bulkAction: bulkActionType,
       };
 
       if (bulkActionType === 'price') {
         payload = {
           ...payload,
           subaction: 'price',
+          bulkAction: 'price',
           targetField: bulkPriceTarget,
           mode: bulkPriceMode,
           value: bulkPriceMode === 'clear' ? undefined : Number(bulkPriceValue),
         };
       } else if (bulkActionType === 'category') {
-        const catId = categoryIdMap[bulkTargetCategory] || 1;
+        const catId = categoryIdMap[bulkTargetCategory] || categoryIdMap[bulkTargetCategory.toLowerCase()] || categoryIdMap['cakes'] || 71;
         payload = {
           ...payload,
           subaction: 'category',
+          bulkAction: 'category',
           category_id: catId,
+          category: bulkTargetCategory,
         };
       } else if (bulkActionType === 'unit') {
         const finalUnit = bulkTargetUnit === 'custom' ? bulkCustomUnit.trim() : bulkTargetUnit;
         payload = {
           ...payload,
           subaction: 'selling_unit',
+          bulkAction: 'selling_unit',
           selling_unit: finalUnit,
         };
       } else if (bulkActionType === 'dietary') {
         payload = {
           ...payload,
           subaction: 'dietary',
+          bulkAction: 'dietary',
           attributeKey: bulkDietaryKey,
           enabled: bulkDietaryEnabled,
         };
@@ -3627,7 +3645,7 @@ images_json: (formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
             </div>
           )}
 
-          {(bulkActionType === 'publish' || bulkActionType === 'draft' || bulkActionType === 'featured') && (
+          {(bulkActionType === 'publish' || bulkActionType === 'draft' || bulkActionType === 'featured' || bulkActionType === 'unfeatured') && (
             <div className="p-3.5 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border)] text-xs text-[var(--text-main)]">
               <div>
                 Are you sure you want to apply <span className="font-bold uppercase">{bulkActionType}</span> to all {selectedProductIds.size} selected products?

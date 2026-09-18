@@ -2,24 +2,28 @@ import { describe, it, expect, beforeEach, afterEach, afterAll } from 'vitest';
 import { db } from '../server/db';
 import { bulkAction } from '../server/admin-catalog';
 import { hasPermission } from '../server/permissions';
-import type { User } from '../types';
+import { POST } from '../../app/api/admin/products/route';
+import { signToken } from '../server/auth';
+import type { UserProfile } from '../types';
 
-const mockAdminUser: User = {
-  id: 'usr_admin_1',
+process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-jwt-secret-key-for-vitest-32-chars-min';
+
+const mockAdminUser: UserProfile = {
+  uid: 'usr_admin_1',
   name: 'Admin Tester',
   email: 'admin@tvoflavours.com',
   role: 'admin',
 };
 
-const mockCatalogManager: User = {
-  id: 'usr_catalog_1',
+const mockCatalogManager: UserProfile = {
+  uid: 'usr_catalog_1',
   name: 'Catalog Manager',
   email: 'catalog@tvoflavours.com',
   role: 'catalog_manager',
 };
 
-const mockUnauthorizedUser: User = {
-  id: 'usr_seo_1',
+const mockUnauthorizedUser: UserProfile = {
+  uid: 'usr_seo_1',
   name: 'SEO Specialist',
   email: 'seo@tvoflavours.com',
   role: 'seo_manager',
@@ -389,6 +393,199 @@ describe('Product Bulk Editor (Phase 2)', () => {
       expect(updated1.sku).toBe(orig1.sku);
       expect(updated1.description).toBe(orig1.description);
       expect(updated1.images_json).toBe(orig1.images_json);
+    });
+  });
+
+  describe('7. Full UI -> API Route Contract Verification (app/api/admin/products/route.ts)', () => {
+    const makeApiRequest = async (payload: any, role: string = 'admin') => {
+      const token = signToken({ sub: 1, name: 'Admin Tester', role });
+      const req = new Request('http://localhost:3000/api/admin/products', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Cookie: `tvo_auth=${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+      const res = await POST(req);
+      const json = await res.json();
+      return { status: res.status, body: json };
+    };
+
+    it('successfully processes UI price adjustment payload via API route', async () => {
+      const res = await makeApiRequest({
+        action: 'bulk',
+        ids: [1, 2],
+        subaction: 'price',
+        targetField: 'regular_price',
+        mode: 'adjust_fixed',
+        value: 25,
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.body.ok).toBe(true);
+      expect(res.body.count).toBe(2);
+
+      const r1 = db.prepare('SELECT regular_price FROM products WHERE id=1').get() as any;
+      const r2 = db.prepare('SELECT regular_price FROM products WHERE id=2').get() as any;
+      expect(r1.regular_price).toBe(525);
+      expect(r2.regular_price).toBe(825);
+    });
+
+    it('successfully processes UI sale price adjustment payload via API route', async () => {
+      const res = await makeApiRequest({
+        action: 'bulk',
+        ids: [1],
+        subaction: 'price',
+        targetField: 'sale_price',
+        mode: 'set',
+        value: 420,
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.body.ok).toBe(true);
+
+      const r1 = db.prepare('SELECT sale_price FROM products WHERE id=1').get() as any;
+      expect(r1.sale_price).toBe(420);
+    });
+
+    it('successfully processes UI selling unit update payload via API route', async () => {
+      const res = await makeApiRequest({
+        action: 'bulk',
+        ids: [1, 2],
+        subaction: 'selling_unit',
+        selling_unit: 'box',
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.body.ok).toBe(true);
+
+      const r1 = db.prepare('SELECT selling_unit FROM products WHERE id=1').get() as any;
+      const r2 = db.prepare('SELECT selling_unit FROM products WHERE id=2').get() as any;
+      expect(r1.selling_unit).toContain('box');
+      expect(r2.selling_unit).toContain('box');
+    });
+
+    it('successfully processes UI dietary attributes update payload via API route', async () => {
+      const res = await makeApiRequest({
+        action: 'bulk',
+        ids: [1, 3],
+        subaction: 'dietary',
+        attributeKey: 'eggless',
+        enabled: false,
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.body.ok).toBe(true);
+
+      const r1 = db.prepare('SELECT eggless FROM products WHERE id=1').get() as any;
+      const r3 = db.prepare('SELECT eggless FROM products WHERE id=3').get() as any;
+      expect(r1.eggless).toBe(0);
+      expect(r3.eggless).toBe(0);
+    });
+
+    it('successfully processes UI publish and draft toggle payloads via API route', async () => {
+      const draftRes = await makeApiRequest({
+        action: 'bulk',
+        ids: [1],
+        subaction: 'draft',
+      });
+      expect(draftRes.status).toBe(200);
+      expect(db.prepare('SELECT published, status FROM products WHERE id=1').get()).toEqual({
+        published: 0,
+        status: 'draft',
+      });
+
+      const pubRes = await makeApiRequest({
+        action: 'bulk',
+        ids: [1],
+        subaction: 'publish',
+      });
+      expect(pubRes.status).toBe(200);
+      expect(db.prepare('SELECT published, status FROM products WHERE id=1').get()).toEqual({
+        published: 1,
+        status: 'publish',
+      });
+    });
+
+    it('successfully processes UI featured and unfeatured payloads via API route', async () => {
+      const featRes = await makeApiRequest({
+        action: 'bulk',
+        ids: [1],
+        subaction: 'featured',
+      });
+      expect(featRes.status).toBe(200);
+      expect((db.prepare('SELECT featured FROM products WHERE id=1').get() as any).featured).toBe(1);
+
+      const unfeatRes = await makeApiRequest({
+        action: 'bulk',
+        ids: [1],
+        subaction: 'unfeatured',
+      });
+      expect(unfeatRes.status).toBe(200);
+      expect((db.prepare('SELECT featured FROM products WHERE id=1').get() as any).featured).toBe(0);
+    });
+
+    it('blocks unauthenticated requests from executing bulk actions via API route', async () => {
+      const req = new Request('http://localhost:3000/api/admin/products', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'bulk',
+          ids: [1],
+          subaction: 'publish',
+        }),
+      });
+      const res = await POST(req);
+      expect(res.status).toBe(403);
+      const json = await res.json();
+      expect(json.error).toMatch(/Admin access required/i);
+    });
+
+    it('successfully processes Change Category bulk action via API route (must not send or fail with action="bulk")', async () => {
+      const res = await makeApiRequest({
+        action: 'bulk',
+        ids: [70, 13],
+        subaction: 'category',
+        bulkAction: 'category',
+        category_id: 88,
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.body.ok).toBe(true);
+      expect(res.body.count).toBe(2);
+
+      const p70 = db.prepare('SELECT category_id FROM products WHERE id=70').get() as any;
+      const p13 = db.prepare('SELECT category_id FROM products WHERE id=13').get() as any;
+      expect(p70.category_id).toBe(88);
+      expect(p13.category_id).toBe(88);
+
+      // Revert test products to original category state
+      db.prepare('UPDATE products SET category_id=NULL WHERE id=70').run();
+      db.prepare('UPDATE products SET category_id=78 WHERE id=13').run();
+    });
+
+    it('rejects bulk request if action is "bulk" but no valid subaction is provided', async () => {
+      const res = await makeApiRequest({
+        action: 'bulk',
+        ids: [1],
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/valid bulk subaction is required/i);
+    });
+
+    it('returns 400 when bulk action is missing or invalid', async () => {
+      const res = await makeApiRequest({
+        action: 'bulk',
+        ids: [1],
+        subaction: 'invalid_action_xyz',
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/Unknown bulk action/i);
     });
   });
 });

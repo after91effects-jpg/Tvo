@@ -102,7 +102,11 @@ export async function POST(req: Request) {
         if (!hasPermission(user.role, 'bulk_edit_products')) {
           return err('Forbidden: bulk_edit_products permission required', 403);
         }
-        const r = bulkAction({ ...body, subaction: body.bulkAction || body.action2 }, user);
+        const subaction = body.subaction || body.bulkAction || body.action2;
+        if (!subaction || subaction === 'bulk') {
+          return err('A valid bulk subaction is required', 400);
+        }
+        const r = bulkAction({ ...body, subaction }, user);
         return ok(r);
       }
       case 'adjust_stock': {

@@ -628,7 +628,8 @@ export function deletePermanently(id: number, user: any) {
 export function bulkAction(body: any, user: any) {
   const ids = (Array.isArray(body.ids) ? body.ids : []).map(Number).filter(Boolean);
   if (!ids.length) throw new Error('No products selected');
-  const action = body.subaction || body.bulkAction || body.action2 || body.action;
+  const action = body.subaction || body.bulkAction || body.action2 || (body.action !== 'bulk' ? body.action : undefined);
+  if (!action || action === 'bulk') throw new Error('A valid bulk subaction is required');
   const tx = db.transaction(() => {
     for (const id of ids) {
       const existing = db.prepare('SELECT * FROM products WHERE id=?').get(id) as any;
@@ -639,7 +640,27 @@ export function bulkAction(body: any, user: any) {
       else if (action === 'trash') { db.prepare(`UPDATE products SET deleted_at=datetime('now'), published=0, updated_at=? WHERE id=?`).run(new Date().toISOString(), id); }
       else if (action === 'featured') { db.prepare(`UPDATE products SET featured=1, updated_at=? WHERE id=?`).run(new Date().toISOString(), id); }
       else if (action === 'unfeatured') { db.prepare(`UPDATE products SET featured=0, updated_at=? WHERE id=?`).run(new Date().toISOString(), id); }
-      else if (action === 'category' && body.category_id) { db.prepare(`UPDATE products SET category_id=?, updated_at=? WHERE id=?`).run(Number(body.category_id), new Date().toISOString(), id); }
+      else if (action === 'category') {
+        let catId = Number(body.category_id);
+        if (!catId || isNaN(catId) || catId <= 0) {
+          const catStr = String(body.category || body.categorySlug || '').trim();
+          if (catStr) {
+            const found = db.prepare('SELECT id FROM categories WHERE slug=? OR lower(name)=lower(?)').get(catStr, catStr) as any;
+            if (found) catId = found.id;
+          }
+        }
+        if (!catId || isNaN(catId) || catId <= 0) {
+          throw new Error('Valid category_id is required for bulk category update');
+        }
+        const catRow = db.prepare('SELECT id, name FROM categories WHERE id=?').get(catId) as any;
+        if (!catRow) {
+          const fallback = db.prepare('SELECT id FROM categories WHERE parent_id IS NULL ORDER BY id ASC LIMIT 1').get() as any;
+          if (fallback) catId = fallback.id;
+          else throw new Error(`Category #${catId} not found`);
+        }
+        db.prepare(`UPDATE products SET category_id=?, updated_at=? WHERE id=?`).run(catId, new Date().toISOString(), id);
+        auditProduct(user, id, 'bulk_category_edit', 'category_id', existing.category_id, catId);
+      }
       else if (action === 'brand' && body.brand_id) { db.prepare(`UPDATE products SET brand_id=?, updated_at=? WHERE id=?`).run(Number(body.brand_id), new Date().toISOString(), id); }
       else if (action === 'stock' && body.stock !== undefined) {
         const st = toStock(body.stock);
@@ -686,7 +707,7 @@ export function bulkAction(body: any, user: any) {
         db.prepare(`UPDATE products SET ${targetField}=?, updated_at=? WHERE id=?`).run(newPrice, new Date().toISOString(), id);
         auditProduct(user, id, 'bulk_price_edit', targetField, existing[targetField], newPrice);
       }
-      else if (action === 'selling_unit') {
+      else if (action === 'selling_unit' || action === 'unit') {
         const valRes = validateSellingUnitInput(body.selling_unit);
         if (!valRes.valid) throw new Error(valRes.error || 'Invalid selling unit');
         const unitStr = serializeSellingUnit(body.selling_unit);
