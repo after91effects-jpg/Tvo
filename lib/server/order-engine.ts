@@ -75,7 +75,12 @@ function resolveVariation(prod: any, weightLabel?: string): { unit: number; opti
   return { unit: -1, option: null };
 }
 
-export function validateSlot(date: string | null | undefined, slotName: string | null | undefined, slotId: string | number | null | undefined): { ok: boolean; error?: string; slot?: any } {
+export function validateSlot(
+  date: string | null | undefined,
+  slotName: string | null | undefined,
+  slotId: string | number | null | undefined,
+  opts?: { checkCutoff?: boolean }
+): { ok: boolean; error?: string; slot?: any } {
   if (!date) return { ok: false, error: 'Delivery date is required' };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { ok: false, error: 'Invalid delivery date format (YYYY-MM-DD required)' };
   const today = getTodayIST();
@@ -140,6 +145,23 @@ export function validateSlot(date: string | null | undefined, slotName: string |
     const books = dayCap ? dayCap.books : slot.books;
     if ((dayCap && dayCap.closed) || books >= cap) {
       return { ok: false, error: `The ${slot.name} slot is fully booked for this date. Please select another time.` };
+    }
+
+    // Check same-day cutoff if requested
+    if (opts?.checkCutoff) {
+      const now = new Date();
+      const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+      const ist = new Date(utc + (3600000 * 5.5));
+      const todayIST = `${ist.getFullYear()}-${String(ist.getMonth() + 1).padStart(2, '0')}-${String(ist.getDate()).padStart(2, '0')}`;
+      if (date === todayIST && slot.start_time) {
+        const [sh, sm] = slot.start_time.split(':').map(Number);
+        const slotStartMinutes = (sh || 0) * 60 + (sm || 0);
+        const cutoffMins = slot.cutoff_minutes ?? 120;
+        const currentMinutes = ist.getHours() * 60 + ist.getMinutes();
+        if (currentMinutes > (slotStartMinutes - cutoffMins)) {
+          return { ok: false, error: `The cut-off time for the ${slot.name} slot has already passed for today. Please select an upcoming slot or a future date.` };
+        }
+      }
     }
   }
   return { ok: true, slot };
@@ -350,8 +372,8 @@ export function createOrder({ items, body, customerId, generateOrderNumber }: Cr
 
     const city = (body.city || body.customer?.city || 'Gurugram').trim();
 
-    // 2. Validation: delivery slot + blackout + capacity (re-checked inside transaction)
-    const slotCheck = validateSlot(body.deliveryDate, body.deliverySlot, body.deliverySlotId);
+    // 2. Validation: delivery slot + blackout + capacity + same-day cutoff (re-checked inside transaction)
+    const slotCheck = validateSlot(body.deliveryDate, body.deliverySlot, body.deliverySlotId, { checkCutoff: true });
     if (!slotCheck.ok) throw new OrderInputError(slotCheck.error || 'Delivery slot error');
 
     // 3. Validation: line items, quantity, product existence, stock, variation and addons
@@ -523,11 +545,20 @@ export function createOrder({ items, body, customerId, generateOrderNumber }: Cr
       };
     }));
 
+    let deliveryZoneId: number | null = null;
+    if (pincode && !isPickup) {
+      try {
+        const pinRow = db.prepare('SELECT zone_id FROM pincodes WHERE pincode = ? AND available = 1').get(pincode) as any;
+        if (pinRow?.zone_id) deliveryZoneId = pinRow.zone_id;
+      } catch {}
+    }
+
     const info = db.prepare(`INSERT INTO orders
       (order_number, customer_id, session_id, customer_name, customer_phone, customer_email, customer_address, pincode, city,
        items, addons, subtotal, discount, coupon_code, delivery_fee, slot_surcharge, tax, total,
-       delivery_date, delivery_slot, delivery_slot_id, status, priority, payment_method, payment_status, tracking_note, timeline, occasion_slug, occasion_id, created_at, updated_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+       delivery_date, delivery_slot, delivery_slot_id, delivery_zone_id, delivery_status,
+       status, priority, payment_method, payment_status, tracking_note, timeline, occasion_slug, occasion_id, created_at, updated_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
       .run(
         orderNumber, customerId, body.session_id || null,
         customerName, phone, customerEmail,
@@ -535,6 +566,7 @@ export function createOrder({ items, body, customerId, generateOrderNumber }: Cr
         itemsJson, JSON.stringify(body.addons || []),
         subtotal, discount, couponCode, deliveryFee, slotSurcharge, tax, total,
         body.deliveryDate || null, body.deliverySlot || (isPickup ? 'Store Pickup' : null), slotCheck.slot?.id ?? (body.deliverySlotId || null),
+        deliveryZoneId, 'pending',
         'Order Placed', body.priority || 'Normal', body.paymentMethod || 'UPI', 'Pending',
         deliveryInstructions || null,
         JSON.stringify([{ status: 'Order Placed', created_at: new Date().toISOString() }]),

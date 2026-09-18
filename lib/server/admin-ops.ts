@@ -261,11 +261,12 @@ export function listDelivery(user: User) {
     slots: all('SELECT * FROM delivery_slots ORDER BY start_time'),
     zones: all('SELECT * FROM delivery_zones ORDER BY name'),
     zonesCount: count('SELECT COUNT(*) c FROM delivery_zones'),
-    pincodes: all('SELECT * FROM pincodes ORDER BY pincode'),
+    pincodes: all('SELECT p.*, z.name as zone_name FROM pincodes p LEFT JOIN delivery_zones z ON p.zone_id = z.id ORDER BY p.pincode'),
     blackout: all('SELECT * FROM blackout_dates ORDER BY date'),
     buffers: all('SELECT * FROM buffer_settings ORDER BY id'),
     production: all('SELECT * FROM production_capacity ORDER BY date'),
     capacity: all('SELECT * FROM slot_capacity ORDER BY date DESC, id DESC LIMIT 500'),
+    drivers: all('SELECT * FROM drivers ORDER BY active DESC, name ASC'),
   };
 }
 
@@ -275,12 +276,13 @@ export function getSlots(user: User) {
 
 export function saveSlot(user: User, data: any) {
   const days = JSON.stringify(data.days && data.days.length ? data.days : [0, 1, 2, 3, 4, 5, 6]);
+  const cutoff = Number(data.cutoff_minutes) || 120;
   if (data.id) {
-    run('UPDATE delivery_slots SET name=?, start_time=?, end_time=?, capacity=?, fee=?, available=?, days=? WHERE id=?',
-      data.name, data.start_time, data.end_time, data.capacity, data.fee || 0, data.available ? 1 : 0, days, data.id);
+    run('UPDATE delivery_slots SET name=?, start_time=?, end_time=?, capacity=?, fee=?, cutoff_minutes=?, available=?, days=? WHERE id=?',
+      data.name, data.start_time, data.end_time, Number(data.capacity) || 10, Number(data.fee) || 0, cutoff, data.available ? 1 : 0, days, data.id);
   } else {
-    run('INSERT INTO delivery_slots (name, start_time, end_time, capacity, fee, available, days) VALUES (?,?,?,?,?,?,?)',
-      data.name, data.start_time, data.end_time, data.capacity, data.fee || 0, data.available ? 1 : 0, days);
+    run('INSERT INTO delivery_slots (name, start_time, end_time, capacity, fee, cutoff_minutes, available, days) VALUES (?,?,?,?,?,?,?,?)',
+      data.name, data.start_time, data.end_time, Number(data.capacity) || 10, Number(data.fee) || 0, cutoff, data.available ? 1 : 0, days);
   }
   audit(user, 'DELIVERY_SLOT_SAVE', 'DeliverySlot', data.id ? String(data.id) : undefined);
   return { ok: true };
@@ -296,12 +298,13 @@ export function deleteSlot(user: User, id: number) {
 }
 
 export function saveZone(user: User, data: any) {
+  const minOrder = Number(data.min_order_value) || 0;
   if (data.id) {
-    run('UPDATE delivery_zones SET name=?, city=?, fee=?, free_delivery_threshold=?, est_delivery_time=?, active=? WHERE id=?',
-      data.name, data.city || null, data.fee || 0, data.free_delivery_threshold ?? null, data.est_delivery_time || null, data.active ? 1 : 0, data.id);
+    run('UPDATE delivery_zones SET name=?, city=?, fee=?, free_delivery_threshold=?, min_order_value=?, est_delivery_time=?, active=? WHERE id=?',
+      data.name, data.city || null, Number(data.fee) || 0, data.free_delivery_threshold ? Number(data.free_delivery_threshold) : null, minOrder, data.est_delivery_time || null, data.active ? 1 : 0, data.id);
   } else {
-    run('INSERT INTO delivery_zones (name, city, fee, free_delivery_threshold, est_delivery_time, active) VALUES (?,?,?,?,?,?)',
-      data.name, data.city || null, data.fee || 0, data.free_delivery_threshold ?? null, data.est_delivery_time || null, data.active ? 1 : 0);
+    run('INSERT INTO delivery_zones (name, city, fee, free_delivery_threshold, min_order_value, est_delivery_time, active) VALUES (?,?,?,?,?,?,?)',
+      data.name, data.city || null, Number(data.fee) || 0, data.free_delivery_threshold ? Number(data.free_delivery_threshold) : null, minOrder, data.est_delivery_time || null, data.active ? 1 : 0);
   }
   audit(user, 'DELIVERY_ZONE_SAVE', 'DeliveryZone', data.id ? String(data.id) : undefined);
   return { ok: true };
@@ -319,6 +322,26 @@ export function savePincode(user: User, data: any) {
     data.zone_id || null, data.pincode, data.available ? 1 : 0);
   audit(user, 'PINCODE_SAVE', 'Pincode', data.pincode);
   return { ok: true };
+}
+
+export function bulkSavePincodes(user: User, zoneId: number, pincodes: string[]) {
+  const zone = one<Row>('SELECT id, name FROM delivery_zones WHERE id=?', zoneId);
+  if (!zone) return { ok: false, error: 'Delivery zone not found' };
+
+  let added = 0;
+  tx(() => {
+    for (const raw of pincodes) {
+      const code = String(raw).trim();
+      if (/^\d{6}$/.test(code)) {
+        run("INSERT INTO pincodes (zone_id, pincode, available) VALUES (?,?,1) ON CONFLICT(pincode) DO UPDATE SET zone_id=excluded.zone_id, available=1",
+          zoneId, code);
+        added++;
+      }
+    }
+  });
+
+  audit(user, 'PINCODES_BULK_SAVE', 'Pincodes', String(zoneId), `Added/updated ${added} pincodes for zone ${zone.name}`);
+  return { ok: true, count: added };
 }
 
 export function deletePincode(user: User, id: number) {
@@ -356,9 +379,189 @@ export function saveProductionCapacity(user: User, data: any) {
 
 export function setSlotCapacity(user: User, data: any) {
   run("INSERT INTO slot_capacity (slot_id, date, capacity, books, closed) VALUES (?,?,?,COALESCE((SELECT books FROM slot_capacity WHERE slot_id=? AND date=?),0),?) ON CONFLICT(slot_id,date) DO UPDATE SET capacity=excluded.capacity, closed=excluded.closed",
-    data.slot_id, data.date, data.capacity, data.slot_id, data.date, data.closed ? 1 : 0);
+    data.slot_id, data.date, Number(data.capacity) || 0, data.slot_id, data.date, data.closed ? 1 : 0);
   audit(user, 'SLOT_CAPACITY_SAVE', 'SlotCapacity', `${data.slot_id}:${data.date}`);
   return { ok: true };
+}
+
+export function bulkSetSlotCapacity(user: User, data: any) {
+  const dates: string[] = Array.isArray(data.dates) ? data.dates : (data.date ? [data.date] : []);
+  const slotIds: number[] = Array.isArray(data.slot_ids) ? data.slot_ids : (data.slot_id ? [Number(data.slot_id)] : []);
+  const capacity = Number(data.capacity) || 10;
+  const closed = data.closed ? 1 : 0;
+
+  if (!dates.length || !slotIds.length) {
+    return { ok: false, error: 'Dates and slot IDs are required' };
+  }
+
+  tx(() => {
+    for (const d of dates) {
+      for (const sId of slotIds) {
+        run("INSERT INTO slot_capacity (slot_id, date, capacity, books, closed) VALUES (?,?,?,COALESCE((SELECT books FROM slot_capacity WHERE slot_id=? AND date=?),0),?) ON CONFLICT(slot_id,date) DO UPDATE SET capacity=excluded.capacity, closed=excluded.closed",
+          sId, d, capacity, sId, d, closed);
+      }
+    }
+  });
+
+  audit(user, 'SLOT_CAPACITY_BULK', 'SlotCapacity', `${slotIds.length} slots over ${dates.length} days`);
+  return { ok: true };
+}
+
+// ---------------------------------------------------------------------------
+// FLEET & DRIVER MANAGEMENT
+// ---------------------------------------------------------------------------
+export function listDrivers(user: User) {
+  const drivers = all<Row>('SELECT * FROM drivers ORDER BY active DESC, name ASC');
+  return drivers.map(d => ({
+    ...d,
+    active_deliveries_count: count("SELECT COUNT(*) c FROM orders WHERE driver_id=? AND delivery_status IN ('assigned', 'out_for_delivery')", d.id),
+  }));
+}
+
+export function saveDriver(user: User, data: any) {
+  const name = (data.name || '').trim();
+  const phone = (data.phone || '').trim();
+  if (!name) return { ok: false, error: 'Driver name is required' };
+  if (!phone) return { ok: false, error: 'Driver phone number is required' };
+  const now = new Date().toISOString();
+  if (data.id) {
+    run('UPDATE drivers SET name=?, phone=?, vehicle_type=?, vehicle_number=?, status=?, active=?, notes=?, updated_at=? WHERE id=?',
+      name, phone, data.vehicle_type || 'Two Wheeler', data.vehicle_number || null, data.status || 'available', data.active ? 1 : 0, data.notes || null, now, data.id);
+  } else {
+    run('INSERT INTO drivers (name, phone, vehicle_type, vehicle_number, status, active, notes, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)',
+      name, phone, data.vehicle_type || 'Two Wheeler', data.vehicle_number || null, data.status || 'available', data.active ? 1 : 0, data.notes || null, now, now);
+  }
+  audit(user, 'DRIVER_SAVE', 'Driver', data.id ? String(data.id) : undefined, name);
+  return { ok: true };
+}
+
+export function deleteDriver(user: User, id: number) {
+  const assigned = count("SELECT COUNT(*) c FROM orders WHERE driver_id=? AND delivery_status IN ('assigned', 'out_for_delivery')", id);
+  if (assigned > 0) {
+    return { ok: false, error: `Cannot delete driver with ${assigned} active deliveries. Reassign them first.` };
+  }
+  run('DELETE FROM drivers WHERE id=?', id);
+  run('UPDATE orders SET driver_id=NULL WHERE driver_id=?', id);
+  audit(user, 'DRIVER_DELETE', 'Driver', String(id));
+  return { ok: true };
+}
+
+export function assignDriverToOrder(user: User, orderId: number, driverId: number | null) {
+  const order = one<Row>('SELECT id, order_number, status, delivery_status, driver_id FROM orders WHERE id=?', orderId);
+  if (!order) return { ok: false, error: 'Order not found' };
+
+  const now = new Date().toISOString();
+  if (driverId) {
+    const driver = one<Row>('SELECT id, name, phone FROM drivers WHERE id=? AND active=1', driverId);
+    if (!driver) return { ok: false, error: 'Driver not found or inactive' };
+
+    run("UPDATE orders SET driver_id=?, delivery_status='assigned', status=CASE WHEN status IN ('Order Placed', 'Confirmed') THEN 'Processing' ELSE status END, updated_at=? WHERE id=?",
+      driverId, now, orderId);
+
+    // Update driver status to on_delivery if currently available
+    run("UPDATE drivers SET status='on_delivery', updated_at=? WHERE id=? AND status='available'", now, driverId);
+
+    audit(user, 'ORDER_DRIVER_ASSIGN', 'Order', String(orderId), `Assigned to driver ${driver.name} (#${driverId})`);
+    return { ok: true, driver: { id: driver.id, name: driver.name, phone: driver.phone } };
+  } else {
+    // Unassign driver
+    const prevDriverId = order.driver_id;
+    run("UPDATE orders SET driver_id=NULL, delivery_status='pending', updated_at=? WHERE id=?", now, orderId);
+
+    if (prevDriverId) {
+      const activeCount = count("SELECT COUNT(*) c FROM orders WHERE driver_id=? AND delivery_status IN ('assigned', 'out_for_delivery')", prevDriverId);
+      if (activeCount === 0) {
+        run("UPDATE drivers SET status='available', updated_at=? WHERE id=?", now, prevDriverId);
+      }
+    }
+    audit(user, 'ORDER_DRIVER_UNASSIGN', 'Order', String(orderId));
+    return { ok: true };
+  }
+}
+
+export function updateDeliveryStatus(user: User, orderId: number, deliveryStatus: string, note?: string, failureReason?: string) {
+  const validStatuses = ['pending', 'assigned', 'out_for_delivery', 'delivered', 'failed', 'returned'];
+  if (!validStatuses.includes(deliveryStatus)) {
+    return { ok: false, error: `Invalid delivery status. Must be one of: ${validStatuses.join(', ')}` };
+  }
+
+  const order = one<Row>('SELECT id, order_number, driver_id, status FROM orders WHERE id=?', orderId);
+  if (!order) return { ok: false, error: 'Order not found' };
+
+  const now = new Date().toISOString();
+  let dispatchedAtUpdate = '';
+  let deliveredAtUpdate = '';
+
+  let mappedOrderStatus = order.status;
+  if (deliveryStatus === 'out_for_delivery') {
+    dispatchedAtUpdate = `, dispatched_at = '${now}'`;
+    mappedOrderStatus = 'Dispatched';
+  } else if (deliveryStatus === 'delivered') {
+    deliveredAtUpdate = `, delivered_at = '${now}'`;
+    mappedOrderStatus = 'Delivered';
+  }
+
+  run(`UPDATE orders SET delivery_status=?, delivery_failure_reason=?, status=?, updated_at=? ${dispatchedAtUpdate} ${deliveredAtUpdate} WHERE id=?`,
+    deliveryStatus, failureReason || null, mappedOrderStatus, now, orderId);
+
+  // If delivered or failed/returned, check if driver has other deliveries
+  if (['delivered', 'failed', 'returned'].includes(deliveryStatus) && order.driver_id) {
+    const remaining = count("SELECT COUNT(*) c FROM orders WHERE driver_id=? AND id!=? AND delivery_status IN ('assigned', 'out_for_delivery')", order.driver_id, orderId);
+    if (remaining === 0) {
+      run("UPDATE drivers SET status='available', updated_at=? WHERE id=?", now, order.driver_id);
+    }
+  }
+
+  audit(user, 'DELIVERY_STATUS_UPDATE', 'Order', String(orderId), `Delivery status → ${deliveryStatus}${failureReason ? ` (Reason: ${failureReason})` : ''}`);
+  return { ok: true, delivery_status: deliveryStatus };
+}
+
+export function listDeliveries(user: User, filter?: { date?: string; status?: string; driverId?: number }) {
+  let query = `
+    SELECT o.id, o.order_number, o.customer_name, o.customer_phone, o.customer_address, o.city, o.pincode,
+           o.delivery_date, o.delivery_slot, o.delivery_slot_id, o.delivery_zone_id, o.driver_id,
+           o.delivery_status, o.dispatched_at, o.delivered_at, o.delivery_failure_reason,
+           o.status as order_status, o.total, o.items, o.tracking_note, o.created_at,
+           z.name as zone_name,
+           d.name as driver_name, d.phone as driver_phone, d.vehicle_type, d.vehicle_number
+    FROM orders o
+    LEFT JOIN delivery_zones z ON o.delivery_zone_id = z.id
+    LEFT JOIN drivers d ON o.driver_id = d.id
+    WHERE 1=1
+  `;
+  const params: any[] = [];
+  if (filter?.date) {
+    query += ' AND o.delivery_date = ?';
+    params.push(filter.date);
+  }
+  if (filter?.status && filter.status !== 'all') {
+    query += ' AND o.delivery_status = ?';
+    params.push(filter.status);
+  }
+  if (filter?.driverId) {
+    query += ' AND o.driver_id = ?';
+    params.push(filter.driverId);
+  }
+  query += ' ORDER BY o.delivery_date ASC, o.delivery_slot_id ASC, o.id DESC LIMIT 400';
+
+  const rows = all<Row>(query, ...params);
+  return rows.map((r) => {
+    let parsedItems = [];
+    try {
+      const raw = JSON.parse(r.items || '[]');
+      parsedItems = Array.isArray(raw) ? raw.map((it: any) => ({
+        name: it.name,
+        qty: it.qty,
+        weight: it.weight,
+        flavour: it.flavour,
+        messageOnCake: it.messageOnCake,
+      })) : [];
+    } catch {}
+    return {
+      ...r,
+      items: parsedItems,
+    };
+  });
 }
 
 // ---------------------------------------------------------------------------

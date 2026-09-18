@@ -19,6 +19,7 @@ import {
   Activity,
   Wheat,
   Star,
+  Truck,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { hasPermission, type Permission } from '../../lib/server/permissions';
@@ -30,6 +31,7 @@ export type AdminTab =
   | 'ingredients'
   | 'media'
   | 'orders'
+  | 'delivery'
   | 'reviews'
   | 'woocommerce'
   | 'security'
@@ -113,6 +115,13 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       icon: <ShoppingBag className="w-4 h-4" />,
       badge: pendingOrdersCount > 0 ? pendingOrdersCount : undefined,
       permission: 'view_orders',
+      group: 'OPERATIONS',
+    },
+    {
+      id: 'delivery',
+      label: 'Delivery & Fleet',
+      icon: <Truck className="w-4 h-4" />,
+      permission: 'view_delivery',
       group: 'OPERATIONS',
     },
     {

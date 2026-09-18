@@ -105,6 +105,8 @@ export async function GET(req: Request) {
       return ok(r);
     }
     if (type === 'delivery') return ok(ops.listDelivery(user));
+    if (type === 'drivers') return ok({ drivers: ops.listDrivers(user) });
+    if (type === 'deliveries') return ok({ deliveries: ops.listDeliveries(user, { date: url.searchParams.get('date') || undefined, status: url.searchParams.get('status') || undefined, driverId: url.searchParams.get('driver_id') ? Number(url.searchParams.get('driver_id')) : undefined }) });
     if (type === 'slots') return ok({ slots: ops.getSlots(user) });
     if (type === 'payment_config') { if (!isSuper(user)) return err('Super admin access required', 403); return ok({ config: ops.getPaymentConfig(user) }); }
     if (type === 'refunds') return ok({ refunds: ops.listRefunds(user, url.searchParams.get('status') || undefined) });
@@ -413,12 +415,20 @@ export async function POST(req: Request) {
     if (type === 'delivery_zones' && action === 'save') return ok(ops.saveZone(user, body));
     if (type === 'delivery_zones' && action === 'delete') return ok(ops.deleteZone(user, body.id));
     if (type === 'pincodes' && action === 'save') return ok(ops.savePincode(user, body));
+    if (type === 'pincodes' && action === 'bulk_create') return ok(ops.bulkSavePincodes(user, Number(body.zone_id), body.pincodes || []));
     if (type === 'pincodes' && action === 'delete') return ok(ops.deletePincode(user, body.id));
     if (type === 'blackout' && action === 'save') return ok(ops.saveBlackout(user, body));
     if (type === 'blackout' && action === 'delete') return ok(ops.deleteBlackout(user, body.id));
     if (type === 'buffer' && action === 'save') return ok(ops.saveBuffer(user, body));
     if (type === 'production' && action === 'save') return ok(ops.saveProductionCapacity(user, body));
     if (type === 'slot_capacity' && action === 'save') return ok(ops.setSlotCapacity(user, body));
+    if (type === 'slot_capacity' && action === 'bulk_date_override') return ok(ops.bulkSetSlotCapacity(user, body));
+
+    // ---- Drivers & Fleet Dispatch ----
+    if (type === 'drivers' && (action === 'save' || action === 'create' || action === 'update')) return ok(ops.saveDriver(user, body));
+    if (type === 'drivers' && action === 'delete') return ok(ops.deleteDriver(user, Number(body.id)));
+    if (type === 'orders' && action === 'assign_driver') return ok(ops.assignDriverToOrder(user, Number(body.id), body.driver_id ? Number(body.driver_id) : null));
+    if (type === 'orders' && action === 'delivery_status') return ok(ops.updateDeliveryStatus(user, Number(body.id), body.delivery_status, body.note, body.failure_reason));
 
     // ---- Payments / Settings (super_admin only - sensitive) ----
     if (type === 'payment_config' && action === 'save') { if (!isSuper(user)) return err('Super admin access required', 403); return ok(ops.savePaymentConfig(user, body.settings || body)); }

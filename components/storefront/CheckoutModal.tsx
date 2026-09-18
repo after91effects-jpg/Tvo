@@ -187,7 +187,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           timeRange: s.start_time && s.end_time ? `${s.start_time} – ${s.end_time}` : s.name,
           fee: Number(s.fee) || 0,
           available: s.available !== false,
-          badge: s.fee > 0 ? `+₹${s.fee} Evening` : undefined,
+          badge: s.cutoffPassed ? 'Cut-off Passed' : (s.fee > 0 ? `+₹${s.fee} Evening` : undefined),
         }));
         if (fetched.length > 0) {
           setSlots(fetched);

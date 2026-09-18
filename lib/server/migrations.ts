@@ -346,6 +346,40 @@ export function runMigrations() {
       db.prepare(`INSERT INTO schema_migrations (name) VALUES ('phase12b11_design_upload_and_related')`).run();
     }
   } catch {}
+
+  // ---- Step 11: Advanced Delivery Management (strictly additive) ----
+  addTable(`CREATE TABLE IF NOT EXISTS drivers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    phone TEXT NOT NULL,
+    vehicle_type TEXT DEFAULT 'Two Wheeler',
+    vehicle_number TEXT,
+    status TEXT DEFAULT 'available',
+    active INTEGER DEFAULT 1,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT
+  )`);
+  addColumn('orders', 'delivery_zone_id', 'delivery_zone_id INTEGER');
+  addColumn('orders', 'driver_id', 'driver_id INTEGER');
+  addColumn('orders', 'dispatched_at', 'dispatched_at TEXT');
+  addColumn('orders', 'delivered_at', 'delivered_at TEXT');
+  addColumn('orders', 'delivery_status', "delivery_status TEXT DEFAULT 'pending'");
+  addColumn('orders', 'delivery_failure_reason', 'delivery_failure_reason TEXT');
+  addColumn('delivery_slots', 'cutoff_minutes', 'cutoff_minutes INTEGER DEFAULT 120');
+  addColumn('delivery_zones', 'min_order_value', 'min_order_value REAL DEFAULT 0');
+
+  addTable(`CREATE INDEX IF NOT EXISTS idx_orders_del_date_slot ON orders(delivery_date, delivery_slot_id)`);
+  addTable(`CREATE INDEX IF NOT EXISTS idx_orders_driver_id ON orders(driver_id)`);
+  addTable(`CREATE INDEX IF NOT EXISTS idx_pincodes_zone ON pincodes(zone_id)`);
+  addTable(`CREATE INDEX IF NOT EXISTS idx_drivers_status ON drivers(status, active)`);
+
+  try {
+    const step11Applied = db.prepare(`SELECT name FROM schema_migrations WHERE name = 'step11_advanced_delivery_management'`).get();
+    if (!step11Applied) {
+      db.prepare(`INSERT INTO schema_migrations (name) VALUES ('step11_advanced_delivery_management')`).run();
+    }
+  } catch {}
 }
 
 // allow-testing helper

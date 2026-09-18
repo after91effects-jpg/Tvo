@@ -219,6 +219,7 @@ CREATE TABLE IF NOT EXISTS delivery_zones (
   city TEXT,
   fee REAL NOT NULL DEFAULT 0,
   free_delivery_threshold REAL,
+  min_order_value REAL DEFAULT 0,
   est_delivery_time TEXT,
   active INTEGER DEFAULT 1
 );
@@ -239,6 +240,7 @@ CREATE TABLE IF NOT EXISTS delivery_slots (
   capacity INTEGER DEFAULT 10,
   books INTEGER DEFAULT 0,
   fee REAL DEFAULT 0,
+  cutoff_minutes INTEGER DEFAULT 120,
   available INTEGER DEFAULT 1,
   days TEXT DEFAULT '[]',
   special_dates TEXT DEFAULT '[]'
@@ -261,6 +263,19 @@ CREATE TABLE IF NOT EXISTS blackout_dates (
   reason TEXT,
   type TEXT DEFAULT 'blackout',
   UNIQUE(date)
+);
+
+CREATE TABLE IF NOT EXISTS drivers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  phone TEXT NOT NULL,
+  vehicle_type TEXT DEFAULT 'Two Wheeler',
+  vehicle_number TEXT,
+  status TEXT DEFAULT 'available',
+  active INTEGER DEFAULT 1,
+  notes TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS buffer_settings (
@@ -411,6 +426,12 @@ CREATE TABLE IF NOT EXISTS orders (
    timeline TEXT DEFAULT '[]',
    occasion_slug TEXT,
    occasion_id INTEGER,
+   delivery_zone_id INTEGER,
+   driver_id INTEGER,
+   dispatched_at TEXT,
+   delivered_at TEXT,
+   delivery_status TEXT DEFAULT 'pending',
+   delivery_failure_reason TEXT,
    created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT
 );
@@ -674,6 +695,10 @@ CREATE INDEX IF NOT EXISTS idx_product_variants_sku ON product_variants(sku);
 CREATE INDEX IF NOT EXISTS idx_orders_number ON orders(order_number);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
 CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at);
+CREATE INDEX IF NOT EXISTS idx_orders_del_date_slot ON orders(delivery_date, delivery_slot_id);
+CREATE INDEX IF NOT EXISTS idx_orders_driver_id ON orders(driver_id);
+CREATE INDEX IF NOT EXISTS idx_pincodes_zone ON pincodes(zone_id);
+CREATE INDEX IF NOT EXISTS idx_drivers_status ON drivers(status, active);
 CREATE INDEX IF NOT EXISTS idx_product_reviews_pid_status ON product_reviews(product_id, status);
 CREATE INDEX IF NOT EXISTS idx_product_reviews_cust_id ON product_reviews(customer_id);
 `;

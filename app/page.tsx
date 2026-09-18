@@ -76,6 +76,7 @@ import { FestivalManagerView } from '../components/admin/FestivalManagerView';
 import { SystemHealthView } from '../components/admin/SystemHealthView';
 import { IngredientMasterView } from '../components/admin/IngredientMasterView';
 import { ReviewModerationView } from '../components/admin/ReviewModerationView';
+import { DeliveryManagementView } from '../components/admin/DeliveryManagementView';
 
 function normalizeProductRecord(p: any): Product {
   const categorySlug = p.category || p.category_slug || '';
@@ -983,6 +984,8 @@ export default function Home() {
               {adminTab === 'orders' && (
                 <CustomerOrdersView orders={orders} onRefresh={fetchData} />
               )}
+
+              {adminTab === 'delivery' && <DeliveryManagementView />}
 
               {adminTab === 'reviews' && <ReviewModerationView />}
 
