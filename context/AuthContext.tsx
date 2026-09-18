@@ -255,10 +255,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (typeof window !== 'undefined') {
         try {
+          const idToken = await firebaseGetIdToken().catch(() => '');
           await fetch('/api/auth', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'login', email, password: pass }),
+            body: JSON.stringify({ action: 'customerSession', idToken, email: fbEmail, name: displayName, phone }),
           });
         } catch (e) {
         }
@@ -410,6 +411,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       setLocalAuthSession(profile, uid);
       setUser(profile);
+
+      if (typeof window !== 'undefined') {
+        try {
+          const idToken = await firebaseGetIdToken().catch(() => '');
+          await fetch('/api/auth', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'customerSession', idToken, email: fbEmail, name }),
+          });
+        } catch (e) {
+        }
+      }
 
       return { success: true };
     } catch (err: any) {

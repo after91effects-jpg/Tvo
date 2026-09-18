@@ -35,7 +35,7 @@ export async function GET(req: Request) {
     let isOwner = false;
     if (user) {
       if (order.customer_id && user.id) {
-        const cust = db.prepare('SELECT id FROM customers WHERE user_id=? AND id=?').get(user.id, order.customer_id);
+        const cust = db.prepare('SELECT id FROM customers WHERE (id=? OR user_id=?) AND id=?').get(user.id, user.id, order.customer_id);
         if (cust) isOwner = true;
       }
       if (order.customer_email && user.email && order.customer_email.toLowerCase() === user.email.toLowerCase()) {
@@ -65,10 +65,10 @@ export async function GET(req: Request) {
   let where = '1=1';
   const params: any[] = [];
   if (user) {
-    const cust = db.prepare('SELECT id FROM customers WHERE user_id=?').get(user.id) as any;
+    const cust = db.prepare('SELECT id FROM customers WHERE id=? OR user_id=? OR email=?').get(user.id, user.id, user.email) as any;
     if (cust) {
-      where = 'customer_id=?';
-      params.push(cust.id);
+      where = '(customer_id=? OR customer_email=?)';
+      params.push(cust.id, user.email);
     } else {
       where = 'customer_email=?';
       params.push(user.email);
@@ -90,7 +90,7 @@ export async function POST(req: Request) {
   const user = getCurrentUser(req);
   let customerId: number | null = null;
   if (user) {
-    const cust = db.prepare('SELECT id FROM customers WHERE user_id=?').get(user.id) as any;
+    const cust = db.prepare('SELECT id FROM customers WHERE id=? OR user_id=? OR email=?').get(user.id, user.id, user.email) as any;
     customerId = cust?.id ?? null;
   }
 

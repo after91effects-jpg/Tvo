@@ -125,5 +125,25 @@ export function getCurrentUser(req: Request): any | null {
   if (!token) return null;
   const payload = verifyToken(token);
   if (!payload || !payload.sub) return null;
+  if (payload.role === 'customer') {
+    const cust = db.prepare('SELECT * FROM customers WHERE id=?').get(payload.sub) as any;
+    if (cust) {
+      return {
+        id: cust.id,
+        name: cust.name,
+        email: cust.email,
+        phone: cust.phone,
+        role: 'customer',
+        customerId: cust.id,
+      };
+    }
+    return {
+      id: payload.sub,
+      name: payload.name || '',
+      email: payload.email || '',
+      role: 'customer',
+      customerId: payload.sub,
+    };
+  }
   return db.prepare('SELECT * FROM users WHERE id=?').get(payload.sub) || null;
 }

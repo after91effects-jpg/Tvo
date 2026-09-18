@@ -124,6 +124,49 @@ export async function POST(req: Request) {
     return res;
   }
 
+  if (action === 'customerSession') {
+    const idToken = body.idToken || '';
+    let email = (body.email || '').toString().toLowerCase().trim();
+    let name = (body.name || '').toString().trim();
+    let phone = (body.phone || '').toString().trim();
+
+    if (idToken) {
+      try {
+        const verifyResult = await withTimeout(
+          verifyFirebaseIdToken(idToken),
+          10000,
+          'customerSession verifyFirebaseIdToken',
+        );
+        if (verifyResult.success && verifyResult.decodedToken) {
+          const decoded = verifyResult.decodedToken;
+          if (decoded.email) email = decoded.email.toLowerCase().trim();
+          if (decoded.name && !name) name = decoded.name;
+        }
+      } catch {}
+    }
+
+    if (!email) return err('Email is required for customer session', 400);
+
+    // Look up or create customer in customers table
+    let cust = db.prepare('SELECT * FROM customers WHERE email=?').get(email) as any;
+    if (!cust) {
+      const custInfo = db.prepare("INSERT INTO customers (name, email, phone, group_name, created_at, updated_at) VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))")
+        .run(name || email.split('@')[0], email, phone || null, 'Online Customer');
+      cust = db.prepare('SELECT * FROM customers WHERE id=?').get(custInfo.lastInsertRowid) as any;
+    } else if (name && cust.name !== name) {
+      db.prepare("UPDATE customers SET name=?, updated_at=datetime('now') WHERE id=?").run(name, cust.id);
+      cust.name = name;
+    }
+
+    const token = signToken({ sub: cust.id, role: 'customer', email: cust.email, name: cust.name });
+    const res = NextResponse.json({
+      user: { id: cust.id, name: cust.name, email: cust.email, role: 'customer', customerId: cust.id },
+      admin: false,
+    });
+    res.cookies.set('tvo_auth', token, sessionCookieOptions());
+    return res;
+  }
+
   if (action === 'logout') {
     const cookie = req.headers.get('cookie') || '';
     const match = cookie.split(';').map((s) => s.trim()).find((s) => s.startsWith('tvo_auth='));

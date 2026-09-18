@@ -101,7 +101,28 @@ function unsetAllDefaults(uid: string, addresses: CustomerAddress[]): CustomerAd
 }
 
 export async function fetchCustomerAddresses(uid: string): Promise<CustomerAddress[]> {
-  return getAddresses(uid).sort((a, b) => (a.isDefault === b.isDefault ? 0 : a.isDefault ? -1 : 1));
+  const local = getAddresses(uid).sort((a, b) => (a.isDefault === b.isDefault ? 0 : a.isDefault ? -1 : 1));
+  if (typeof window !== 'undefined') {
+    try {
+      const res = await fetch('/api/customer/addresses');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data?.addresses) && data.addresses.length > 0) {
+          saveAddresses(uid, data.addresses);
+          return data.addresses.sort((a: CustomerAddress, b: CustomerAddress) => (a.isDefault === b.isDefault ? 0 : a.isDefault ? -1 : 1));
+        } else if (local.length > 0) {
+          for (const addr of local) {
+            await fetch('/api/customer/addresses', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(addr),
+            }).catch(() => {});
+          }
+        }
+      }
+    } catch {}
+  }
+  return local;
 }
 
 export async function createCustomerAddress(
@@ -133,6 +154,15 @@ export async function createCustomerAddress(
     };
     addresses.push(newAddress);
     saveAddresses(uid, addresses);
+
+    if (typeof window !== 'undefined') {
+      fetch('/api/customer/addresses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newAddress),
+      }).catch(() => {});
+    }
+
     return { ok: true };
   } catch (e: any) {
     return { ok: false, error: e?.message || 'Could not save address. Please try again.' };
@@ -162,6 +192,15 @@ export async function updateCustomerAddress(
     updatedAt: new Date().toISOString(),
   };
   saveAddresses(uid, addresses);
+
+  if (typeof window !== 'undefined') {
+    fetch('/api/customer/addresses', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(addresses[idx]),
+    }).catch(() => {});
+  }
+
   return { ok: true };
 }
 
@@ -172,6 +211,13 @@ export async function deleteCustomerAddress(uid: string, addressId: string): Pro
 
   addresses.splice(idx, 1);
   saveAddresses(uid, addresses);
+
+  if (typeof window !== 'undefined') {
+    fetch(`/api/customer/addresses?id=${encodeURIComponent(addressId)}`, {
+      method: 'DELETE',
+    }).catch(() => {});
+  }
+
   return { ok: true };
 }
 
@@ -184,5 +230,14 @@ export async function setDefaultCustomerAddress(uid: string, addressId: string):
   addresses[idx].isDefault = true;
   addresses[idx].updatedAt = new Date().toISOString();
   saveAddresses(uid, addresses);
+
+  if (typeof window !== 'undefined') {
+    fetch('/api/customer/addresses', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(addresses[idx]),
+    }).catch(() => {});
+  }
+
   return { ok: true };
 }
