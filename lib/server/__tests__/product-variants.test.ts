@@ -6,6 +6,9 @@ describe('product-variants.ts', () => {
   let testProductId: number;
 
   beforeEach(() => {
+    db.prepare("DELETE FROM variant_stock_adjustments WHERE product_id IN (SELECT id FROM products WHERE slug = 'test-variant-product' OR sku = 'VART-TEST')").run();
+    db.prepare("DELETE FROM product_variants WHERE product_id IN (SELECT id FROM products WHERE slug = 'test-variant-product' OR sku = 'VART-TEST')").run();
+    db.prepare("DELETE FROM products WHERE slug = 'test-variant-product' OR sku = 'VART-TEST'").run();
     const info = db.prepare('INSERT INTO products (sku, name, slug, stock, low_stock_threshold, status) VALUES (?,?,?,?,?,?)')
       .run('VART-TEST', 'Test Variant Product', 'test-variant-product', 10, 5, 'publish');
     testProductId = Number(info.lastInsertRowid);

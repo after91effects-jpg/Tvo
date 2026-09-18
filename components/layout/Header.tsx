@@ -69,9 +69,25 @@ export const Header: React.FC<HeaderProps> = ({
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [mobileExpandedCat, setMobileExpandedCat] = useState<string | null>('cat-main-cakes');
   const [mounted, setMounted] = useState(false);
+  const [activeOccasion, setActiveOccasion] = useState<{ name: string; slug: string } | null>(null);
 
   useEffect(() => {
     setMounted(true);
+    let unmounted = false;
+    fetch('/api/occasions?mode=active_only')
+      .then((res) => res.json())
+      .then((data) => {
+        if (!unmounted && data?.activeOccasion?.slug) {
+          setActiveOccasion({
+            name: data.activeOccasion.name,
+            slug: data.activeOccasion.slug,
+          });
+        }
+      })
+      .catch(() => {});
+    return () => {
+      unmounted = true;
+    };
   }, []);
 
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -471,7 +487,17 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
 
             {/* Right Express Perks */}
-            <div className="flex items-center gap-4 text-[11px] text-[var(--text-muted)] font-semibold">
+            <div className="flex items-center gap-3 text-[11px] text-[var(--text-muted)] font-semibold">
+              {activeOccasion && (
+                <button
+                  type="button"
+                  onClick={() => onNavigate('occasion', activeOccasion.slug)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-linear-to-r from-amber-500 via-rose-500 to-[#FF2B6D] text-white font-bold text-[11px] shadow-xs hover:opacity-95 transition-all cursor-pointer animate-pulse"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>{activeOccasion.name} Specials</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => handleCategoryClick('eggless-cakes')}
@@ -664,6 +690,24 @@ export const Header: React.FC<HeaderProps> = ({
                   ))}
                 </div>
               </div>
+
+              {/* Active Festival Spotlight (Mobile Drawer) */}
+              {activeOccasion && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMobileNavOpen(false);
+                    onNavigate('occasion', activeOccasion.slug);
+                  }}
+                  className="w-full p-3 rounded-2xl bg-linear-to-r from-amber-500 via-rose-500 to-[#FF2B6D] text-white font-bold text-xs flex items-center justify-between shadow-xs cursor-pointer"
+                >
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4" />
+                    <span>Celebrate {activeOccasion.name}</span>
+                  </div>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              )}
 
               {/* 5 Master Categories Accordion Hierarchy */}
               <div className="space-y-2">

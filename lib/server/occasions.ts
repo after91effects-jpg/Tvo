@@ -66,7 +66,216 @@ export function seedOccasionsIfEmpty() {
     /* no-op */
   }
 }
+
+export function initializeFestivalDefaults() {
+  try {
+    // 1. Activate primary occasions if none are active
+    const activeRow = db.prepare('SELECT COUNT(*) AS c FROM occasions WHERE active = 1 AND deleted_at IS NULL').get() as { c: number };
+    if (activeRow.c === 0) {
+      const now = new Date().toISOString();
+      const updates = [
+        {
+          slug: 'diwali',
+          active: 1,
+          status: 'active',
+          homepage_visibility: 1,
+          banner_image: 'https://images.unsplash.com/photo-1512909006721-3d6018887383?q=80&w=1200&auto=format&fit=crop',
+          homepage_section_title: 'Celebrate Diwali with TVO Flavours',
+          homepage_section_subtitle: 'Indulge in artisanal festive hampers, handcrafted dry fruit potlis, and royal celebratory cakes.',
+          cta_label: 'Explore Diwali Hampers',
+          cta_destination: '/occasion/diwali',
+          priority: 95,
+        },
+        {
+          slug: 'raksha-bandhan',
+          active: 1,
+          status: 'scheduled',
+          homepage_visibility: 1,
+          banner_image: 'https://images.unsplash.com/photo-1530103862676-de8c9debad1d?q=80&w=1200&auto=format&fit=crop',
+          homepage_section_title: 'Raksha Bandhan Celebrations',
+          homepage_section_subtitle: 'Celebrate the sacred bond of siblinghood with exquisite rakhis, sweets, and gift hampers.',
+          cta_label: 'Shop Rakhi Collection',
+          cta_destination: '/occasion/raksha-bandhan',
+          priority: 93,
+        },
+        {
+          slug: 'valentines-day',
+          active: 1,
+          status: 'scheduled',
+          homepage_visibility: 1,
+          banner_image: 'https://images.unsplash.com/photo-1518199266791-5375a83190b7?q=80&w=1200&auto=format&fit=crop',
+          homepage_section_title: 'Valentine Specials',
+          homepage_section_subtitle: 'Decadent heart-shaped cakes and romantic treats made with pure Belgian chocolate.',
+          cta_label: 'View Valentine Cakes',
+          cta_destination: '/occasion/valentines-day',
+          priority: 92,
+        },
+        {
+          slug: 'birthday',
+          active: 1,
+          status: 'active',
+          homepage_visibility: 1,
+          banner_image: 'https://images.unsplash.com/photo-1558636508-e0db3814bd1d?q=80&w=1200&auto=format&fit=crop',
+          homepage_section_title: 'Handcrafted Birthday Cakes',
+          homepage_section_subtitle: 'Make birthdays extraordinary with artisanal celebration cakes freshly baked with love.',
+          cta_label: 'Shop Birthday Cakes',
+          cta_destination: '/occasion/birthday',
+          priority: 90,
+        },
+        {
+          slug: 'anniversary',
+          active: 1,
+          status: 'active',
+          homepage_visibility: 1,
+          banner_image: 'https://images.unsplash.com/photo-1535141192574-5d4897c13136?q=80&w=1200&auto=format&fit=crop',
+          homepage_section_title: 'Anniversary Milestones',
+          homepage_section_subtitle: 'Celebrate your love with bespoke anniversary cakes crafted to perfection.',
+          cta_label: 'Shop Anniversary Cakes',
+          cta_destination: '/occasion/anniversary',
+          priority: 88,
+        },
+      ];
+
+      for (const u of updates) {
+        db.prepare(`
+          UPDATE occasions 
+          SET active = ?, status = ?, homepage_visibility = ?, banner_image = ?,
+              homepage_section_title = ?, homepage_section_subtitle = ?,
+              cta_label = ?, cta_destination = ?, priority = ?, updated_at = ?
+          WHERE slug = ? AND deleted_at IS NULL
+        `).run(
+          u.active, u.status, u.homepage_visibility, u.banner_image,
+          u.homepage_section_title, u.homepage_section_subtitle,
+          u.cta_label, u.cta_destination, u.priority, now, u.slug
+        );
+      }
+    }
+
+    // 2. Populate occasion_years if empty
+    const yearRow = db.prepare('SELECT COUNT(*) AS c FROM occasion_years').get() as { c: number };
+    if (yearRow.c === 0) {
+      const occs = db.prepare('SELECT id, slug FROM occasions WHERE deleted_at IS NULL').all() as { id: number; slug: string }[];
+      const occMap = new Map(occs.map((o) => [o.slug, o.id]));
+
+      const yearData = [
+        { slug: 'diwali', year: 2026, start_date: '2026-11-08', end_date: '2026-11-12', campaign_start_date: '2026-09-01', notes: 'Diwali 2026 Campaign' },
+        { slug: 'diwali', year: 2027, start_date: '2027-10-29', end_date: '2027-11-02', campaign_start_date: '2027-09-15', notes: 'Diwali 2027 Campaign' },
+        { slug: 'raksha-bandhan', year: 2026, start_date: '2026-08-28', end_date: '2026-08-28', campaign_start_date: '2026-08-01', notes: 'Rakhi 2026' },
+        { slug: 'raksha-bandhan', year: 2027, start_date: '2027-08-17', end_date: '2027-08-17', campaign_start_date: '2027-07-25', notes: 'Rakhi 2027' },
+        { slug: 'holi', year: 2026, start_date: '2026-03-04', end_date: '2026-03-04', campaign_start_date: '2026-02-15', notes: 'Holi 2026' },
+        { slug: 'holi', year: 2027, start_date: '2027-03-22', end_date: '2027-03-22', campaign_start_date: '2027-03-01', notes: 'Holi 2027' },
+        { slug: 'ganesh-chaturthi', year: 2026, start_date: '2026-09-14', end_date: '2026-09-24', campaign_start_date: '2026-09-01', notes: 'Ganesh Utsav 2026' },
+      ];
+
+      const stmt = db.prepare('INSERT OR IGNORE INTO occasion_years (occasion_id, year, start_date, end_date, campaign_start_date, notes) VALUES (?,?,?,?,?,?)');
+      for (const y of yearData) {
+        const occId = occMap.get(y.slug);
+        if (occId) {
+          stmt.run(occId, y.year, y.start_date, y.end_date, y.campaign_start_date, y.notes);
+        }
+      }
+    }
+
+    // 3. Populate product_occasions if empty
+    const mapRow = db.prepare('SELECT COUNT(*) AS c FROM product_occasions').get() as { c: number };
+    if (mapRow.c === 0) {
+      const occs = db.prepare('SELECT id, slug FROM occasions WHERE deleted_at IS NULL').all() as { id: number; slug: string }[];
+      const occMap = new Map(occs.map((o) => [o.slug, o.id]));
+
+      const insertMap = db.prepare('INSERT OR IGNORE INTO product_occasions (product_id, occasion_id, priority, active) VALUES (?,?,?,1)');
+
+      // Diwali products (Hampers & Festive Treats)
+      const diwaliId = occMap.get('diwali');
+      if (diwaliId) {
+        const diwaliProducts = db.prepare(`
+          SELECT id, name FROM products 
+          WHERE published = 1 AND deleted_at IS NULL 
+            AND (name LIKE '%diwali%' OR name LIKE '%hamper%' OR name LIKE '%gift%' OR tags LIKE '%diwali%')
+          ORDER BY CASE WHEN name LIKE '%hamper%' THEN 1 WHEN name LIKE '%gift%' THEN 2 ELSE 3 END, id ASC
+        `).all() as { id: number; name: string }[];
+
+        let p = 100;
+        for (const prd of diwaliProducts) {
+          insertMap.run(prd.id, diwaliId, Math.max(p, 10));
+          p -= 2;
+        }
+      }
+
+      // Raksha Bandhan products (Rakhis & Sweets)
+      const rakhiId = occMap.get('raksha-bandhan');
+      if (rakhiId) {
+        const rakhiProducts = db.prepare(`
+          SELECT id, name FROM products 
+          WHERE published = 1 AND deleted_at IS NULL 
+            AND (name LIKE '%rakhi%' OR name LIKE '%raksha%' OR tags LIKE '%rakhi%')
+          ORDER BY CASE WHEN name LIKE '%hamper%' THEN 1 ELSE 2 END, id ASC
+        `).all() as { id: number; name: string }[];
+
+        let p = 100;
+        for (const prd of rakhiProducts) {
+          insertMap.run(prd.id, rakhiId, Math.max(p, 10));
+          p -= 2;
+        }
+      }
+
+      // Valentine's Day products (Cakes & Treats)
+      const valId = occMap.get('valentines-day');
+      if (valId) {
+        const valProducts = db.prepare(`
+          SELECT id, name FROM products 
+          WHERE published = 1 AND deleted_at IS NULL 
+            AND (name LIKE '%valentine%' OR name LIKE '%love%' OR name LIKE '%heart%' OR name LIKE '%red velvet%')
+          ORDER BY id ASC
+        `).all() as { id: number; name: string }[];
+
+        let p = 100;
+        for (const prd of valProducts) {
+          insertMap.run(prd.id, valId, Math.max(p, 10));
+          p -= 5;
+        }
+      }
+
+      // Birthday cakes
+      const bdayId = occMap.get('birthday');
+      if (bdayId) {
+        const bdayProducts = db.prepare(`
+          SELECT id, name FROM products 
+          WHERE published = 1 AND deleted_at IS NULL 
+            AND (name LIKE '%cake%' OR tags LIKE '%birthday%')
+          LIMIT 12
+        `).all() as { id: number; name: string }[];
+
+        let p = 100;
+        for (const prd of bdayProducts) {
+          insertMap.run(prd.id, bdayId, Math.max(p, 10));
+          p -= 5;
+        }
+      }
+
+      // Anniversary cakes
+      const annId = occMap.get('anniversary');
+      if (annId) {
+        const annProducts = db.prepare(`
+          SELECT id, name FROM products 
+          WHERE published = 1 AND deleted_at IS NULL 
+            AND (name LIKE '%chocolate%' OR name LIKE '%truffle%' OR name LIKE '%fruit%')
+          LIMIT 12
+        `).all() as { id: number; name: string }[];
+
+        let p = 100;
+        for (const prd of annProducts) {
+          insertMap.run(prd.id, annId, Math.max(p, 10));
+          p -= 5;
+        }
+      }
+    }
+  } catch (e) {
+    /* no-op on non-critical */
+  }
+}
+
 seedOccasionsIfEmpty();
+initializeFestivalDefaults();
 
 export type OccasionStatus = 'draft' | 'scheduled' | 'active' | 'ended' | 'disabled' | 'archived';
 export type RecurrenceType = 'fixed' | 'range' | 'variable' | 'one_time';
