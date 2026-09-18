@@ -725,6 +725,23 @@ CREATE TABLE IF NOT EXISTS settlements (
   settled_at TEXT,
   created_at TEXT DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS payment_gateway_configs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  provider TEXT NOT NULL DEFAULT 'razorpay',
+  environment TEXT NOT NULL DEFAULT 'test',
+  key_id TEXT NOT NULL,
+  encrypted_key_secret TEXT NOT NULL,
+  encrypted_webhook_secret TEXT,
+  is_active INTEGER NOT NULL DEFAULT 1,
+  connection_status TEXT DEFAULT 'unknown',
+  last_connection_test_at TEXT,
+  last_webhook_received_at TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now')),
+  created_by TEXT,
+  updated_by TEXT
+);
 `;
 
 export function initDb() {

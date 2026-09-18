@@ -232,6 +232,19 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
   // Payment Method
   const [paymentMethod, setPaymentMethod] = useState<'upi_card' | 'cod'>('upi_card');
+  const [onlinePaymentEnabled, setOnlinePaymentEnabled] = useState<boolean>(true);
+
+  useEffect(() => {
+    fetch('/api/payments')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && data.enabled === false) {
+          setOnlinePaymentEnabled(false);
+          setPaymentMethod('cod');
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Coupon State
   const [inputCoupon, setInputCoupon] = useState('');
@@ -1345,22 +1358,34 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             <div className="px-4 pb-4 pt-2 border-t border-[var(--border)] space-y-3 bg-[var(--bg-subtle)]/20">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label
-                  className={`flex items-center gap-3 p-3.5 rounded-xl border cursor-pointer transition-all ${
-                    paymentMethod === 'upi_card'
-                      ? 'border-[var(--primary)] bg-[var(--primary-light)] text-[var(--primary)] font-semibold shadow-sm'
-                      : 'border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-main)]'
+                  className={`flex items-center gap-3 p-3.5 rounded-xl border transition-all ${
+                    !onlinePaymentEnabled
+                      ? 'opacity-50 cursor-not-allowed border-[var(--border)] bg-[var(--bg-subtle)]'
+                      : (paymentMethod === 'upi_card'
+                          ? 'border-[var(--primary)] bg-[var(--primary-light)] text-[var(--primary)] font-semibold shadow-sm cursor-pointer'
+                          : 'border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-main)] cursor-pointer')
                   }`}
                 >
                   <input
                     type="radio"
                     name="payment"
+                    disabled={!onlinePaymentEnabled}
                     checked={paymentMethod === 'upi_card'}
-                    onChange={() => setPaymentMethod('upi_card')}
+                    onChange={() => onlinePaymentEnabled && setPaymentMethod('upi_card')}
                     className="accent-[var(--primary)]"
                   />
                   <div className="text-xs">
-                    <div className="font-bold">Instant UPI / Cards / NetBanking</div>
-                    <div className="text-[10px] opacity-80">Instant bakery confirmation & priority queue</div>
+                    <div className="font-bold flex items-center gap-1.5">
+                      <span>Instant UPI / Cards / NetBanking</span>
+                      {!onlinePaymentEnabled && (
+                        <span className="text-[9px] bg-amber-500/10 text-amber-600 px-1.5 py-0.5 rounded-full font-medium">Paused</span>
+                      )}
+                    </div>
+                    <div className="text-[10px] opacity-80">
+                      {!onlinePaymentEnabled
+                        ? 'Online payments temporarily paused — Cash on Delivery available'
+                        : 'Instant bakery confirmation & priority queue'}
+                    </div>
                   </div>
                 </label>
 

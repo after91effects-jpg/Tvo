@@ -1,40 +1,150 @@
 import crypto from 'node:crypto';
 import { db } from './db';
 import { logError } from './logger';
+import {
+  encryptSecret,
+  decryptSecret,
+  maskKeyId,
+  validateKeyFormat,
+} from './payment-crypto';
+
+export interface ActivePaymentConfig {
+  source: 'database' | 'env' | 'none';
+  keyId: string;
+  keySecret: string;
+  webhookSecret: string;
+  mode: 'TEST' | 'LIVE' | 'SANDBOX';
+  isActive: boolean;
+  dbConfigId?: number;
+  connectionStatus?: string;
+  lastConnectionTestAt?: string | null;
+  lastWebhookReceivedAt?: string | null;
+  updatedAt?: string | null;
+}
 
 export interface SafePaymentConfig {
   configured: boolean;
+  isActive: boolean;
   mode: 'TEST' | 'LIVE' | 'SANDBOX';
+  environment: 'test' | 'live';
+  source: 'database' | 'env' | 'none';
   keyIdPresent: boolean;
   keyIdMasked: string;
+  keyId: string;
   keySecretPresent: boolean;
+  hasKeySecret: boolean;
   webhookSecretPresent: boolean;
+  hasWebhookSecret: boolean;
   webhookUrl: string;
+  connectionStatus: string;
+  lastConnectionTestAt: string | null;
+  lastWebhookReceivedAt: string | null;
+  updatedAt: string | null;
+}
+
+/**
+ * Resolves the active Razorpay configuration.
+ * Precedence:
+ * 1. Active database configuration in `payment_gateway_configs` (encrypted)
+ * 2. Environment variables fallback (RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET)
+ */
+export function getActiveGatewayConfig(): ActivePaymentConfig {
+  try {
+    const row = db.prepare(`
+      SELECT * FROM payment_gateway_configs 
+      WHERE provider='razorpay' 
+      ORDER BY id DESC LIMIT 1
+    `).get() as any;
+
+    if (row) {
+      let keySecret = '';
+      let webhookSecret = '';
+
+      try {
+        if (row.encrypted_key_secret) {
+          keySecret = decryptSecret(row.encrypted_key_secret);
+        }
+      } catch (e) {
+        logError('payment_crypto_decrypt_key_error', 'Failed to decrypt gateway key secret');
+      }
+
+      try {
+        if (row.encrypted_webhook_secret) {
+          webhookSecret = decryptSecret(row.encrypted_webhook_secret);
+        }
+      } catch (e) {
+        logError('payment_crypto_decrypt_webhook_error', 'Failed to decrypt webhook secret');
+      }
+
+      const mode: 'TEST' | 'LIVE' | 'SANDBOX' = 
+        row.environment?.toLowerCase() === 'live' ? 'LIVE' : 'TEST';
+
+      return {
+        source: 'database',
+        keyId: row.key_id || '',
+        keySecret,
+        webhookSecret,
+        mode,
+        isActive: Boolean(row.is_active),
+        dbConfigId: row.id,
+        connectionStatus: row.connection_status || 'unknown',
+        lastConnectionTestAt: row.last_connection_test_at || null,
+        lastWebhookReceivedAt: row.last_webhook_received_at || null,
+        updatedAt: row.updated_at || row.created_at || null,
+      };
+    }
+  } catch {
+    // If table doesn't exist yet or query fails, fall back to environment variables
+  }
+
+  // Fallback to environment variables
+  const envKeyId = (process.env.RAZORPAY_KEY_ID || '').trim();
+  const envKeySecret = (process.env.RAZORPAY_KEY_SECRET || '').trim();
+  const envWebhookSecret = (process.env.RAZORPAY_WEBHOOK_SECRET || '').trim();
+
+  const isConfigured = Boolean(envKeyId && envKeySecret);
+  const mode: 'TEST' | 'LIVE' | 'SANDBOX' = !envKeyId 
+    ? 'SANDBOX' 
+    : (envKeyId.startsWith('rzp_live_') ? 'LIVE' : 'TEST');
+
+  return {
+    source: isConfigured ? 'env' : 'none',
+    keyId: envKeyId,
+    keySecret: envKeySecret,
+    webhookSecret: envWebhookSecret,
+    mode,
+    isActive: isConfigured,
+    connectionStatus: isConfigured ? 'configured_via_env' : 'not_configured',
+    lastConnectionTestAt: null,
+    lastWebhookReceivedAt: null,
+    updatedAt: null,
+  };
 }
 
 export function getRazorpayKeyId(): string {
-  return (process.env.RAZORPAY_KEY_ID || '').trim();
+  return getActiveGatewayConfig().keyId;
 }
 
 export function getRazorpayKeySecret(): string {
-  return (process.env.RAZORPAY_KEY_SECRET || '').trim();
+  return getActiveGatewayConfig().keySecret;
 }
 
 export function getRazorpayWebhookSecret(): string {
-  return (process.env.RAZORPAY_WEBHOOK_SECRET || '').trim();
+  return getActiveGatewayConfig().webhookSecret;
 }
 
 export function isRazorpayConfigured(): boolean {
-  const keyId = getRazorpayKeyId();
-  const secret = getRazorpayKeySecret();
-  return Boolean(keyId && secret);
+  const config = getActiveGatewayConfig();
+  return Boolean(config.keyId && config.keySecret);
+}
+
+export function isRazorpayActive(): boolean {
+  const config = getActiveGatewayConfig();
+  return Boolean(config.keyId && config.keySecret && config.isActive);
 }
 
 export function getRazorpayMode(): 'TEST' | 'LIVE' | 'SANDBOX' {
-  const keyId = getRazorpayKeyId();
-  if (!keyId) return 'SANDBOX';
-  if (keyId.startsWith('rzp_live_')) return 'LIVE';
-  return 'TEST';
+  return getActiveGatewayConfig().mode;
 }
 
 /**
@@ -42,27 +152,27 @@ export function getRazorpayMode(): 'TEST' | 'LIVE' | 'SANDBOX' {
  * NEVER leaks actual secret values.
  */
 export function getSafeConfigStatus(): SafePaymentConfig {
-  const keyId = getRazorpayKeyId();
-  const secret = getRazorpayKeySecret();
-  const webhookSecret = getRazorpayWebhookSecret();
-
-  let keyIdMasked = 'Not Configured';
-  if (keyId) {
-    if (keyId.length > 8) {
-      keyIdMasked = `${keyId.slice(0, 8)}••••${keyId.slice(-4)}`;
-    } else {
-      keyIdMasked = '••••••••';
-    }
-  }
+  const config = getActiveGatewayConfig();
+  const masked = maskKeyId(config.keyId);
 
   return {
     configured: isRazorpayConfigured(),
-    mode: getRazorpayMode(),
-    keyIdPresent: Boolean(keyId),
-    keyIdMasked,
-    keySecretPresent: Boolean(secret),
-    webhookSecretPresent: Boolean(webhookSecret),
+    isActive: isRazorpayActive(),
+    mode: config.mode,
+    environment: config.mode === 'LIVE' ? 'live' : 'test',
+    source: config.source,
+    keyIdPresent: Boolean(config.keyId),
+    keyIdMasked: masked,
+    keyId: masked,
+    keySecretPresent: Boolean(config.keySecret),
+    hasKeySecret: Boolean(config.keySecret),
+    webhookSecretPresent: Boolean(config.webhookSecret),
+    hasWebhookSecret: Boolean(config.webhookSecret),
     webhookUrl: '/api/payments/razorpay/webhook',
+    connectionStatus: config.connectionStatus || 'unknown',
+    lastConnectionTestAt: config.lastConnectionTestAt || null,
+    lastWebhookReceivedAt: config.lastWebhookReceivedAt || null,
+    updatedAt: config.updatedAt || null,
   };
 }
 
@@ -81,9 +191,20 @@ export async function createRazorpayOrder(params: {
   sandbox?: boolean;
   error?: string;
 }> {
-  const keyId = getRazorpayKeyId();
-  const secret = getRazorpayKeySecret();
+  const config = getActiveGatewayConfig();
   const currency = params.currency || 'INR';
+
+  if (config.source === 'database' && !config.isActive) {
+    return {
+      id: '',
+      amount: params.amountPaise,
+      currency,
+      error: 'Online payments are currently disabled by the bakery administrator.',
+    };
+  }
+
+  const keyId = config.keyId;
+  const secret = config.keySecret;
 
   if (!keyId || !secret) {
     // Sandbox / Test Mode fallback when environment variables are not yet injected
@@ -200,6 +321,8 @@ export function verifyWebhookSignature(params: {
   }
 }
 
+export const verifyRazorpayWebhookSignature = verifyWebhookSignature;
+
 /**
  * Initiates a full or partial refund on a captured Razorpay payment.
  */
@@ -262,24 +385,32 @@ export async function createRazorpayRefund(params: {
 
 /**
  * Tests live or test API connectivity to Razorpay.
+ * Can test either passed credentials or the currently active configuration.
  */
-export async function testRazorpayConnection(): Promise<{
+export async function testRazorpayConnection(creds?: {
+  keyId?: string;
+  keySecret?: string;
+  environment?: 'test' | 'live';
+}): Promise<{
   ok: boolean;
   status: 'CONNECTED' | 'NOT_CONFIGURED' | 'ERROR';
   latencyMs: number;
   message: string;
   mode: 'TEST' | 'LIVE' | 'SANDBOX';
 }> {
-  const keyId = getRazorpayKeyId();
-  const secret = getRazorpayKeySecret();
-  const mode = getRazorpayMode();
+  const active = getActiveGatewayConfig();
+  const keyId = creds?.keyId?.trim() || active.keyId;
+  const secret = creds?.keySecret?.trim() || active.keySecret;
+  const mode = creds?.environment
+    ? (creds.environment === 'live' ? 'LIVE' : 'TEST')
+    : (keyId.startsWith('rzp_live_') ? 'LIVE' : (keyId ? 'TEST' : 'SANDBOX'));
 
   if (!keyId || !secret) {
     return {
       ok: false,
       status: 'NOT_CONFIGURED',
       latencyMs: 0,
-      message: 'Razorpay credentials (RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET) not set in environment.',
+      message: 'Razorpay credentials (Key ID and Key Secret) are not configured.',
       mode,
     };
   }
@@ -294,6 +425,17 @@ export async function testRazorpayConnection(): Promise<{
     const latencyMs = Date.now() - start;
 
     if (res.ok) {
+      // If testing active saved config, update status in database
+      if (!creds?.keyId && active.dbConfigId) {
+        try {
+          db.prepare(`
+            UPDATE payment_gateway_configs 
+            SET connection_status='connected', last_connection_test_at=datetime('now')
+            WHERE id=?
+          `).run(active.dbConfigId);
+        } catch {}
+      }
+
       return {
         ok: true,
         status: 'CONNECTED',
@@ -304,11 +446,23 @@ export async function testRazorpayConnection(): Promise<{
     }
 
     const data = await res.json().catch(() => ({}));
+    const errMsg = data.error?.description || `Razorpay returned HTTP ${res.status}`;
+    
+    if (!creds?.keyId && active.dbConfigId) {
+      try {
+        db.prepare(`
+          UPDATE payment_gateway_configs 
+          SET connection_status='error', last_connection_test_at=datetime('now')
+          WHERE id=?
+        `).run(active.dbConfigId);
+      } catch {}
+    }
+
     return {
       ok: false,
       status: 'ERROR',
       latencyMs,
-      message: data.error?.description || `Razorpay returned HTTP ${res.status}`,
+      message: errMsg,
       mode,
     };
   } catch (e: any) {
@@ -320,6 +474,163 @@ export async function testRazorpayConnection(): Promise<{
       mode,
     };
   }
+}
+
+/**
+ * Saves and activates a new Razorpay configuration with encrypted secrets.
+ */
+export async function saveGatewayConfig(params: {
+  environment: 'test' | 'live';
+  keyId: string;
+  keySecret: string;
+  webhookSecret?: string;
+  adminUser?: string;
+}): Promise<{
+  ok: boolean;
+  config?: SafePaymentConfig;
+  testResult?: any;
+  error?: string;
+}> {
+  // 1. Validate Key ID format against environment
+  const formatCheck = validateKeyFormat(params.keyId, params.environment);
+  if (!formatCheck.valid) {
+    return { ok: false, error: formatCheck.error };
+  }
+
+  if (!params.keySecret || params.keySecret.trim().length < 8) {
+    return { ok: false, error: 'A valid Razorpay Key Secret is required.' };
+  }
+
+  // 2. Perform safe connection test against Razorpay
+  const testRes = await testRazorpayConnection({
+    keyId: params.keyId,
+    keySecret: params.keySecret,
+    environment: params.environment,
+  });
+
+  const connectionStatus = testRes.ok ? 'connected' : 'error';
+
+  // 3. Encrypt secrets with AES-256-GCM
+  const encryptedKeySecret = encryptSecret(params.keySecret.trim());
+  const encryptedWebhookSecret = params.webhookSecret?.trim()
+    ? encryptSecret(params.webhookSecret.trim())
+    : null;
+
+  // 4. Atomically persist to SQLite
+  try {
+    db.transaction(() => {
+      db.prepare("UPDATE payment_gateway_configs SET is_active=0 WHERE provider='razorpay'").run();
+      db.prepare(`
+        INSERT INTO payment_gateway_configs (
+          provider, environment, key_id, encrypted_key_secret, encrypted_webhook_secret,
+          is_active, connection_status, last_connection_test_at, created_by, updated_by,
+          created_at, updated_at
+        )
+        VALUES (
+          'razorpay', ?, ?, ?, ?, 1, ?, datetime('now'), ?, ?, datetime('now'), datetime('now')
+        )
+      `).run(
+        params.environment,
+        params.keyId.trim(),
+        encryptedKeySecret,
+        encryptedWebhookSecret,
+        connectionStatus,
+        params.adminUser || 'Admin',
+        params.adminUser || 'Admin'
+      );
+    })();
+  } catch (dbErr: any) {
+    return { ok: false, error: `Database error saving configuration: ${dbErr.message}` };
+  }
+
+  return {
+    ok: true,
+    config: getSafeConfigStatus(),
+    testResult: testRes,
+  };
+}
+
+/**
+ * Toggles payment gateway active status (enable/disable).
+ */
+export function setGatewayActiveStatus(active: boolean, adminUser?: string): { ok: boolean; config: SafePaymentConfig } {
+  const current = getActiveGatewayConfig();
+
+  if (current.source === 'database' && current.dbConfigId) {
+    db.prepare(`
+      UPDATE payment_gateway_configs 
+      SET is_active=?, updated_by=?, updated_at=datetime('now')
+      WHERE id=?
+    `).run(active ? 1 : 0, adminUser || 'Admin', current.dbConfigId);
+  } else {
+    // If running solely from env, create a DB record to persist active toggle
+    const envKeyId = process.env.RAZORPAY_KEY_ID || 'rzp_test_placeholder';
+    const envKeySecret = process.env.RAZORPAY_KEY_SECRET || 'placeholder';
+    const envWebhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET || '';
+
+    try {
+      db.prepare(`
+        INSERT INTO payment_gateway_configs (
+          provider, environment, key_id, encrypted_key_secret, encrypted_webhook_secret,
+          is_active, connection_status, created_by, updated_by, created_at, updated_at
+        )
+        VALUES (
+          'razorpay', 'test', ?, ?, ?, ?, 'configured', ?, ?, datetime('now'), datetime('now')
+        )
+      `).run(
+        envKeyId,
+        encryptSecret(envKeySecret),
+        envWebhookSecret ? encryptSecret(envWebhookSecret) : null,
+        active ? 1 : 0,
+        adminUser || 'Admin',
+        adminUser || 'Admin'
+      );
+    } catch {}
+  }
+
+  return { ok: true, config: getSafeConfigStatus() };
+}
+
+/**
+ * Rotates only the webhook secret while preserving Key ID and Secret.
+ */
+export function rotateWebhookSecret(newSecret: string, adminUser?: string): { ok: boolean; error?: string } {
+  if (!newSecret || newSecret.trim().length < 6) {
+    return { ok: false, error: 'Webhook secret must be at least 6 characters.' };
+  }
+
+  const current = getActiveGatewayConfig();
+  const encrypted = encryptSecret(newSecret.trim());
+
+  if (current.source === 'database' && current.dbConfigId) {
+    db.prepare(`
+      UPDATE payment_gateway_configs 
+      SET encrypted_webhook_secret=?, updated_by=?, updated_at=datetime('now')
+      WHERE id=?
+    `).run(encrypted, adminUser || 'Admin', current.dbConfigId);
+  } else {
+    const envKeyId = process.env.RAZORPAY_KEY_ID || 'rzp_test_placeholder';
+    const envKeySecret = process.env.RAZORPAY_KEY_SECRET || 'placeholder';
+    try {
+      db.prepare(`
+        INSERT INTO payment_gateway_configs (
+          provider, environment, key_id, encrypted_key_secret, encrypted_webhook_secret,
+          is_active, connection_status, created_by, updated_by, created_at, updated_at
+        )
+        VALUES (
+          'razorpay', 'test', ?, ?, ?, 1, 'configured', ?, ?, datetime('now'), datetime('now')
+        )
+      `).run(
+        envKeyId,
+        encryptSecret(envKeySecret),
+        encrypted,
+        adminUser || 'Admin',
+        adminUser || 'Admin'
+      );
+    } catch {}
+  }
+
+  return { ok: true };
 }
 
 /**

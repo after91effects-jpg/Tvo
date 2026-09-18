@@ -13,8 +13,9 @@ export async function GET(req: Request) {
   const safeConfig = getSafeConfigStatus();
   return ok({
     configured: safeConfig.configured,
+    enabled: safeConfig.isActive,
     mode: safeConfig.mode,
-    key_id: getRazorpayKeyId() || null,
+    key_id: safeConfig.isActive ? (getRazorpayKeyId() || null) : null,
   });
 }
 
@@ -28,6 +29,11 @@ export async function POST(req: Request) {
     // 1. CREATE PAYMENT ORDER (Server Authoritative)
     // -------------------------------------------------------------------------
     if (action === 'create' || action === 'create_order') {
+      const safeConfig = getSafeConfigStatus();
+      if (!safeConfig.isActive) {
+        return err('Online payments are temporarily disabled by the bakery. Please choose Cash on Delivery or contact us.', 400);
+      }
+
       const orderNumber = String(body.orderNumber || '').trim();
       if (!orderNumber) return err('orderNumber is required', 400);
 

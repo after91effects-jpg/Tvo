@@ -16,6 +16,10 @@ import {
   ShieldCheck,
   RefreshCw,
   Eye,
+  EyeOff,
+  Copy,
+  Lock,
+  Power,
   SlidersHorizontal,
   ChevronRight,
   Activity,
@@ -61,6 +65,29 @@ export const PaymentDashboardView: React.FC = () => {
   // Test API State
   const [isTestingApi, setIsTestingApi] = useState(false);
   const [apiTestResult, setApiTestResult] = useState<any | null>(null);
+
+  // Gateway Configuration Form State
+  const [configEnv, setConfigEnv] = useState<'test' | 'live'>('test');
+  const [configKeyId, setConfigKeyId] = useState('');
+  const [configKeySecret, setConfigKeySecret] = useState('');
+  const [configWebhookSecret, setConfigWebhookSecret] = useState('');
+  const [showSecretInput, setShowSecretInput] = useState(false);
+  const [isSavingConfig, setIsSavingConfig] = useState(false);
+  const [configFeedback, setConfigFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Live Mode Safeguard State
+  const [showLiveModal, setShowLiveModal] = useState(false);
+  const [liveConfirmCheckbox, setLiveConfirmCheckbox] = useState(false);
+
+  // Disable Gateway Modal State
+  const [showDisableModal, setShowDisableModal] = useState(false);
+  const [isTogglingGateway, setIsTogglingGateway] = useState(false);
+
+  // Rotate Webhook Modal State
+  const [showWebhookRotateModal, setShowWebhookRotateModal] = useState(false);
+  const [rotateWebhookVal, setRotateWebhookVal] = useState('');
+  const [isRotatingWebhook, setIsRotatingWebhook] = useState(false);
+  const [copiedWebhookUrl, setCopiedWebhookUrl] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -143,10 +170,14 @@ export const PaymentDashboardView: React.FC = () => {
     setIsTestingApi(true);
     setApiTestResult(null);
     try {
-      const res = await fetch('/api/admin/payments', {
+      const res = await fetch('/api/admin/payments/razorpay/test-connection', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'test_api' }),
+        body: JSON.stringify({
+          keyId: configKeyId ? configKeyId.trim() : undefined,
+          keySecret: configKeySecret ? configKeySecret.trim() : undefined,
+          environment: configEnv,
+        }),
       });
       const json = await res.json();
       setApiTestResult(json);
@@ -155,6 +186,106 @@ export const PaymentDashboardView: React.FC = () => {
     } finally {
       setIsTestingApi(false);
     }
+  };
+
+  const handleSaveGatewayConfig = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!configKeyId.trim() || !configKeySecret.trim()) {
+      setConfigFeedback({ type: 'error', text: 'Razorpay Key ID and Key Secret are required.' });
+      return;
+    }
+
+    if (configEnv === 'live' && !liveConfirmCheckbox) {
+      setShowLiveModal(true);
+      return;
+    }
+
+    setIsSavingConfig(true);
+    setConfigFeedback(null);
+
+    try {
+      const res = await fetch('/api/admin/payments/razorpay/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'save_activate',
+          environment: configEnv,
+          keyId: configKeyId.trim(),
+          keySecret: configKeySecret.trim(),
+          webhookSecret: configWebhookSecret.trim() || undefined,
+          confirmedLive: liveConfirmCheckbox,
+        }),
+      });
+
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.error || 'Failed to save gateway configuration');
+      }
+
+      setConfigFeedback({ type: 'success', text: json.message || 'Configuration saved and activated successfully!' });
+      setShowLiveModal(false);
+      setLiveConfirmCheckbox(false);
+      setConfigKeySecret(''); // Clear plain secret from memory
+      setConfigWebhookSecret('');
+      fetchData();
+    } catch (err: any) {
+      setConfigFeedback({ type: 'error', text: err.message || 'Error saving gateway configuration' });
+    } finally {
+      setIsSavingConfig(false);
+    }
+  };
+
+  const handleToggleGateway = async (enable: boolean) => {
+    setIsTogglingGateway(true);
+    try {
+      const res = await fetch('/api/admin/payments/razorpay/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: enable ? 'enable' : 'disable' }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to toggle gateway');
+      setShowDisableModal(false);
+      fetchData();
+    } catch (err: any) {
+      alert(err.message || 'Failed to toggle gateway status');
+    } finally {
+      setIsTogglingGateway(false);
+    }
+  };
+
+  const handleRotateWebhookSecret = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!rotateWebhookVal.trim() || rotateWebhookVal.trim().length < 6) {
+      alert('Webhook secret must be at least 6 characters.');
+      return;
+    }
+
+    setIsRotatingWebhook(true);
+    try {
+      const res = await fetch('/api/admin/payments/razorpay/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'rotate_webhook', webhookSecret: rotateWebhookVal.trim() }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to update webhook secret');
+      setShowWebhookRotateModal(false);
+      setRotateWebhookVal('');
+      fetchData();
+    } catch (err: any) {
+      alert(err.message || 'Error rotating webhook secret');
+    } finally {
+      setIsRotatingWebhook(false);
+    }
+  };
+
+  const copyWebhookUrl = () => {
+    const url = 'https://blanchedalmond-leopard-910858.hostingersite.com/api/payments/razorpay/webhook';
+    navigator.clipboard.writeText(url).then(() => {
+      setCopiedWebhookUrl(true);
+      setTimeout(() => setCopiedWebhookUrl(false), 2000);
+    });
   };
 
   const exportTransactionsToCsv = () => {
@@ -294,6 +425,16 @@ export const PaymentDashboardView: React.FC = () => {
             </span>
           </div>
 
+          {/* Processing Status */}
+          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[var(--bg-subtle)] border border-[var(--border)]">
+            <span className="text-[var(--text-muted)]">Processing:</span>
+            {config.isActive !== false ? (
+              <span className="text-emerald-600 font-bold">ACTIVE</span>
+            ) : (
+              <span className="text-rose-600 font-bold">DISABLED</span>
+            )}
+          </div>
+
           {/* Refresh Button */}
           <button
             onClick={fetchData}
@@ -305,6 +446,24 @@ export const PaymentDashboardView: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Prominent Live Mode Alert Banner */}
+      {config.mode === 'LIVE' && config.isActive !== false && (
+        <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs animate-in fade-in">
+          <div className="flex items-center gap-2.5 text-rose-700 dark:text-rose-400 font-bold">
+            <AlertTriangle className="w-5 h-5 shrink-0" />
+            <div>
+              <span className="font-extrabold uppercase tracking-wide">Live Payments Enabled:</span> Customers will be charged real money through their credit cards or UPI.
+            </div>
+          </div>
+          <button
+            onClick={() => setShowDisableModal(true)}
+            className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shrink-0 cursor-pointer transition-colors shadow-xs"
+          >
+            Pause Online Payments
+          </button>
+        </div>
+      )}
 
       {/* ------------------------------------------------------------------- */}
       {/* 2. SUBTABS NAVIGATION                                               */}
@@ -1141,88 +1300,330 @@ export const PaymentDashboardView: React.FC = () => {
       {/* ------------------------------------------------------------------- */}
       {activeSubTab === 'settings' && (
         <div className="space-y-6">
-          <div className="p-5 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border)] shadow-xs space-y-4">
-            <div>
-              <h2 className="text-sm font-bold text-[var(--text-main)]">Payment Gateway Configuration Status</h2>
+          {/* Card A: Gateway Operational Status & Controls */}
+          <div className="p-5 sm:p-6 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border)] shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[var(--border)] pb-4">
+              <div>
+                <h2 className="text-sm font-bold text-[var(--text-main)] flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-[var(--primary)]" />
+                  <span>Gateway Operational Status</span>
+                </h2>
+                <p className="text-xs text-[var(--text-muted)]">
+                  Active payment gateway status, connectivity latency, and live processing controls.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {config.isActive !== false ? (
+                  <button
+                    onClick={() => setShowDisableModal(true)}
+                    className="px-3.5 py-1.5 rounded-xl border border-rose-500/30 text-rose-600 hover:bg-rose-500/10 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Power className="w-3.5 h-3.5" />
+                    <span>Disable Gateway</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleToggleGateway(true)}
+                    disabled={isTogglingGateway}
+                    className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 shadow-xs"
+                  >
+                    <Power className="w-3.5 h-3.5" />
+                    <span>Enable Gateway</span>
+                  </button>
+                )}
+
+                <button
+                  onClick={handleTestApiConnection}
+                  disabled={isTestingApi}
+                  className="px-3.5 py-1.5 rounded-xl bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white text-xs font-bold shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  <Activity className={`w-3.5 h-3.5 ${isTestingApi ? 'animate-spin' : ''}`} />
+                  <span>Test Connection</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Status Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+              <div className="p-3.5 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border)] space-y-1">
+                <span className="text-[11px] text-[var(--text-muted)] block">Processing Status</span>
+                <span className={`inline-flex items-center gap-1 font-bold text-xs ${
+                  config.isActive !== false ? 'text-emerald-600' : 'text-rose-600'
+                }`}>
+                  <span className={`w-2 h-2 rounded-full ${config.isActive !== false ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
+                  {config.isActive !== false ? 'ACTIVE' : 'DISABLED'}
+                </span>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border)] space-y-1">
+                <span className="text-[11px] text-[var(--text-muted)] block">Environment Mode</span>
+                <span className={`inline-flex items-center gap-1 font-bold text-xs ${
+                  config.mode === 'LIVE' ? 'text-emerald-600' : 'text-blue-600'
+                }`}>
+                  {config.mode === 'LIVE' ? '🟢 LIVE MODE' : '🔵 TEST MODE'}
+                </span>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border)] space-y-1">
+                <span className="text-[11px] text-[var(--text-muted)] block">Credential Source</span>
+                <span className="font-bold text-xs text-[var(--text-main)] uppercase">
+                  {config.source === 'database' ? 'Encrypted DB' : (config.source === 'env' ? 'ENV Fallback' : 'Unconfigured')}
+                </span>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border)] space-y-1">
+                <span className="text-[11px] text-[var(--text-muted)] block">Last Tested</span>
+                <span className="font-semibold text-[11px] text-[var(--text-muted)] truncate block">
+                  {config.lastConnectionTestAt ? new Date(config.lastConnectionTestAt).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' }) : 'Never tested'}
+                </span>
+              </div>
+            </div>
+
+            {/* Test Connection Diagnostic Output */}
+            {apiTestResult && (
+              <div className={`p-3.5 rounded-xl text-xs font-semibold flex items-center gap-2 border ${
+                apiTestResult.ok ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400' : 'bg-rose-500/10 border-rose-500/30 text-rose-700 dark:text-rose-400'
+              }`}>
+                {apiTestResult.ok ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <XCircle className="w-4 h-4 shrink-0" />}
+                <span>{apiTestResult.message}</span>
+                {apiTestResult.latencyMs > 0 && <span className="text-[11px] opacity-75">({apiTestResult.latencyMs}ms latency)</span>}
+              </div>
+            )}
+          </div>
+
+          {/* Card B: Razorpay Credentials Configuration Form */}
+          <form onSubmit={handleSaveGatewayConfig} className="p-5 sm:p-6 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border)] shadow-xs space-y-5">
+            <div className="border-b border-[var(--border)] pb-4">
+              <h2 className="text-sm font-bold text-[var(--text-main)] flex items-center gap-2">
+                <Lock className="w-4 h-4 text-[var(--primary)]" />
+                <span>Razorpay Gateway Credentials</span>
+              </h2>
               <p className="text-xs text-[var(--text-muted)]">
-                Authoritative server-side environment checks. Secret keys are strictly sealed on the server and are never displayed in the browser.
+                Credentials are automatically encrypted using authenticated AES-256-GCM before writing to the database. Plaintext secrets are never logged or returned to the browser.
               </p>
             </div>
 
-            <div className="divide-y divide-[var(--border)] text-xs">
-              <div className="py-3 flex items-center justify-between">
-                <div>
-                  <div className="font-bold text-[var(--text-main)]">Environment Mode</div>
-                  <div className="text-[var(--text-muted)]">Current operational gateway mode</div>
-                </div>
-                <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
-                  config.mode === 'LIVE' ? 'bg-emerald-500/10 text-emerald-600' : 'bg-blue-500/10 text-blue-600'
+            {/* Environment Switcher */}
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-[var(--text-main)]">
+                Operating Environment
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label className={`flex items-center gap-3 p-3.5 rounded-xl border cursor-pointer transition-all ${
+                  configEnv === 'test' 
+                    ? 'border-blue-500 bg-blue-500/10 text-blue-700 dark:text-blue-400 font-bold' 
+                    : 'border-[var(--border)] bg-[var(--bg-subtle)] text-[var(--text-muted)]'
                 }`}>
-                  {config.mode}
-                </span>
-              </div>
+                  <input
+                    type="radio"
+                    name="gatewayEnv"
+                    value="test"
+                    checked={configEnv === 'test'}
+                    onChange={() => {
+                      setConfigEnv('test');
+                      setLiveConfirmCheckbox(false);
+                    }}
+                    className="accent-blue-600"
+                  />
+                  <div>
+                    <div className="text-xs font-bold">Test Mode (Sandbox)</div>
+                    <div className="text-[10px] opacity-80 font-normal">Safe mock payments using Razorpay Test instruments (rzp_test_)</div>
+                  </div>
+                </label>
 
-              <div className="py-3 flex items-center justify-between">
-                <div>
-                  <div className="font-bold text-[var(--text-main)]">Razorpay Key ID</div>
-                  <div className="text-[var(--text-muted)]">Public client-side credential used by checkout modal</div>
-                </div>
-                <div className="font-mono font-semibold text-[var(--text-main)] bg-[var(--bg-subtle)] px-3 py-1 rounded-lg border border-[var(--border)]">
-                  {config.keyIdMasked}
-                </div>
-              </div>
-
-              <div className="py-3 flex items-center justify-between">
-                <div>
-                  <div className="font-bold text-[var(--text-main)]">Razorpay Key Secret</div>
-                  <div className="text-[var(--text-muted)]">Server-side HMAC & Order creation secret (Sealed)</div>
-                </div>
-                <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
-                  config.keySecretPresent ? 'bg-emerald-500/10 text-emerald-600' : 'bg-rose-500/10 text-rose-600'
+                <label className={`flex items-center gap-3 p-3.5 rounded-xl border cursor-pointer transition-all ${
+                  configEnv === 'live' 
+                    ? 'border-rose-500 bg-rose-500/10 text-rose-700 dark:text-rose-400 font-bold' 
+                    : 'border-[var(--border)] bg-[var(--bg-subtle)] text-[var(--text-muted)]'
                 }`}>
-                  {config.keySecretPresent ? 'Configured (Server-Only)' : 'Missing'}
-                </span>
-              </div>
-
-              <div className="py-3 flex items-center justify-between">
-                <div>
-                  <div className="font-bold text-[var(--text-main)]">Webhook Secret</div>
-                  <div className="text-[var(--text-muted)]">HMAC secret for asynchronous webhook verification (Sealed)</div>
-                </div>
-                <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
-                  config.webhookSecretPresent ? 'bg-emerald-500/10 text-emerald-600' : 'bg-amber-500/10 text-amber-600'
-                }`}>
-                  {config.webhookSecretPresent ? 'Configured (Server-Only)' : 'Missing / Optional in Sandbox'}
-                </span>
-              </div>
-
-              <div className="py-3 flex items-center justify-between">
-                <div>
-                  <div className="font-bold text-[var(--text-main)]">Live Webhook Endpoint</div>
-                  <div className="text-[var(--text-muted)]">Configure this exact path in your Razorpay Dashboard Webhooks panel</div>
-                </div>
-                <div className="font-mono text-xs font-bold text-[var(--primary)] bg-[var(--bg-subtle)] px-3 py-1 rounded-lg border border-[var(--border)]">
-                  https://blanchedalmond-leopard-910858.hostingersite.com/api/payments/razorpay/webhook
-                </div>
+                  <input
+                    type="radio"
+                    name="gatewayEnv"
+                    value="live"
+                    checked={configEnv === 'live'}
+                    onChange={() => {
+                      setConfigEnv('live');
+                      setShowLiveModal(true);
+                    }}
+                    className="accent-rose-600"
+                  />
+                  <div>
+                    <div className="text-xs font-bold flex items-center gap-1.5">
+                      <span>Live Mode (Production)</span>
+                      <span className="text-[9px] bg-rose-600 text-white px-1.5 py-0.2 rounded-full font-extrabold uppercase">Real Money</span>
+                    </div>
+                    <div className="text-[10px] opacity-80 font-normal">Real customer bank cards and UPI (rzp_live_)</div>
+                  </div>
+                </label>
               </div>
             </div>
 
-            {/* Test Connection Button */}
-            <div className="pt-4 flex items-center gap-3">
-              <button
-                onClick={handleTestApiConnection}
-                disabled={isTestingApi}
-                className="px-4 py-2 rounded-xl bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white text-xs font-bold shadow-xs transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50"
-              >
-                <Activity className={`w-3.5 h-3.5 ${isTestingApi ? 'animate-spin' : ''}`} />
-                <span>Test Gateway API Connection</span>
-              </button>
+            {/* Key ID Field */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-[var(--text-main)]">
+                  Razorpay Key ID
+                </label>
+                {config.keyIdPresent && (
+                  <span className="text-[10px] font-mono text-[var(--text-muted)] bg-[var(--bg-subtle)] px-2 py-0.5 rounded-md border border-[var(--border)]">
+                    Current: {config.keyIdMasked}
+                  </span>
+                )}
+              </div>
+              <input
+                type="text"
+                placeholder={configEnv === 'live' ? 'rzp_live_xxxxxxxxxxxxxxxx' : 'rzp_test_xxxxxxxxxxxxxxxx'}
+                value={configKeyId}
+                onChange={(e) => setConfigKeyId(e.target.value)}
+                required
+                className="w-full px-3.5 py-2.5 text-xs font-mono rounded-xl border border-[var(--border)] bg-[var(--bg-subtle)] text-[var(--text-main)] focus:outline-none focus:border-[var(--primary)]"
+              />
+              <p className="text-[10px] text-[var(--text-muted)]">
+                {configEnv === 'live' ? 'Must begin with "rzp_live_"' : 'Must begin with "rzp_test_"'}
+              </p>
+            </div>
 
-              {apiTestResult && (
-                <div className={`text-xs font-semibold ${apiTestResult.ok ? 'text-emerald-600' : 'text-rose-600'}`}>
-                  {apiTestResult.message}
+            {/* Key Secret Field */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-[var(--text-main)]">
+                  Razorpay Key Secret
+                </label>
+                {config.keySecretPresent && (
+                  <span className="text-[10px] text-emerald-600 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-md">
+                    ✓ Encrypted & Sealed
+                  </span>
+                )}
+              </div>
+              <div className="relative">
+                <input
+                  type={showSecretInput ? 'text' : 'password'}
+                  placeholder={config.keySecretPresent ? '•••••••••••••••••••••••••••••••• (Leave blank to keep current)' : 'Paste Key Secret from Razorpay Dashboard'}
+                  value={configKeySecret}
+                  onChange={(e) => setConfigKeySecret(e.target.value)}
+                  className="w-full px-3.5 py-2.5 text-xs font-mono rounded-xl border border-[var(--border)] bg-[var(--bg-subtle)] text-[var(--text-main)] pr-10 focus:outline-none focus:border-[var(--primary)]"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowSecretInput(!showSecretInput)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                >
+                  {showSecretInput ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              <p className="text-[10px] text-[var(--text-muted)]">
+                AES-256-GCM encrypted in SQLite. Never sent to the client.
+              </p>
+            </div>
+
+            {/* Webhook Secret Field */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-[var(--text-main)]">
+                  Razorpay Webhook Secret (Optional in Test)
+                </label>
+                {config.webhookSecretPresent && (
+                  <span className="text-[10px] text-emerald-600 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-md">
+                    ✓ Encrypted & Sealed
+                  </span>
+                )}
+              </div>
+              <input
+                type="password"
+                placeholder={config.webhookSecretPresent ? '•••••••••••••••• (Leave blank to keep current)' : 'Secret entered when creating webhook in Razorpay'}
+                value={configWebhookSecret}
+                onChange={(e) => setConfigWebhookSecret(e.target.value)}
+                className="w-full px-3.5 py-2.5 text-xs font-mono rounded-xl border border-[var(--border)] bg-[var(--bg-subtle)] text-[var(--text-main)] focus:outline-none focus:border-[var(--primary)]"
+              />
+            </div>
+
+            {/* Feedback Alert */}
+            {configFeedback && (
+              <div className={`p-3.5 rounded-xl text-xs font-semibold flex items-center gap-2 border ${
+                configFeedback.type === 'success' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400' : 'bg-rose-500/10 border-rose-500/30 text-rose-700 dark:text-rose-400'
+              }`}>
+                {configFeedback.type === 'success' ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <XCircle className="w-4 h-4 shrink-0" />}
+                <span>{configFeedback.text}</span>
+              </div>
+            )}
+
+            {/* Submit Buttons */}
+            <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-[var(--border)]">
+              <div className="text-[11px] text-[var(--text-muted)]">
+                Saving will test connectivity and atomically activate the credentials.
+              </div>
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="submit"
+                  disabled={isSavingConfig}
+                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white text-xs font-bold shadow-xs transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  {isSavingConfig ? <RefreshCw className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
+                  <span>Save & Activate Configuration</span>
+                </button>
+              </div>
+            </div>
+          </form>
+
+          {/* Card C: Webhook Integration & Secret Rotation */}
+          <div className="p-5 sm:p-6 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border)] shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[var(--border)] pb-3">
+              <div>
+                <h2 className="text-sm font-bold text-[var(--text-main)] flex items-center gap-2">
+                  <ArrowUpRight className="w-4 h-4 text-[var(--primary)]" />
+                  <span>Webhook Health & Integration</span>
+                </h2>
+                <p className="text-xs text-[var(--text-muted)]">
+                  Razorpay sends asynchronous status notifications (e.g. payment.captured, payment.failed) to this endpoint.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowWebhookRotateModal(true)}
+                className="px-3.5 py-1.5 rounded-xl border border-[var(--border)] hover:bg-[var(--bg-subtle)] text-[var(--text-main)] text-xs font-bold transition-colors cursor-pointer shrink-0"
+              >
+                Rotate Webhook Secret
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="block text-[11px] font-semibold text-[var(--text-muted)] mb-1">
+                  Endpoint URL to enter in Razorpay Dashboard → Webhooks
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value="https://blanchedalmond-leopard-910858.hostingersite.com/api/payments/razorpay/webhook"
+                    className="w-full px-3.5 py-2.5 text-xs font-mono rounded-xl border border-[var(--border)] bg-[var(--bg-subtle)] text-[var(--text-main)] select-all"
+                  />
+                  <button
+                    onClick={copyWebhookUrl}
+                    className="px-3.5 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] hover:bg-[var(--bg-subtle)] text-xs font-bold flex items-center gap-1.5 cursor-pointer shrink-0"
+                  >
+                    {copiedWebhookUrl ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedWebhookUrl ? 'Copied!' : 'Copy'}</span>
+                  </button>
                 </div>
-              )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+                <div className="p-3 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border)]">
+                  <span className="text-[10px] text-[var(--text-muted)] block">Signature Verification</span>
+                  <span className="font-bold text-emerald-600">HMAC-SHA256 Timing-Safe</span>
+                </div>
+                <div className="p-3 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border)]">
+                  <span className="text-[10px] text-[var(--text-muted)] block">Idempotency Filter</span>
+                  <span className="font-bold text-emerald-600">Active (Deduplication)</span>
+                </div>
+                <div className="p-3 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border)]">
+                  <span className="text-[10px] text-[var(--text-muted)] block">Webhook Health Status</span>
+                  <span className={`font-bold ${webhookHealth.status === 'HEALTHY' ? 'text-emerald-600' : 'text-amber-600'}`}>
+                    {webhookHealth.status}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -1401,6 +1802,190 @@ export const PaymentDashboardView: React.FC = () => {
               >
                 {isRefunding ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
                 <span>Confirm Refund</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------------- */}
+      {/* MODAL: LIVE MODE CONFIRMATION                                       */}
+      {/* ------------------------------------------------------------------- */}
+      {showLiveModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-[var(--bg-surface)] border border-rose-500/30 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
+              <div className="flex items-center gap-2 text-rose-600">
+                <AlertTriangle className="w-5 h-5" />
+                <h3 className="font-bold text-sm text-[var(--text-main)]">Confirm Switch to Live Payment Mode</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowLiveModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/20 space-y-2 text-rose-700 dark:text-rose-400">
+                <div className="font-bold flex items-center gap-1.5 text-xs">
+                  <ShieldCheck className="w-4 h-4" />
+                  REAL MONEY TRANSACTIONS WILL OCCUR
+                </div>
+                <ul className="list-disc list-inside space-y-1 text-[11px] leading-relaxed text-[var(--text-muted)]">
+                  <li>Actual bank cards, UPI IDs, and net banking accounts will be charged in real INR.</li>
+                  <li>Ensure your Razorpay Key ID begins with <code className="bg-[var(--bg-subtle)] px-1 rounded font-mono font-bold">rzp_live_</code>.</li>
+                  <li>Ensure your Razorpay Dashboard Webhooks are pointed to this live store URL.</li>
+                </ul>
+              </div>
+
+              <label className="flex items-start gap-2.5 p-3 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border)] cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={liveConfirmCheckbox}
+                  onChange={(e) => setLiveConfirmCheckbox(e.target.checked)}
+                  className="mt-0.5 rounded text-[var(--primary)] focus:ring-0"
+                />
+                <span className="text-[11px] font-semibold text-[var(--text-main)] leading-tight">
+                  I understand that Live Mode processes real customer money and charges active bank accounts.
+                </span>
+              </label>
+            </div>
+
+            <div className="pt-2 flex justify-end gap-2 border-t border-[var(--border)]">
+              <button
+                type="button"
+                onClick={() => setShowLiveModal(false)}
+                disabled={isSavingConfig}
+                className="px-4 py-2 rounded-xl border border-[var(--border)] text-xs font-semibold hover:bg-[var(--bg-subtle)] cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSaveGatewayConfig()}
+                disabled={!liveConfirmCheckbox || isSavingConfig}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-xs transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {isSavingConfig ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
+                <span>Activate Live Mode</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------------- */}
+      {/* MODAL: DISABLE GATEWAY CONFIRMATION                                 */}
+      {/* ------------------------------------------------------------------- */}
+      {showDisableModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-[var(--bg-surface)] border border-amber-500/30 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
+              <div className="flex items-center gap-2 text-amber-600">
+                <AlertTriangle className="w-5 h-5" />
+                <h3 className="font-bold text-sm text-[var(--text-main)]">Disable Online Payment Gateway</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowDisableModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-400 text-[11px] leading-relaxed">
+                Disabling the gateway will immediately pause online payments on the storefront. Customers will only be able to place orders using <strong>Cash on Delivery (COD)</strong> until re-enabled.
+              </div>
+              <p className="text-[11px] text-[var(--text-muted)]">
+                Existing payment transactions and history will remain completely intact.
+              </p>
+            </div>
+
+            <div className="pt-2 flex justify-end gap-2 border-t border-[var(--border)]">
+              <button
+                type="button"
+                onClick={() => setShowDisableModal(false)}
+                disabled={isTogglingGateway}
+                className="px-4 py-2 rounded-xl border border-[var(--border)] text-xs font-semibold hover:bg-[var(--bg-subtle)] cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleToggleGateway(false)}
+                disabled={isTogglingGateway}
+                className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-xs transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {isTogglingGateway ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Power className="w-3.5 h-3.5" />}
+                <span>Confirm Disable</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------------- */}
+      {/* MODAL: ROTATE WEBHOOK SECRET                                        */}
+      {/* ------------------------------------------------------------------- */}
+      {showWebhookRotateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
+          <form onSubmit={handleRotateWebhookSecret} className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl w-full max-w-md overflow-hidden shadow-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
+              <div className="flex items-center gap-2 text-purple-600">
+                <RotateCcw className="w-4 h-4" />
+                <h3 className="font-bold text-sm text-[var(--text-main)]">Rotate Webhook Secret</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowWebhookRotateModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
+                Updating your webhook secret will immediately invalidate the existing secret. Make sure to copy the new secret and paste it into your Razorpay Dashboard Webhook settings.
+              </p>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-[var(--text-muted)] mb-1">
+                  New Webhook Secret
+                </label>
+                <input
+                  type="text"
+                  value={rotateWebhookVal}
+                  onChange={(e) => setRotateWebhookVal(e.target.value)}
+                  placeholder="Enter new strong webhook secret"
+                  required
+                  minLength={6}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-[var(--border)] bg-[var(--bg-subtle)] text-[var(--text-main)] font-mono focus:outline-none focus:border-[var(--primary)]"
+                />
+              </div>
+            </div>
+
+            <div className="pt-2 flex justify-end gap-2 border-t border-[var(--border)]">
+              <button
+                type="button"
+                onClick={() => setShowWebhookRotateModal(false)}
+                disabled={isRotatingWebhook}
+                className="px-4 py-2 rounded-xl border border-[var(--border)] text-xs font-semibold hover:bg-[var(--bg-subtle)] cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isRotatingWebhook || !rotateWebhookVal.trim()}
+                className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold shadow-xs transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {isRotatingWebhook ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                <span>Update Secret</span>
               </button>
             </div>
           </form>
