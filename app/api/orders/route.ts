@@ -146,6 +146,25 @@ export async function PUT(req: Request) {
       for (const it of lineItems) {
         if (!it || !it.productId) continue;
         const qty = Number(it.qty) || 1;
+        if (it.isCustomHamper && Array.isArray(it.components)) {
+          for (const comp of it.components) {
+            const compProdId = Number(comp.productId);
+            if (!compProdId) continue;
+            const compQty = (Number(comp.qty) || 1) * qty;
+            const cProd = db.prepare('SELECT selling_unit, manage_stock, enable_stock FROM products WHERE id=?').get(compProdId) as any;
+            const cManage = cProd ? (cProd.manage_stock !== 0 && cProd.enable_stock !== 0) : true;
+            if (!cManage) continue;
+            db.prepare(
+              "UPDATE products SET stock = stock + ?, stock_status = CASE " +
+              "WHEN stock + ? <= 0 THEN 'out_of_stock' " +
+              "WHEN stock + ? <= low_stock_threshold THEN 'low_stock' ELSE 'in_stock' END WHERE id=?"
+            ).run(compQty, compQty, compQty, compProdId);
+            db.prepare('INSERT INTO inventory_transactions (product_id, type, quantity, note) VALUES (?,?,?,?)')
+              .run(compProdId, 'restock', compQty, `Cancelled order ${order.order_number} (hamper component)`);
+          }
+          continue;
+        }
+
         const prod = db.prepare('SELECT selling_unit, manage_stock, enable_stock FROM products WHERE id=?').get(it.productId) as any;
         const manageStock = prod ? (prod.manage_stock !== 0 && prod.enable_stock !== 0) : true;
         if (!manageStock) continue; // Skip restock for untracked inventory

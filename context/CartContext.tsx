@@ -187,6 +187,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
           quantity,
           unitPrice,
           totalPrice: unitPrice * quantity,
+          isCustomHamper: (product as any).isCustomHamper,
+          hamperDetails: (product as any).hamperDetails,
         };
         return [...prev, newItem];
       }

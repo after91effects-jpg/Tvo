@@ -432,6 +432,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           totalPrice: (item.selectedWeight?.price || item.unitPrice || 699) * item.quantity,
           imageUrl: item.product?.images?.[0]?.mediumUrl || item.product?.images?.[0]?.url || item.imageUrl || '',
           sellingUnit: getSellingUnitLabel(item.product?.sellingUnit) || 'kg',
+          isCustomHamper: Boolean(item.isCustomHamper || item.product?.isCustomHamper),
+          hamperDetails: item.hamperDetails || item.product?.hamperDetails || undefined,
         })),
         subtotal,
         deliveryFee,
@@ -477,6 +479,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               customDesignDescription: item.customDesignDescription || '',
               addons: item.addons || [],
               sellingUnit: getSellingUnitLabel(item.sellingUnit) || 'kg',
+              isCustomHamper: item.isCustomHamper,
+              hamperDetails: item.hamperDetails,
             })),
             customer: {
               name: recipientName.trim(),

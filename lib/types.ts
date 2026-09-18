@@ -210,6 +210,8 @@ export interface Product {
   showCheckoutOptions?: boolean;
   related?: RelatedProduct[];
   dietaryAttributes?: DietaryAttribute[];
+  isCustomHamper?: boolean;
+  hamperDetails?: HamperOrderDetails;
 }
 
 export interface AddOn {
@@ -246,6 +248,8 @@ export interface CartItem {
   quantity: number;
   unitPrice: number;
   totalPrice: number;
+  isCustomHamper?: boolean;
+  hamperDetails?: HamperOrderDetails;
 }
 
 export interface CustomerDetails {
@@ -298,6 +302,15 @@ export interface Order {
     totalPrice: number;
     imageUrl?: string;
     sellingUnit?: StructuredSellingUnit | string;
+    isCustomHamper?: boolean;
+    hamperDetails?: HamperOrderDetails;
+    components?: HamperComponentItem[];
+    box?: { id: string; name: string; price: number };
+    wrapping?: { id: string; name: string; price: number };
+    theme?: { id: string; name: string };
+    recipientName?: string;
+    giftMessage?: string;
+    photoUploads?: string[];
   }[];
   subtotal: number;
   deliveryFee: number;
@@ -466,6 +479,31 @@ export interface HamperSettings {
   maxGiftMessageChars: number;
   photoUploadMaxCount: number;
   minItemsRequired: number;
+}
+
+export interface HamperComponentItem {
+  productId: string | number;
+  name: string;
+  sku?: string;
+  qty: number;
+  unitPrice: number;
+  weight?: string;
+  image?: string;
+}
+
+export interface HamperOrderDetails {
+  boxId: string;
+  boxName: string;
+  boxPrice: number;
+  wrappingId?: string;
+  wrappingName?: string;
+  wrappingPrice?: number;
+  themeId?: string;
+  themeName?: string;
+  recipientName?: string;
+  giftMessage?: string;
+  photoUploads?: string[];
+  components: HamperComponentItem[];
 }
 
 export type UserRole = 'super_admin' | 'admin' | 'catalog_manager' | 'seo_manager' | 'kitchen_manager' | 'delivery_manager' | 'marketing_manager' | 'festival_manager' | 'customer_support' | 'media_manager' | 'finance_manager' | 'read_only' | 'staff' | 'customer';

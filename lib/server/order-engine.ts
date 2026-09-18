@@ -1,5 +1,6 @@
 import { getSellingUnitLabel, isPieceOrDiscreteUnit } from '../sellingUnit';
 import { db } from './db';
+import { validateCustomHamperOrder, type ValidatedCustomHamper } from './hampers';
 
 export class OrderInputError extends Error {}
 
@@ -168,11 +169,66 @@ export function extractPieceCount(labelOrWeight?: string | null): number {
   return 1;
 }
 
+interface BuiltLineItem {
+  it: any;
+  prod: any;
+  unit: number;
+  option: any;
+  addedAddonTotal: number;
+  validatedAddons: any[];
+  flavourPrice: number;
+  isCustomHamper?: boolean;
+  customHamper?: ValidatedCustomHamper;
+}
+
 // Resolve + validate every line item against fresh DB reads.
-function buildLineItems(items: any[]): Array<{ it: any; prod: any; unit: number; option: any; addedAddonTotal: number; validatedAddons: any[]; flavourPrice: number }> {
+function buildLineItems(items: any[]): Array<BuiltLineItem> {
   return items.map((it) => {
-    if (!it || !it.productId) throw new OrderInputError('Product not found');
-    const prod = db.prepare('SELECT id, name, sku, stock, stock_status, selling_unit, low_stock_threshold, manage_stock, enable_stock, sale_price, regular_price, variations_json, category_id, flavour_options_json, flavours, same_day_eligible FROM products WHERE id=?').get(it.productId) as any;
+    if (!it) throw new OrderInputError('Product not found');
+
+    const isCustomHamper = Boolean(
+      it.isCustomHamper ||
+      it.hamperDetails ||
+      (typeof it.productId === 'string' && it.productId.startsWith('custom-hamper-'))
+    );
+
+    if (isCustomHamper) {
+      const qty = it.qty;
+      if (typeof qty !== 'number' || !Number.isFinite(qty) || !Number.isInteger(qty) || qty < 1) {
+        throw new OrderInputError('Invalid quantity for Custom Hamper. Quantity must be a positive whole number.');
+      }
+      const customHamper = validateCustomHamperOrder(it);
+      const unit = customHamper.unitPrice;
+      const prod = {
+        id: 0,
+        name: customHamper.snapshotName,
+        sku: customHamper.snapshotSku,
+        stock: 999,
+        stock_status: 'in_stock',
+        selling_unit: 'piece',
+        manage_stock: 0,
+        enable_stock: 0,
+        sale_price: unit,
+        regular_price: unit,
+      };
+      const option = null;
+      const flavourPrice = 0;
+      const validatedAddons: any[] = [];
+      let addedAddonTotal = 0;
+      if (Array.isArray(it.addons)) {
+        for (const ad of it.addons) {
+          if (ad.id === 'wrapping' || ad.id === 'theme' || ad.id === 'photos') continue;
+          const dbAddon = db.prepare('SELECT id, name, price FROM addons WHERE id=? OR name=?').get(ad.id || 0, ad.name || '') as any;
+          const p = dbAddon ? Number(dbAddon.price) : 0;
+          addedAddonTotal += p;
+          validatedAddons.push({ id: dbAddon ? dbAddon.id : ad.id, name: dbAddon ? dbAddon.name : ad.name, price: p });
+        }
+      }
+      return { it, prod, unit, option, addedAddonTotal, validatedAddons, flavourPrice, isCustomHamper: true, customHamper };
+    }
+
+    if (!it.productId) throw new OrderInputError('Product not found');
+    const prod = db.prepare('SELECT * FROM products WHERE id=?').get(it.productId) as any;
     if (!prod) throw new OrderInputError('Product not found');
     const qty = it.qty;
     // quantity must be a positive integer
@@ -408,11 +464,43 @@ export function createOrder({ items, body, customerId, generateOrderNumber }: Cr
     const orderNumber = generateOrderNumber();
 
     // 8. Line items JSON
-    const itemsJson = JSON.stringify(lines.map(({ it, prod, unit, addedAddonTotal, validatedAddons, flavourPrice }) => {
+    const itemsJson = JSON.stringify(lines.map((line) => {
+      const { it, prod, unit, addedAddonTotal, validatedAddons, flavourPrice } = line;
       // Safe sanitization: never store base64 data URLs in DB; enforce length limits
       const safeDesignImage = it.customDesignImage && !String(it.customDesignImage).startsWith('data:')
         ? String(it.customDesignImage).trim().slice(0, 500)
         : null;
+
+      if (line.isCustomHamper && line.customHamper) {
+        const ch = line.customHamper;
+        return {
+          productId: String(it.productId || 'custom-hamper'),
+          name: ch.snapshotName,
+          sku: ch.snapshotSku,
+          qty: it.qty,
+          weight: ch.box.name,
+          flavour: null,
+          flavourPrice: 0,
+          messageOnCake: ch.giftMessage || null,
+          customInstructions: it.customInstructions ? String(it.customInstructions).trim().slice(0, 500) : null,
+          customDesignImage: safeDesignImage,
+          customDesignDescription: it.customDesignDescription ? String(it.customDesignDescription).trim().slice(0, 500) : null,
+          addons: validatedAddons,
+          unitPrice: ch.unitPrice,
+          addonTotal: addedAddonTotal,
+          totalPrice: (ch.unitPrice + addedAddonTotal) * it.qty,
+          imageUrl: it.imageUrl || (ch.components[0]?.image || null),
+          sellingUnit: 'piece',
+          isCustomHamper: true,
+          box: ch.box,
+          wrapping: ch.wrapping,
+          theme: ch.theme,
+          recipientName: ch.recipientName,
+          giftMessage: ch.giftMessage,
+          photoUploads: ch.photoUploads,
+          components: ch.components,
+        };
+      }
 
       return {
         productId: String(it.productId),
@@ -458,6 +546,24 @@ export function createOrder({ items, body, customerId, generateOrderNumber }: Cr
 
     // 9. Reserve stock atomically (oversell protection with SQL AND stock >= ?)
     for (const line of lines) {
+      if (line.isCustomHamper && line.customHamper) {
+        for (const deduction of line.customHamper.componentDeductions) {
+          const deductQty = deduction.deductQty;
+          const r = db.prepare(
+            "UPDATE products SET stock = stock - ?, stock_status = CASE " +
+            "WHEN stock - ? <= 0 THEN 'out_of_stock' " +
+            "WHEN stock - ? <= low_stock_threshold THEN 'low_stock' ELSE 'in_stock' END WHERE id=? AND stock >= ?"
+          ).run(deductQty, deductQty, deductQty, deduction.productId, deductQty);
+          if (r.changes !== 1) {
+            const live = db.prepare('SELECT stock FROM products WHERE id=?').get(deduction.productId) as any;
+            throw new OrderInputError(`Only ${live ? live.stock : 0} left in stock for "${deduction.name}" in hamper`);
+          }
+          db.prepare('INSERT INTO inventory_transactions (product_id, type, quantity, note) VALUES (?,?,?,?)')
+            .run(deduction.productId, 'reserved', -deductQty, `Hamper component in order ${orderNumber}`);
+        }
+        continue;
+      }
+
       const manageStock = line.prod.manage_stock !== 0 && line.prod.enable_stock !== 0;
       if (!manageStock) {
         // Untracked inventory products do not deduct or block orders

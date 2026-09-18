@@ -964,13 +964,47 @@ export const CustomerOrdersView: React.FC<CustomerOrdersViewProps> = ({ orders, 
                     className="p-3.5 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                   >
                     <div>
-                      <div className="font-bold text-xs text-[var(--text-main)]">{item.name}</div>
-                      <div className="text-[11px] text-[var(--text-muted)] mt-0.5">
-                        Weight: {item.weight} • Flavour: {item.flavour} • Qty: {item.qty}
-                        {item.sellingUnit && (
-                          <span> • Unit: <strong className="text-[var(--text-main)] font-semibold">{typeof item.sellingUnit === 'object' ? (item.sellingUnit as any).value : item.sellingUnit}</strong></span>
+                      <div className="flex items-center gap-2">
+                        <div className="font-bold text-xs text-[var(--text-main)]">{item.name}</div>
+                        {((item as any).isCustomHamper || (item as any).components) && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300">
+                            🎁 Custom Hamper
+                          </span>
                         )}
                       </div>
+                      <div className="text-[11px] text-[var(--text-muted)] mt-0.5">
+                        {((item as any).isCustomHamper || (item as any).components) ? (
+                          <span>Box: {(item as any).box?.name || item.weight} • Qty: {item.qty}{(item as any).wrapping?.name ? ` • Wrapping: ${(item as any).wrapping.name}` : ''}{(item as any).theme?.name ? ` • Theme: ${(item as any).theme.name}` : ''}</span>
+                        ) : (
+                          <>
+                            Weight: {item.weight} • Flavour: {item.flavour} • Qty: {item.qty}
+                            {item.sellingUnit && (
+                              <span> • Unit: <strong className="text-[var(--text-main)] font-semibold">{typeof item.sellingUnit === 'object' ? (item.sellingUnit as any).value : item.sellingUnit}</strong></span>
+                            )}
+                          </>
+                        )}
+                      </div>
+
+                      {/* Hamper Components List */}
+                      {Array.isArray((item as any).components) && (item as any).components.length > 0 && (
+                        <div className="mt-2 p-2.5 rounded-lg bg-[var(--bg-subtle)]/70 border border-[var(--border)] text-xs space-y-1">
+                          <span className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block mb-1">
+                            Hamper Contents ({(item as any).components.reduce((sum: number, c: any) => sum + (Number(c.qty) || 1), 0)} items)
+                          </span>
+                          {(item as any).components.map((comp: any, cIdx: number) => (
+                            <div key={cIdx} className="flex items-center justify-between text-[11px] text-[var(--text-main)] py-0.5 border-b border-[var(--border)]/50 last:border-0">
+                              <span className="font-medium">• {comp.qty}x {comp.name} {comp.sku ? `(${comp.sku})` : ''}</span>
+                              <span className="text-[var(--text-muted)]">₹{comp.unitPrice * comp.qty}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {(item as any).recipientName && (
+                        <div className="mt-1 text-[11px] text-[var(--text-muted)]">
+                          <strong className="text-[var(--text-main)] font-semibold">Recipient:</strong> {(item as any).recipientName}
+                        </div>
+                      )}
 
                       {item.messageOnCake && (
                         <div className="mt-1.5 p-2 rounded-lg bg-[var(--primary-light)] text-[var(--primary)] text-xs font-semibold">

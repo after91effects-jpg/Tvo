@@ -2,6 +2,7 @@ import { ok, err, db, requireAdmin, logAudit, jsonParseSafe, slugify } from '../
 import { getCatalogSourceConfig } from '../../../lib/server/catalog-sources';
 import { hasPerm } from '../../../lib/server/authorization';
 import * as ops from '../../../lib/server/admin-ops';
+import { getHamperSettings, saveHamperSettings } from '../../../lib/server/hampers';
 import { logError } from '../../../lib/server/logger';
 
 export const runtime = 'nodejs';
@@ -45,8 +46,7 @@ export async function GET(req: Request) {
     if (type === 'media') return ok({ media: db.prepare('SELECT * FROM media ORDER BY id DESC LIMIT 200').all() });
     if (type === 'hamper_settings') {
       if (!hasPerm(user, 'manage_hampers')) return err('Manage hampers permission required', 403);
-      const row = db.prepare("SELECT value FROM settings WHERE key='hamper_settings'").get() as any;
-      return ok({ settings: row ? jsonParseSafe(row.value, null) : null });
+      return ok({ settings: getHamperSettings() });
     }
     // ---- Phase 2 domains ----
     if (type === 'order') {
@@ -350,10 +350,13 @@ export async function POST(req: Request) {
     if (type === 'media' && action === 'delete') { db.prepare('DELETE FROM media WHERE id=?').run(body.id); return ok({ ok: true }); }
     if (type === 'hamper_settings' && action === 'save') {
       if (!hasPerm(user, 'manage_hampers')) return err('Manage hampers permission required', 403);
-      const value = body.settings ?? {};
-      db.prepare("INSERT INTO settings (key, value) VALUES ('hamper_settings', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(JSON.stringify(value));
-      logAudit(user, 'HAMPERS_SAVE', 'Settings', 'hamper_settings');
-      return ok({ ok: true, settings: value });
+      try {
+        const saved = saveHamperSettings(body.settings ?? {});
+        logAudit(user, 'HAMPERS_SAVE', 'Settings', 'hamper_settings');
+        return ok({ ok: true, settings: saved });
+      } catch (e: any) {
+        return err(e.message || 'Failed to save hamper settings', 400);
+      }
     }
 
     // ===================== PHASE 2 =====================

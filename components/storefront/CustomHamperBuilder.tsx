@@ -198,6 +198,30 @@ export const CustomHamperBuilder: React.FC<CustomHamperBuilderProps> = ({
   };
 
   const handleAddToCart = () => {
+    const selectedWrapObj = settings.wrappings.find((w) => w.id === selectedWrapping);
+    const hamperDetails = {
+      boxId: selectedBox.id,
+      boxName: selectedBox.name,
+      boxPrice: selectedBox.price,
+      wrappingId: selectedWrapping !== 'none' ? selectedWrapping : undefined,
+      wrappingName: selectedWrapping !== 'none' ? selectedWrapObj?.name : undefined,
+      wrappingPrice: selectedWrapping !== 'none' ? wrappingPrice : 0,
+      themeId: selectedTheme,
+      themeName: selectedThemeOption?.name,
+      recipientName: recipientName?.trim() || undefined,
+      giftMessage: giftMessage?.trim() || undefined,
+      photoUploads: uploadedPhotos.length > 0 ? uploadedPhotos : undefined,
+      components: hamperItems.map((item) => ({
+        productId: item.product.id,
+        name: item.product.name,
+        sku: item.product.sku || '',
+        qty: item.quantity,
+        unitPrice: item.product.weightOptions?.[0]?.price || item.product.salePrice || item.product.regularPrice || 0,
+        weight: item.product.weightOptions?.[0]?.label,
+        image: item.product.images?.[0]?.url,
+      })),
+    };
+
     const hamperProduct: Product = {
       id: `custom-hamper-${Date.now()}`,
       sku: `HAMPER-${selectedBox.id.toUpperCase()}`,
@@ -209,7 +233,7 @@ export const CustomHamperBuilder: React.FC<CustomHamperBuilderProps> = ({
       tags: ['custom-hamper', selectedBox.id],
       flavours: [],
       eggless: true,
-      weightOptions: [{ label: 'Custom', weightKg: 1, price: totalPrice, mrp: totalPrice + 200 }],
+      weightOptions: [{ label: selectedBox.name, weightKg: 1, price: totalPrice, mrp: totalPrice + 200 }],
       images: (uploadedPhotos.length ? uploadedPhotos.map((u) => ({ url: u })) : hamperItems[0]?.product.images) || [],
       rating: 5,
       reviewCount: 0,
@@ -219,6 +243,8 @@ export const CustomHamperBuilder: React.FC<CustomHamperBuilderProps> = ({
       published: true,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+      isCustomHamper: true,
+      hamperDetails,
     };
 
     const addons = [
