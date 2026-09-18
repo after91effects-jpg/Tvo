@@ -25,12 +25,26 @@ for (let attempt = 0; attempt < 3; attempt++) {
 
 export function checkDbHealth(): { reachable: boolean; check: string } {
   try {
-    const result = db.prepare('PRAGMA quick_check').get() as { quick_check: string };
-    return { reachable: result?.quick_check === 'ok', check: 'PRAGMA quick_check' };
+    const ping = db.prepare('SELECT 1 as ok').get() as { ok: number } | undefined;
+    if (ping?.ok !== 1) {
+      return { reachable: false, check: 'SELECT 1' };
+    }
+
+    try {
+      const result = db.prepare('PRAGMA quick_check').get() as { quick_check: string } | undefined;
+      const qc = result?.quick_check || '';
+      if (qc === 'ok') {
+        return { reachable: true, check: 'PRAGMA quick_check' };
+      }
+      return { reachable: true, check: 'SELECT 1' };
+    } catch {
+      return { reachable: true, check: 'SELECT 1' };
+    }
   } catch {
-    return { reachable: false, check: 'PRAGMA quick_check' };
+    return { reachable: false, check: 'SELECT 1' };
   }
 }
+
 
 export function checkDbReachable(): boolean {
   try {

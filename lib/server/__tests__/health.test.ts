@@ -12,6 +12,15 @@ vi.mock('../auth', async (importOriginal) => {
   };
 });
 
+const mockGetFirebaseAdminAuth = vi.fn();
+vi.mock('../firebaseAdmin', async (importOriginal) => {
+  const actual: any = await importOriginal();
+  return {
+    ...actual,
+    getFirebaseAdminAuth: (...args: any[]) => mockGetFirebaseAdminAuth(...args),
+  };
+});
+
 // Re-import after mocking — the GET handler will use our mock.
 import { GET as healthGET } from '../../../app/api/health/route';
 import { GET as readyGET } from '../../../app/api/health/ready/route';
@@ -25,7 +34,9 @@ function makeReq(cookie = '') {
 describe('health endpoints', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetFirebaseAdminAuth.mockReturnValue({} as any);
   });
+
 
   describe('GET /api/health — auth decisions', () => {
     it('returns 401 when no session (unauthenticated)', async () => {
@@ -163,4 +174,70 @@ describe('health endpoints', () => {
       expect(id).toMatch(uuidPattern);
     });
   });
+
+  describe('database connectivity and readiness health checks', () => {
+    it('CASE 1: SELECT 1 succeeds -> database status PASS (reachable: true)', async () => {
+      const { checkDbHealth } = await import('../db');
+      const health = checkDbHealth();
+      expect(health.reachable).toBe(true);
+      expect(['SELECT 1', 'PRAGMA quick_check']).toContain(health.check);
+    });
+
+    it('CASE 2: PRAGMA quick_check returns non-"ok" informational output -> database must NOT be classified as disconnected', async () => {
+      const { checkDbHealth, db } = await import('../db');
+      const origPrepare = db.prepare.bind(db);
+      vi.spyOn(db, 'prepare').mockImplementation((sql: string) => {
+        if (sql.includes('PRAGMA quick_check')) {
+          return {
+            get: () => ({ quick_check: '*** in database main ***\nPage 198: never used' }),
+          } as any;
+        }
+        return origPrepare(sql);
+      });
+
+      const health = checkDbHealth();
+      expect(health.reachable).toBe(true);
+      expect(health.check).toBe('SELECT 1');
+      vi.restoreAllMocks();
+    });
+
+    it('CASE 3: Database connection genuinely fails -> database status FAIL (reachable: false)', async () => {
+      const { checkDbHealth, db } = await import('../db');
+      vi.spyOn(db, 'prepare').mockImplementation(() => {
+        throw new Error('Database disk image is malformed or connection closed');
+      });
+
+      const health = checkDbHealth();
+      expect(health.reachable).toBe(false);
+      expect(health.check).toBe('SELECT 1');
+      vi.restoreAllMocks();
+    });
+
+    it('CASE 4: Readiness with healthy database -> returns 200 (NOT 503)', async () => {
+      mockGetCurrentUser.mockReturnValue({ id: 1, role: 'super_admin', name: 'Admin' });
+      const res = await readyGET(makeReq('tvo_auth=admin-token'));
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.ok).toBe(true);
+      expect(body.status).toBe('ready');
+      expect(body.checks.database.ready).toBe(true);
+    });
+
+    it('CASE 5: Readiness with genuine database failure -> returns 503 with not_ready', async () => {
+      mockGetCurrentUser.mockReturnValue({ id: 1, role: 'super_admin', name: 'Admin' });
+      const { db } = await import('../db');
+      vi.spyOn(db, 'prepare').mockImplementation(() => {
+        throw new Error('Connection failed');
+      });
+
+      const res = await readyGET(makeReq('tvo_auth=admin-token'));
+      expect(res.status).toBe(503);
+      const body = await res.json();
+      expect(body.ok).toBe(false);
+      expect(body.status).toBe('not_ready');
+      expect(body.checks.database.ready).toBe(false);
+      vi.restoreAllMocks();
+    });
+  });
 });
+
