@@ -60,6 +60,7 @@ import { INITIAL_CATEGORIES } from '../../lib/seedData';
 import { validateImageFile, validateVideoFile } from '../../lib/uploadValidation';
 import { normalizeImageUrl } from '../../lib/imageUrl';
 import { ProductRecipeEditor } from './ProductRecipeEditor';
+import { hasPermission } from '../../lib/server/permissions';
 
 interface ProductsCatalogViewProps {
   products: Product[];
@@ -106,6 +107,33 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+
+  // Product Bulk Selection & Batch Operations State
+  const canBulkEdit = hasPermission(user?.role, 'bulk_edit_products');
+  const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
+  const headerCheckboxRef = useRef<HTMLInputElement>(null);
+
+  // Bulk Edit Modal State
+  const [bulkActionType, setBulkActionType] = useState<'price' | 'category' | 'unit' | 'dietary' | 'publish' | 'draft' | 'featured' | 'unfeatured' | 'trash' | null>(null);
+  const [isBulkSubmitting, setIsBulkSubmitting] = useState(false);
+  const [bulkError, setBulkError] = useState('');
+  const [bulkSuccessMessage, setBulkSuccessMessage] = useState('');
+
+  // Bulk Price Form State
+  const [bulkPriceTarget, setBulkPriceTarget] = useState<'regular_price' | 'sale_price'>('regular_price');
+  const [bulkPriceMode, setBulkPriceMode] = useState<'set' | 'adjust_fixed' | 'adjust_percent' | 'clear'>('set');
+  const [bulkPriceValue, setBulkPriceValue] = useState('');
+
+  // Bulk Category Form State
+  const [bulkTargetCategory, setBulkTargetCategory] = useState('chocolate');
+
+  // Bulk Selling Unit Form State
+  const [bulkTargetUnit, setBulkTargetUnit] = useState<string>('kg');
+  const [bulkCustomUnit, setBulkCustomUnit] = useState('');
+
+  // Bulk Dietary Form State
+  const [bulkDietaryKey, setBulkDietaryKey] = useState('eggless');
+  const [bulkDietaryEnabled, setBulkDietaryEnabled] = useState(true);
 
   // CSV Bulk Import State
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -1386,6 +1414,120 @@ images_json: (formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
     return matchesSearch && matchesCategory && matchesDietary && matchesStock;
   });
 
+  // Product Selection Helpers
+  const allFilteredSelected =
+    filteredProducts.length > 0 &&
+    filteredProducts.every((p) => selectedProductIds.has(String(p.id)));
+  const someFilteredSelected =
+    filteredProducts.some((p) => selectedProductIds.has(String(p.id))) && !allFilteredSelected;
+
+  useEffect(() => {
+    if (headerCheckboxRef.current) {
+      headerCheckboxRef.current.indeterminate = someFilteredSelected;
+    }
+  }, [someFilteredSelected]);
+
+  const toggleSelectAllFiltered = () => {
+    const next = new Set(selectedProductIds);
+    if (allFilteredSelected) {
+      filteredProducts.forEach((p) => next.delete(String(p.id)));
+    } else {
+      filteredProducts.forEach((p) => next.add(String(p.id)));
+    }
+    setSelectedProductIds(next);
+  };
+
+  const toggleSelectProduct = (id: string) => {
+    const next = new Set(selectedProductIds);
+    if (next.has(id)) {
+      next.delete(id);
+    } else {
+      next.add(id);
+    }
+    setSelectedProductIds(next);
+  };
+
+  const clearSelection = () => {
+    setSelectedProductIds(new Set());
+  };
+
+  // Bulk action submission
+  const executeBulkAction = async () => {
+    if (!bulkActionType || selectedProductIds.size === 0) return;
+    setIsBulkSubmitting(true);
+    setBulkError('');
+
+    try {
+      const ids = Array.from(selectedProductIds).map(Number).filter(Boolean);
+      let payload: any = {
+        action: 'bulk',
+        ids,
+        subaction: bulkActionType,
+      };
+
+      if (bulkActionType === 'price') {
+        payload = {
+          ...payload,
+          subaction: 'price',
+          targetField: bulkPriceTarget,
+          mode: bulkPriceMode,
+          value: bulkPriceMode === 'clear' ? undefined : Number(bulkPriceValue),
+        };
+      } else if (bulkActionType === 'category') {
+        const catId = categoryIdMap[bulkTargetCategory] || 1;
+        payload = {
+          ...payload,
+          subaction: 'category',
+          category_id: catId,
+        };
+      } else if (bulkActionType === 'unit') {
+        const finalUnit = bulkTargetUnit === 'custom' ? bulkCustomUnit.trim() : bulkTargetUnit;
+        payload = {
+          ...payload,
+          subaction: 'selling_unit',
+          selling_unit: finalUnit,
+        };
+      } else if (bulkActionType === 'dietary') {
+        payload = {
+          ...payload,
+          subaction: 'dietary',
+          attributeKey: bulkDietaryKey,
+          enabled: bulkDietaryEnabled,
+        };
+      }
+
+      const res = await fetch('/api/admin/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || 'Failed to execute bulk action');
+      }
+
+      await logAuditEvent({
+        actorUid: user?.uid,
+        actorName: user?.name,
+        actorEmail: user?.email,
+        action: `BULK_${bulkActionType.toUpperCase()}`,
+        targetType: 'Product',
+        details: `Updated ${ids.length} products via bulk action ${bulkActionType}`,
+      });
+
+      setBulkSuccessMessage(`Successfully updated ${ids.length} products!`);
+      setTimeout(() => setBulkSuccessMessage(''), 4000);
+      setBulkActionType(null);
+      clearSelection();
+      onRefresh();
+    } catch (err: any) {
+      setBulkError(err.message || 'An error occurred during bulk update.');
+    } finally {
+      setIsBulkSubmitting(false);
+    }
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
       {/* Top Header & Search / Filter Controls */}
@@ -1535,12 +1677,70 @@ images_json: (formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
         ))}
       </div>
 
+      {/* Bulk Success Notification */}
+      {bulkSuccessMessage && (
+        <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 rounded-xl px-4 py-3 text-xs flex items-center gap-2 animate-in fade-in">
+          <CheckCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+          <span>{bulkSuccessMessage}</span>
+        </div>
+      )}
+
+      {/* Bulk Selection Summary Banner */}
+      {canBulkEdit && selectedProductIds.size > 0 && (
+        <div className="bg-[var(--primary-light)]/40 border border-[var(--primary)]/20 rounded-xl px-4 py-2.5 flex items-center justify-between text-xs text-[var(--text-main)]">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-[var(--primary)]">
+              {selectedProductIds.size} product{selectedProductIds.size > 1 ? 's' : ''} selected
+            </span>
+            {filteredProducts.length !== products.length && (
+              <span className="text-[var(--text-muted)]">
+                ({filteredProducts.filter((p) => selectedProductIds.has(String(p.id))).length} match current filter)
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-3">
+            {filteredProducts.length !== products.length && !allFilteredSelected && (
+              <button
+                type="button"
+                onClick={() => {
+                  const next = new Set(selectedProductIds);
+                  filteredProducts.forEach((p) => next.add(String(p.id)));
+                  setSelectedProductIds(next);
+                }}
+                className="text-[var(--primary)] hover:underline font-medium cursor-pointer"
+              >
+                Select all {filteredProducts.length} filtered
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={clearSelection}
+              className="text-[var(--text-muted)] hover:text-[var(--danger)] font-medium cursor-pointer"
+            >
+              Clear selection
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Products Table */}
       <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl overflow-hidden shadow-xs">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead className="bg-[var(--bg-subtle)]/70 text-[var(--text-subtle)] uppercase text-[10px] tracking-wider border-b border-[var(--border)]">
               <tr>
+                {canBulkEdit && (
+                  <th className="py-3.5 px-3 w-10 text-center">
+                    <input
+                      type="checkbox"
+                      ref={headerCheckboxRef}
+                      checked={allFilteredSelected}
+                      onChange={toggleSelectAllFiltered}
+                      className="rounded border-[var(--border)] text-[var(--primary)] focus:ring-[var(--primary)] h-4 w-4 cursor-pointer"
+                      aria-label="Select all matching products"
+                    />
+                  </th>
+                )}
                 <th className="py-3.5 px-4 font-semibold">Image & Recipe Title</th>
                 <th className="py-3.5 px-4 font-semibold">SKU & Category</th>
                 <th className="py-3.5 px-4 font-semibold">Base Price (₹)</th>
@@ -1553,13 +1753,24 @@ images_json: (formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
             <tbody className="divide-y divide-[var(--border)] text-[var(--text-main)]">
               {filteredProducts.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-xs text-[var(--text-muted)]">
+                  <td colSpan={canBulkEdit ? 8 : 7} className="py-8 text-center text-xs text-[var(--text-muted)]">
                     No recipes found matching your search and filter criteria.
                   </td>
                 </tr>
               ) : (
                 filteredProducts.map((prod) => (
                   <tr key={prod.id} className="hover:bg-[var(--bg-subtle)]/40 transition-colors">
+                    {canBulkEdit && (
+                      <td className="py-3.5 px-3 text-center">
+                        <input
+                          type="checkbox"
+                          checked={selectedProductIds.has(String(prod.id))}
+                          onChange={() => toggleSelectProduct(String(prod.id))}
+                          className="rounded border-[var(--border)] text-[var(--primary)] focus:ring-[var(--primary)] h-4 w-4 cursor-pointer"
+                          aria-label={`Select product ${prod.name}`}
+                        />
+                      </td>
+                    )}
                     {/* Image & Title */}
                     <td className="py-3.5 px-4">
                       <div className="flex items-center gap-3">
@@ -3080,6 +3291,374 @@ images_json: (formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
               </div>
             </div>
           )}
+        </div>
+      </Modal>
+
+      {/* Floating Bulk Action Bar */}
+      {canBulkEdit && selectedProductIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 max-w-[95vw] lg:max-w-4xl w-full">
+          <div className="bg-[var(--bg-surface)]/95 backdrop-blur-md border border-[var(--border)] shadow-2xl rounded-2xl p-3 px-4 flex items-center justify-between gap-2 overflow-x-auto">
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="px-2.5 py-1 rounded-lg bg-[var(--primary)] text-white text-xs font-bold shrink-0">
+                {selectedProductIds.size} Selected
+              </span>
+              <button
+                type="button"
+                onClick={clearSelection}
+                className="p-1 rounded-md text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-subtle)] transition-colors cursor-pointer"
+                title="Deselect All"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex items-center gap-1.5 overflow-x-auto py-1">
+              <button
+                type="button"
+                onClick={() => { setBulkActionType('price'); setBulkError(''); }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--primary-light)] text-[var(--text-main)] hover:text-[var(--primary)] text-xs font-semibold transition-all shrink-0 cursor-pointer border border-[var(--border)]"
+              >
+                <Tag className="w-3.5 h-3.5" />
+                <span>Price</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { setBulkActionType('category'); setBulkError(''); }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--primary-light)] text-[var(--text-main)] hover:text-[var(--primary)] text-xs font-semibold transition-all shrink-0 cursor-pointer border border-[var(--border)]"
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>Category</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { setBulkActionType('unit'); setBulkError(''); }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--primary-light)] text-[var(--text-main)] hover:text-[var(--primary)] text-xs font-semibold transition-all shrink-0 cursor-pointer border border-[var(--border)]"
+              >
+                <Package className="w-3.5 h-3.5" />
+                <span>Unit</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { setBulkActionType('dietary'); setBulkError(''); }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--primary-light)] text-[var(--text-main)] hover:text-[var(--primary)] text-xs font-semibold transition-all shrink-0 cursor-pointer border border-[var(--border)]"
+              >
+                <Leaf className="w-3.5 h-3.5" />
+                <span>Dietary</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { setBulkActionType('publish'); setBulkError(''); }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--bg-subtle)] hover:bg-emerald-500/10 text-[var(--text-main)] hover:text-emerald-600 text-xs font-semibold transition-all shrink-0 cursor-pointer border border-[var(--border)]"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                <span>Publish</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { setBulkActionType('draft'); setBulkError(''); }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--bg-subtle)] hover:bg-amber-500/10 text-[var(--text-main)] hover:text-amber-600 text-xs font-semibold transition-all shrink-0 cursor-pointer border border-[var(--border)]"
+              >
+                <ToggleLeft className="w-3.5 h-3.5" />
+                <span>Draft</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { setBulkActionType('featured'); setBulkError(''); }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--bg-subtle)] hover:bg-yellow-500/10 text-[var(--text-main)] hover:text-amber-500 text-xs font-semibold transition-all shrink-0 cursor-pointer border border-[var(--border)]"
+              >
+                <Star className="w-3.5 h-3.5" />
+                <span>Feature</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { setBulkActionType('trash'); setBulkError(''); }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/30 dark:hover:bg-rose-900/40 text-rose-600 text-xs font-semibold transition-all shrink-0 cursor-pointer border border-rose-200 dark:border-rose-900/50"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Trash</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Action Confirmation Modal */}
+      <Modal
+        isOpen={bulkActionType !== null}
+        onClose={() => { if (!isBulkSubmitting) setBulkActionType(null); }}
+        title={`Bulk Action: ${
+          bulkActionType === 'price' ? 'Adjust Pricing' :
+          bulkActionType === 'category' ? 'Change Category' :
+          bulkActionType === 'unit' ? 'Change Selling Unit' :
+          bulkActionType === 'dietary' ? 'Update Dietary Attributes' :
+          bulkActionType === 'publish' ? 'Publish Products' :
+          bulkActionType === 'draft' ? 'Set as Draft' :
+          bulkActionType === 'featured' ? 'Mark as Featured' :
+          bulkActionType === 'unfeatured' ? 'Remove Featured Status' :
+          bulkActionType === 'trash' ? 'Move to Trash' : ''
+        }`}
+        subtitle={`Applies to ${selectedProductIds.size} selected products`}
+        maxWidth="lg"
+      >
+        <div className="space-y-4">
+          {/* Affected Products Preview */}
+          <div className="p-3 bg-[var(--bg-subtle)] rounded-xl border border-[var(--border)]">
+            <div className="text-[11px] font-bold text-[var(--text-subtle)] uppercase tracking-wider mb-2">
+              Selected Products ({selectedProductIds.size})
+            </div>
+            <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+              {products
+                .filter((p) => selectedProductIds.has(String(p.id)))
+                .slice(0, 8)
+                .map((p) => (
+                  <span
+                    key={p.id}
+                    className="inline-flex items-center px-2 py-0.5 rounded-md bg-[var(--bg-surface)] text-[var(--text-main)] text-[11px] border border-[var(--border)] font-medium"
+                  >
+                    {p.name}
+                  </span>
+                ))}
+              {selectedProductIds.size > 8 && (
+                <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-[var(--bg-surface)] text-[var(--text-muted)] text-[11px] border border-[var(--border)]">
+                  +{selectedProductIds.size - 8} more
+                </span>
+              )}
+            </div>
+          </div>
+
+          {bulkError && (
+            <div className="p-3 rounded-xl bg-[var(--danger-light)] text-[var(--danger)] text-xs flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              <span>{bulkError}</span>
+            </div>
+          )}
+
+          {/* Action-Specific Form Controls */}
+          {bulkActionType === 'price' && (
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-[var(--text-main)] mb-1">Target Price Field</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setBulkPriceTarget('regular_price')}
+                    className={`py-2 px-3 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                      bulkPriceTarget === 'regular_price'
+                        ? 'bg-[var(--primary)] text-white border-[var(--primary)]'
+                        : 'bg-[var(--bg-surface)] text-[var(--text-main)] border-[var(--border)]'
+                    }`}
+                  >
+                    Regular / Base Price
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBulkPriceTarget('sale_price')}
+                    className={`py-2 px-3 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                      bulkPriceTarget === 'sale_price'
+                        ? 'bg-[var(--primary)] text-white border-[var(--primary)]'
+                        : 'bg-[var(--bg-surface)] text-[var(--text-main)] border-[var(--border)]'
+                    }`}
+                  >
+                    Sale Price
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[var(--text-main)] mb-1">Adjustment Mode</label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                  {[
+                    { id: 'set', label: 'Set Value' },
+                    { id: 'adjust_fixed', label: 'Adjust (₹)' },
+                    { id: 'adjust_percent', label: 'Adjust (%)' },
+                    ...(bulkPriceTarget === 'sale_price' ? [{ id: 'clear', label: 'Clear Sale' }] : []),
+                  ].map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => setBulkPriceMode(m.id as any)}
+                      className={`py-1.5 px-2 rounded-lg text-xs font-medium border text-center transition-all cursor-pointer ${
+                        bulkPriceMode === m.id
+                          ? 'bg-[var(--primary-light)] text-[var(--primary)] border-[var(--primary)] font-bold'
+                          : 'bg-[var(--bg-surface)] text-[var(--text-subtle)] border-[var(--border)]'
+                      }`}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {bulkPriceMode !== 'clear' && (
+                <div>
+                  <label className="block text-xs font-semibold text-[var(--text-main)] mb-1">
+                    {bulkPriceMode === 'set' ? 'New Price (₹)' : bulkPriceMode === 'adjust_fixed' ? 'Delta Amount (+/- ₹)' : 'Percentage (+/- %)'}
+                  </label>
+                  <input
+                    type="number"
+                    value={bulkPriceValue}
+                    onChange={(e) => setBulkPriceValue(e.target.value)}
+                    placeholder={bulkPriceMode === 'set' ? 'e.g. 799' : bulkPriceMode === 'adjust_fixed' ? 'e.g. 50 or -50' : 'e.g. 10 or -10'}
+                    className="w-full px-3 py-2 rounded-xl bg-[var(--bg-surface)] border border-[var(--border)] text-xs text-[var(--text-main)] focus:outline-none focus:border-[var(--primary)]"
+                  />
+                  <span className="text-[11px] text-[var(--text-muted)] mt-1 block">
+                    {bulkPriceMode === 'set' && 'Sets the exact price for all selected products.'}
+                    {bulkPriceMode === 'adjust_fixed' && 'Adds or subtracts a fixed amount (positive or negative number).'}
+                    {bulkPriceMode === 'adjust_percent' && 'Increases or decreases by a percentage (e.g. 10 for +10%, -15 for -15%).'}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {bulkActionType === 'category' && (
+            <div>
+              <label className="block text-xs font-semibold text-[var(--text-main)] mb-1">New Category</label>
+              <select
+                value={bulkTargetCategory}
+                onChange={(e) => setBulkTargetCategory(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl bg-[var(--bg-surface)] border border-[var(--border)] text-xs text-[var(--text-main)] focus:outline-none focus:border-[var(--primary)] capitalize"
+              >
+                {INITIAL_CATEGORIES.map((cat) => (
+                  <option key={cat.slug} value={cat.slug}>
+                    {cat.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {bulkActionType === 'unit' && (
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-[var(--text-main)] mb-1">Selling Unit</label>
+                <select
+                  value={bulkTargetUnit}
+                  onChange={(e) => setBulkTargetUnit(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-[var(--bg-surface)] border border-[var(--border)] text-xs text-[var(--text-main)] focus:outline-none focus:border-[var(--primary)] capitalize"
+                >
+                  {PREDEFINED_SELLING_UNITS.map((u) => (
+                    <option key={u} value={u}>
+                      {u}
+                    </option>
+                  ))}
+                  <option value="custom">Custom Unit...</option>
+                </select>
+              </div>
+
+              {bulkTargetUnit === 'custom' && (
+                <div>
+                  <label className="block text-xs font-semibold text-[var(--text-main)] mb-1">Custom Unit Name</label>
+                  <input
+                    type="text"
+                    value={bulkCustomUnit}
+                    onChange={(e) => setBulkCustomUnit(e.target.value)}
+                    placeholder="e.g. platter, jar of 250g"
+                    className="w-full px-3 py-2 rounded-xl bg-[var(--bg-surface)] border border-[var(--border)] text-xs text-[var(--text-main)] focus:outline-none focus:border-[var(--primary)]"
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          {bulkActionType === 'dietary' && (
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-[var(--text-main)] mb-1">Dietary Tag</label>
+                <select
+                  value={bulkDietaryKey}
+                  onChange={(e) => setBulkDietaryKey(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-[var(--bg-surface)] border border-[var(--border)] text-xs text-[var(--text-main)] focus:outline-none focus:border-[var(--primary)]"
+                >
+                  {DEFAULT_DIETARY_ATTRIBUTES.map((d) => (
+                    <option key={d.key} value={d.key}>
+                      {d.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[var(--text-main)] mb-1">Tag State</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setBulkDietaryEnabled(true)}
+                    className={`py-2 px-3 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                      bulkDietaryEnabled
+                        ? 'bg-emerald-600 text-white border-emerald-600'
+                        : 'bg-[var(--bg-surface)] text-[var(--text-main)] border-[var(--border)]'
+                    }`}
+                  >
+                    Enable / Mark Yes
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBulkDietaryEnabled(false)}
+                    className={`py-2 px-3 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                      !bulkDietaryEnabled
+                        ? 'bg-rose-600 text-white border-rose-600'
+                        : 'bg-[var(--bg-surface)] text-[var(--text-main)] border-[var(--border)]'
+                    }`}
+                  >
+                    Disable / Remove Tag
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {bulkActionType === 'trash' && (
+            <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-xs flex items-start gap-2.5">
+              <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <div className="font-bold">Are you sure you want to trash {selectedProductIds.size} products?</div>
+                <div className="text-[11px] mt-0.5">
+                  Trashed products will be unpublished and hidden from the storefront. They can be restored later from the database.
+                </div>
+              </div>
+            </div>
+          )}
+
+          {(bulkActionType === 'publish' || bulkActionType === 'draft' || bulkActionType === 'featured') && (
+            <div className="p-3.5 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border)] text-xs text-[var(--text-main)]">
+              <div>
+                Are you sure you want to apply <span className="font-bold uppercase">{bulkActionType}</span> to all {selectedProductIds.size} selected products?
+              </div>
+            </div>
+          )}
+
+          {/* Modal Action Buttons */}
+          <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[var(--border)]">
+            <button
+              type="button"
+              disabled={isBulkSubmitting}
+              onClick={() => setBulkActionType(null)}
+              className="px-4 py-2 rounded-xl text-xs font-medium text-[var(--text-subtle)] hover:bg-[var(--bg-subtle)] transition-colors cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={isBulkSubmitting}
+              onClick={executeBulkAction}
+              className={`px-4 py-2 rounded-xl text-xs font-bold text-white shadow-xs transition-all flex items-center gap-2 cursor-pointer ${
+                bulkActionType === 'trash'
+                  ? 'bg-rose-600 hover:bg-rose-700'
+                  : 'bg-[var(--primary)] hover:bg-[var(--primary-hover)]'
+              }`}
+            >
+              {isBulkSubmitting && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+              <span>{isBulkSubmitting ? 'Updating...' : 'Apply Bulk Action'}</span>
+            </button>
+          </div>
         </div>
       </Modal>
     </div>

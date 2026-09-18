@@ -3,6 +3,7 @@ import {
   listProducts, getProduct, upsertProduct, quickEdit, duplicateProduct,
   setStatus, deletePermanently, bulkAction, getProductWithVariants, adjustProductStock, getLowStockProducts, getCategoryTree,
 } from '../../../../lib/server/admin-catalog';
+import { hasPermission } from '../../../../lib/server/permissions';
 
 export const runtime = 'nodejs';
 
@@ -98,6 +99,9 @@ export async function POST(req: Request) {
         return ok(r);
       }
       case 'bulk': {
+        if (!hasPermission(user.role, 'bulk_edit_products')) {
+          return err('Forbidden: bulk_edit_products permission required', 403);
+        }
         const r = bulkAction({ ...body, subaction: body.bulkAction || body.action2 }, user);
         return ok(r);
       }

@@ -5,6 +5,7 @@ import { logAudit, slugify, jsonParseSafe } from './api';
 import { normalizeImageUrl, mediumImageUrl, isSafeMediaUrl } from '../imageUrl';
 import { listActiveVariants, getVariantStockStatus } from './product-variants';
 import { parseDietaryAttributes, parseVideos } from './product-serializer';
+import { DEFAULT_DIETARY_ATTRIBUTES } from '../types';
 
 // ============================================================================
 // Shared helpers
@@ -644,6 +645,81 @@ export function bulkAction(body: any, user: any) {
         const st = toStock(body.stock);
         db.prepare(`UPDATE products SET stock=?, stock_status=?, updated_at=? WHERE id=?`).run(st, st <= 0 ? 'out_of_stock' : 'in_stock', new Date().toISOString(), id);
         db.prepare(`INSERT INTO stock_history (product_id, change_amount, type, note, user_id, user_name) VALUES (?,?,?,?,?,?)`).run(id, st - (existing.stock||0), 'bulk', 'Bulk stock update', user?.id, user?.name);
+      }
+      else if (action === 'price') {
+        const targetField = body.targetField === 'sale_price' ? 'sale_price' : 'regular_price';
+        const mode = body.mode || 'set'; // 'set' | 'adjust_fixed' | 'adjust_percent' | 'clear'
+        let newPrice: number | null = null;
+
+        if (mode === 'clear') {
+          if (targetField !== 'sale_price') throw new Error('Only sale price can be cleared');
+          newPrice = null;
+        } else if (mode === 'set') {
+          newPrice = toPrice(body.value);
+          if (newPrice === null || newPrice < 0) throw new Error('Price must be a non-negative number');
+        } else if (mode === 'adjust_fixed') {
+          const delta = Number(body.value);
+          if (isNaN(delta)) throw new Error('Adjustment value must be a number');
+          const current = Number(existing[targetField] ?? (targetField === 'sale_price' ? (existing.sale_price ?? existing.regular_price ?? 0) : (existing.regular_price ?? 0)));
+          newPrice = Math.max(0, Math.round((current + delta) * 100) / 100);
+        } else if (mode === 'adjust_percent') {
+          const pct = Number(body.value);
+          if (isNaN(pct)) throw new Error('Percentage adjustment must be a number');
+          const current = Number(existing[targetField] ?? (targetField === 'sale_price' ? (existing.sale_price ?? existing.regular_price ?? 0) : (existing.regular_price ?? 0)));
+          newPrice = Math.max(0, Math.round((current * (1 + pct / 100)) * 100) / 100);
+        } else {
+          throw new Error(`Invalid price adjustment mode: ${mode}`);
+        }
+
+        // Validate sale price vs regular price
+        if (targetField === 'sale_price' && newPrice !== null && existing.regular_price !== null) {
+          if (newPrice > Number(existing.regular_price)) {
+            throw new Error(`Sale price (₹${newPrice}) cannot exceed regular price (₹${existing.regular_price}) for product #${id}`);
+          }
+        }
+        if (targetField === 'regular_price' && newPrice !== null && existing.sale_price !== null) {
+          if (Number(existing.sale_price) > newPrice) {
+            db.prepare(`UPDATE products SET sale_price=?, updated_at=? WHERE id=?`).run(newPrice, new Date().toISOString(), id);
+          }
+        }
+
+        db.prepare(`UPDATE products SET ${targetField}=?, updated_at=? WHERE id=?`).run(newPrice, new Date().toISOString(), id);
+        auditProduct(user, id, 'bulk_price_edit', targetField, existing[targetField], newPrice);
+      }
+      else if (action === 'selling_unit') {
+        const valRes = validateSellingUnitInput(body.selling_unit);
+        if (!valRes.valid) throw new Error(valRes.error || 'Invalid selling unit');
+        const unitStr = serializeSellingUnit(body.selling_unit);
+        db.prepare(`UPDATE products SET selling_unit=?, updated_at=? WHERE id=?`).run(unitStr, new Date().toISOString(), id);
+        auditProduct(user, id, 'bulk_unit_edit', 'selling_unit', existing.selling_unit, unitStr);
+      }
+      else if (action === 'dietary') {
+        const attrKey = String(body.attributeKey || '').trim();
+        if (!attrKey) throw new Error('Dietary attributeKey is required');
+        const enabled = Boolean(body.enabled);
+        const parsed = parseDietaryAttributes(existing.dietary_json, !!existing.eggless);
+        const existingIdx = parsed.findIndex((d) => d.key === attrKey);
+        if (existingIdx >= 0) {
+          parsed[existingIdx].enabled = enabled;
+        } else {
+          const known = DEFAULT_DIETARY_ATTRIBUTES.find((d) => d.key === attrKey);
+          parsed.push({
+            key: attrKey,
+            label: known ? known.label : attrKey,
+            enabled,
+            showOnStorefront: true,
+            isCustom: !known,
+          });
+        }
+        const updatedJson = JSON.stringify(parsed);
+        let egglessVal = existing.eggless;
+        if (attrKey === 'eggless') {
+          egglessVal = enabled ? 1 : 0;
+        } else if (attrKey === 'contains_egg') {
+          egglessVal = enabled ? 0 : 1;
+        }
+        db.prepare(`UPDATE products SET dietary_json=?, eggless=?, updated_at=? WHERE id=?`).run(updatedJson, egglessVal, new Date().toISOString(), id);
+        auditProduct(user, id, 'bulk_dietary_edit', 'dietary_json', existing.dietary_json, updatedJson);
       }
       else throw new Error(`Unknown bulk action: ${action}`);
     }
