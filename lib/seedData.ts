@@ -60,6 +60,7 @@ export const DEFAULT_STORE_SETTINGS: StoreSettings = {
   deliveryCities: [
     'Gurugram',
     'Delhi NCR',
+    'Deoria',
     'Noida',
     'Faridabad',
     'Ghaziabad',

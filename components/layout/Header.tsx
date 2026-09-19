@@ -671,7 +671,7 @@ export const Header: React.FC<HeaderProps> = ({
                   <span className="text-[9px] text-[#FF2B6D] font-extrabold uppercase">⚡ Express Delivery</span>
                 </div>
                 <div className="grid grid-cols-2 gap-1.5">
-                  {DEFAULT_STORE_SETTINGS.deliveryCities.slice(0, 4).map((city) => (
+                  {DEFAULT_STORE_SETTINGS.deliveryCities.map((city) => (
                     <button
                       key={city}
                       type="button"

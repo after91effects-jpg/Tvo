@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { db } from '../server/db';
-import { validateSlot } from '../server/order-engine';
+import { validateSlot, createOrder } from '../server/order-engine';
 import * as ops from '../server/admin-ops';
 
 const mockAdminUser = {
@@ -41,6 +41,50 @@ describe('TVO Flavours — Step 11: Advanced Delivery Management Test Suite', ()
       expect(row).toBeDefined();
       expect(row.zone_name).toBe('Delhi NCR');
       expect(row.fee).toBe(79);
+    });
+
+    it('resolves Deoria pincode 274001 to Deoria zone with fee 0', () => {
+      const row = db.prepare(`
+        SELECT p.pincode, p.available, z.name as zone_name, z.fee, z.free_delivery_threshold, z.min_order_value
+        FROM pincodes p
+        JOIN delivery_zones z ON p.zone_id = z.id
+        WHERE p.pincode = ? AND p.available = 1 AND z.active = 1
+      `).get('274001') as any;
+
+      expect(row).toBeDefined();
+      expect(row.zone_name).toBe('Deoria');
+      expect(row.fee).toBe(0);
+    });
+
+    it('creates an order with Deoria pincode 274001 with delivery fee 0', () => {
+      const prod = db.prepare('SELECT id, stock FROM products WHERE stock > 0 LIMIT 1').get() as any;
+      const targetDate = new Date(Date.now() + 2 * 86400000).toISOString().split('T')[0];
+      const testOrderNum = `TVO-DEORIA-TEST-${Date.now()}`;
+      try {
+        const res = createOrder({
+          items: [{ productId: prod.id, qty: 1, weight: '0.5 Kg' }],
+          body: {
+            customer: { name: 'Deoria Customer', phone: '9876543210' },
+            address: 'Civil Lines, Near Subhash Chowk',
+            city: 'Deoria',
+            pincode: '274001',
+            deliveryDate: targetDate,
+            deliverySlot: 'Morning Fresh',
+            paymentMethod: 'COD',
+          },
+          customerId: null,
+          generateOrderNumber: () => testOrderNum,
+        });
+
+        expect(res.orderNumber).toBe(testOrderNum);
+        expect(res.deliveryFee).toBe(0);
+        expect(res.total).toBe(res.subtotal);
+
+        const orderInDb = db.prepare('SELECT delivery_fee, total, subtotal FROM orders WHERE order_number=?').get(testOrderNum) as any;
+        expect(orderInDb.delivery_fee).toBe(0);
+      } finally {
+        db.prepare('DELETE FROM orders WHERE order_number=?').run(testOrderNum);
+      }
     });
 
     it('correctly handles unserviceable pincodes', () => {
@@ -179,10 +223,10 @@ describe('TVO Flavours — Step 11: Advanced Delivery Management Test Suite', ()
 
     it('creates and lists drivers with availability status', () => {
       const drivers = ops.listDrivers(mockAdminUser);
-      const found = drivers.find((d: any) => d.id === testDriverId);
+      const found: any = drivers.find((d: any) => d.id === testDriverId);
       expect(found).toBeDefined();
-      expect(found.name).toBe('Vikas Sharma');
-      expect(found.status).toBe('available');
+      expect(found?.name).toBe('Vikas Sharma');
+      expect(found?.status).toBe('available');
     });
 
     it('assigns driver to order and transitions delivery status to assigned', () => {
@@ -276,7 +320,7 @@ describe('TVO Flavours — Step 11: Advanced Delivery Management Test Suite', ()
       expect(counts.users).toBe(1);
       expect(counts.categories).toBe(65);
       expect(counts.addons).toBe(11);
-      expect(counts.zones).toBe(3);
+      expect(counts.zones).toBe(4);
     });
   });
 });

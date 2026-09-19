@@ -365,7 +365,7 @@ export function createOrder({ items, body, customerId, generateOrderNumber }: Cr
       throw new OrderInputError('Please enter a valid 6-digit delivery pincode');
     }
 
-    const pinRow = db.prepare('SELECT p.available, z.active FROM pincodes p LEFT JOIN delivery_zones z ON p.zone_id=z.id WHERE p.pincode=?').get(pincode) as any;
+    const pinRow = db.prepare('SELECT p.available, z.active, z.fee, z.free_delivery_threshold FROM pincodes p LEFT JOIN delivery_zones z ON p.zone_id=z.id WHERE p.pincode=?').get(pincode) as any;
     if (pinRow && (!pinRow.available || (pinRow.active !== null && pinRow.active === 0))) {
       throw new OrderInputError(`Delivery is not available for pincode ${pincode}. Currently we serve Gurugram and select Delhi NCR areas.`);
     }
@@ -386,14 +386,17 @@ export function createOrder({ items, body, customerId, generateOrderNumber }: Cr
     }
     subtotal = Math.round(subtotal);
 
-    // 5. Authoritative delivery fee from store settings
+    // 5. Authoritative delivery fee from store settings / zone settings
     const freeThreshRow = db.prepare("SELECT value FROM settings WHERE key='free_delivery_threshold'").get() as any;
-    const freeDeliveryThreshold = freeThreshRow ? Number(freeThreshRow.value) : 499;
+    const defaultFreeDeliveryThreshold = freeThreshRow ? Number(freeThreshRow.value) : 499;
     const stdFeeRow = db.prepare("SELECT value FROM settings WHERE key='standard_delivery_fee'").get() as any;
-    const standardDeliveryFee = stdFeeRow ? Number(stdFeeRow.value) : 49;
+    const defaultStandardDeliveryFee = stdFeeRow ? Number(stdFeeRow.value) : 49;
+
+    const zoneFee = (pinRow && pinRow.fee !== null && pinRow.fee !== undefined) ? Number(pinRow.fee) : defaultStandardDeliveryFee;
+    const zoneFreeThreshold = (pinRow && pinRow.free_delivery_threshold !== null && pinRow.free_delivery_threshold !== undefined) ? Number(pinRow.free_delivery_threshold) : defaultFreeDeliveryThreshold;
 
     const isPickup = body.deliveryType === 'pickup' || body.deliverySlot === 'Store Pickup';
-    const deliveryFee = isPickup ? 0 : (subtotal >= freeDeliveryThreshold ? 0 : standardDeliveryFee);
+    const deliveryFee = isPickup || zoneFee === 0 || (zoneFreeThreshold !== null && subtotal >= zoneFreeThreshold) ? 0 : zoneFee;
     const slotSurcharge = isPickup ? 0 : (slotCheck.slot?.fee ? Math.round(Number(slotCheck.slot.fee)) : (Math.round(Number(body.slot_surcharge)) || 0));
     const deliveryInstructions = (body.deliveryInstructions || body.delivery_instructions || body.orderNotes || '').toString().trim().slice(0, 500);
 
@@ -445,6 +448,26 @@ export function createOrder({ items, body, customerId, generateOrderNumber }: Cr
         `).get(code, customerId || -1, phone, customerEmail || '') as any;
         if (usedCount && usedCount.cnt >= (c.per_customer_limit || 1)) {
           throw new OrderInputError(`You have already used coupon "${code}" the maximum number of times`);
+        }
+
+        const isFirstOrderCoupon = Boolean(
+          (c.description && /first(\s+|-)?order/i.test(c.description)) ||
+          (c.description && /first celebration order/i.test(c.description)) ||
+          c.code.toUpperCase().startsWith('FIRST') ||
+          c.code.toUpperCase().startsWith('WELCOME')
+        );
+        if (isFirstOrderCoupon) {
+          const priorOrders = db.prepare(`
+            SELECT COUNT(*) as cnt FROM orders 
+            WHERE status != 'Cancelled' AND (
+              (customer_id IS NOT NULL AND customer_id = ?) OR
+              (customer_phone IS NOT NULL AND customer_phone = ?) OR
+              (customer_email IS NOT NULL AND customer_email = ?)
+            )
+          `).get(customerId || -1, phone || '', customerEmail || '') as any;
+          if (priorOrders && priorOrders.cnt > 0) {
+            throw new OrderInputError(`Coupon "${code}" is only valid for your first order`);
+          }
         }
       }
       if (c.product_ids) {

@@ -13,6 +13,7 @@ const SUPPORTED_COORDINATES: Record<string, { lat: number; lng: number }> = {
   'Faridabad': { lat: 28.4089, lng: 77.3178 },
   'Ghaziabad': { lat: 28.6692, lng: 77.4538 },
   'Greater Noida': { lat: 28.4744, lng: 77.5040 },
+  'Deoria': { lat: 26.5024, lng: 83.7791 },
 };
 
 function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number) {
@@ -35,6 +36,29 @@ interface LocationPinServiceBarProps {
 
 export function LocationPinServiceBar({ isDesktop = false }: LocationPinServiceBarProps) {
   const { deliveryCity, setDeliveryCity } = useCart();
+  const [deliveryCities, setDeliveryCities] = useState<string[]>(DEFAULT_STORE_SETTINGS.deliveryCities);
+
+  // Dynamically load active zones from API so all active delivery zones are available
+  useEffect(() => {
+    let isMounted = true;
+    fetch('/api/delivery?action=zones')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!isMounted || !data?.zones || !Array.isArray(data.zones)) return;
+        const activeZoneCities = data.zones
+          .filter((z: any) => z.active)
+          .map((z: any) => (z.name || z.city || '').trim())
+          .filter(Boolean);
+        setDeliveryCities((prev) => {
+          const combined = Array.from(new Set([...prev, ...activeZoneCities]));
+          return combined;
+        });
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Anchored dropdown states
   const [isCityDropdownOpen, setIsCityDropdownOpen] = useState(false);
@@ -199,7 +223,7 @@ export function LocationPinServiceBar({ isDesktop = false }: LocationPinServiceB
         });
 
         // If the API returns a recognized city, update the cart delivery city
-        if (data.city && DEFAULT_STORE_SETTINGS.deliveryCities.includes(data.city)) {
+        if (data.city && (deliveryCities.includes(data.city) || DEFAULT_STORE_SETTINGS.deliveryCities.includes(data.city))) {
           setDeliveryCity(data.city);
         }
       } else {
@@ -225,7 +249,7 @@ export function LocationPinServiceBar({ isDesktop = false }: LocationPinServiceB
             Select Delivery City
           </h3>
           <p className="text-[11px] text-[var(--text-muted)]">
-            Serving Gurugram &amp; Delhi NCR
+            Serving Gurugram, Delhi NCR &amp; select regions
           </p>
         </div>
         <button
@@ -260,7 +284,7 @@ export function LocationPinServiceBar({ isDesktop = false }: LocationPinServiceB
         <div className="text-[10px] font-bold text-[var(--text-subtle)] uppercase tracking-wider px-1 mb-1">
           Supported Delivery Areas
         </div>
-        {DEFAULT_STORE_SETTINGS.deliveryCities.map((city) => (
+        {deliveryCities.map((city) => (
           <button
             key={city}
             type="button"
@@ -388,6 +412,14 @@ export function LocationPinServiceBar({ isDesktop = false }: LocationPinServiceB
                     </span>
                   </div>
                 )}
+                {pinDeliveryDetails.fee !== undefined && pinDeliveryDetails.fee !== null && (
+                  <div className="flex justify-between">
+                    <span>Delivery Fee:</span>
+                    <span className="font-semibold text-[var(--text-main)]">
+                      {pinDeliveryDetails.fee === 0 ? 'FREE (₹0)' : `₹${pinDeliveryDetails.fee}`}
+                    </span>
+                  </div>
+                )}
                 {pinDeliveryDetails.estDeliveryTime && (
                   <div className="flex justify-between">
                     <span>Est. Delivery:</span>
@@ -396,7 +428,7 @@ export function LocationPinServiceBar({ isDesktop = false }: LocationPinServiceB
                     </span>
                   </div>
                 )}
-                {pinDeliveryDetails.freeThreshold !== undefined && (
+                {pinDeliveryDetails.freeThreshold != null && (
                   <div className="flex justify-between">
                     <span>Free Delivery:</span>
                     <span className="font-semibold text-[var(--text-main)]">

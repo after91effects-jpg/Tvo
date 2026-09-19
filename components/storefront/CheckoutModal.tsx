@@ -96,7 +96,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   onOrderSuccess,
   occasionSlug,
 }) => {
-  const { cartItems, subtotal, clearCart, appliedPromo, applyPromoCode, removePromoCode } = useCart();
+  const { cartItems, subtotal, clearCart, appliedPromo, applyPromoCode, removePromoCode, deliveryCity } = useCart();
   const { user } = useAuth();
 
   useEffect(() => {
@@ -160,13 +160,25 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   // Delivery Mode & Address State
   const [deliveryMode, setDeliveryMode] = useState<'delivery' | 'pickup'>('delivery');
   const [address, setAddress] = useState('');
-  const [city, setCity] = useState('Gurugram');
-  const [pincode, setPincode] = useState('122001');
+  const [city, setCity] = useState(deliveryCity || 'Gurugram');
+  const [pincode, setPincode] = useState(deliveryCity === 'Deoria' ? '274001' : '122001');
   const [pincodeStatus, setPincodeStatus] = useState<{ checked: boolean; available: boolean; message?: string }>({
     checked: true,
     available: true,
   });
+  const [zoneFee, setZoneFee] = useState<number | null>(null);
+  const [zoneFreeThreshold, setZoneFreeThreshold] = useState<number | null>(null);
   const [specialInstructions, setSpecialInstructions] = useState('');
+
+  // Sync city & default pincode if cart deliveryCity changes
+  useEffect(() => {
+    if (deliveryCity) {
+      setCity(deliveryCity);
+      if (deliveryCity === 'Deoria' && (pincode === '122001' || !pincode)) {
+        setPincode('274001');
+      }
+    }
+  }, [deliveryCity]);
 
   // Delivery Date & Slot State
   const [deliveryDate, setDeliveryDate] = useState<string>(minDateStr);
@@ -218,6 +230,16 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             message: data.message,
           });
           if (data.city) setCity(data.city);
+          if (data.fee !== undefined && data.fee !== null) {
+            setZoneFee(Number(data.fee));
+          } else {
+            setZoneFee(null);
+          }
+          if (data.free_delivery_threshold !== undefined) {
+            setZoneFreeThreshold(data.free_delivery_threshold !== null ? Number(data.free_delivery_threshold) : null);
+          } else {
+            setZoneFreeThreshold(null);
+          }
         })
         .catch(() => {
           if (!cancelled) setPincodeStatus({ checked: true, available: true });
@@ -265,9 +287,13 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   }, [slots, selectedSlotId, deliveryMode]);
 
   const slotSurcharge = deliveryMode === 'pickup' ? 0 : (selectedSlot?.fee || 0);
-  const freeThreshold = DEFAULT_STORE_SETTINGS.thresholds.freeDeliveryAbove || 499;
-  const standardDeliveryFee = DEFAULT_STORE_SETTINGS.thresholds.standardDeliveryFee || 49;
-  const deliveryFee = deliveryMode === 'pickup' || subtotal >= freeThreshold || cartItems.length === 0 ? 0 : standardDeliveryFee;
+  const freeThreshold = zoneFreeThreshold !== null 
+    ? zoneFreeThreshold 
+    : (DEFAULT_STORE_SETTINGS.thresholds.freeDeliveryAbove || 499);
+  const standardDeliveryFee = zoneFee !== null 
+    ? zoneFee 
+    : (DEFAULT_STORE_SETTINGS.thresholds.standardDeliveryFee || 49);
+  const deliveryFee = deliveryMode === 'pickup' || standardDeliveryFee === 0 || (freeThreshold !== null && subtotal >= freeThreshold) || cartItems.length === 0 ? 0 : standardDeliveryFee;
 
   let appliedDiscount = 0;
   if (appliedPromo && subtotal >= appliedPromo.minOrderValue) {
