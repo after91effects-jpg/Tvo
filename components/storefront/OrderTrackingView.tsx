@@ -758,11 +758,17 @@ export const PrintableOrderSlip: React.FC<{ order: Order; onPrint?: () => void }
                       Piped: &ldquo;{item.messageOnCake}&rdquo;
                     </div>
                   )}
-                  {item.addons && item.addons.length > 0 && (
-                    <div className="text-[10px] text-gray-500 mt-0.5">
-                      Add-ons: {item.addons.map((a: any) => (typeof a === 'string' ? a : (a?.name || String(a ?? '')))).join(', ')}
-                    </div>
-                  )}
+                  {Array.isArray(item.addons) && item.addons.length > 0 && (() => {
+                    const addonText = item.addons
+                      .map((a: any) => (typeof a === 'string' ? a : (a?.name || (a?.price ? `Add-on (₹${a.price})` : ''))))
+                      .filter(Boolean)
+                      .join(', ');
+                    return addonText ? (
+                      <div className="text-[10px] text-gray-500 mt-0.5">
+                        Add-ons: {addonText}
+                      </div>
+                    ) : null;
+                  })()}
                 </td>
                 <td className="py-3 px-3 align-top text-gray-600">
                   <div>{item.weight}</div>
@@ -1391,11 +1397,17 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
                         Piped: &ldquo;{item.messageOnCake}&rdquo;
                       </div>
                     )}
-                    {item.addons && item.addons.length > 0 && (
-                      <div className="text-[10px] text-[var(--text-subtle)] mt-1">
-                        Add-ons: {item.addons.map((a: any) => (typeof a === 'string' ? a : (a?.name || String(a ?? '')))).join(', ')}
-                      </div>
-                    )}
+                    {Array.isArray(item.addons) && item.addons.length > 0 && (() => {
+                      const addonText = item.addons
+                        .map((a: any) => (typeof a === 'string' ? a : (a?.name || (a?.price ? `Add-on (₹${a.price})` : ''))))
+                        .filter(Boolean)
+                        .join(', ');
+                      return addonText ? (
+                        <div className="text-[10px] text-[var(--text-subtle)] mt-1">
+                          Add-ons: {addonText}
+                        </div>
+                      ) : null;
+                    })()}
                   </div>
                 ))}
               </div>

@@ -306,7 +306,8 @@ export const PaymentDashboardView: React.FC = () => {
       'Gateway',
     ];
 
-    const rows = data.transactions.items.map((tx: any) => [
+    const items = Array.isArray(data?.transactions?.items) ? data.transactions.items : [];
+    const rows = items.map((tx: any) => [
       tx.created_at || '',
       tx.order_number || '',
       tx.razorpay_order_id || '',

@@ -27,7 +27,25 @@ function toNum(v: unknown): number {
  * `createdAt`, `customer.*`, etc. Mapping happens here, once, at the source.
  */
 export function normalizeOrderRow(raw: any): Order {
-  const items = safeArray(raw?.items);
+  const rawItems = safeArray(raw?.items);
+  const items = rawItems.map((item: any) => {
+    if (!item || typeof item !== 'object') return item;
+    let addons = item.addons;
+    if (typeof addons === 'string') {
+      try {
+        const parsed = JSON.parse(addons);
+        addons = Array.isArray(parsed) ? parsed : (addons ? [addons] : []);
+      } catch {
+        addons = addons ? [addons] : [];
+      }
+    } else if (!Array.isArray(addons)) {
+      addons = addons ? [addons] : [];
+    }
+    return {
+      ...item,
+      addons,
+    };
+  });
   const timelineRaw = safeArray(raw?.timeline);
   const timeline = timelineRaw
     .map((t: any) =>

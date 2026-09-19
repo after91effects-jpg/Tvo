@@ -84,6 +84,8 @@ describe('TVO Flavours — Step 11: Advanced Delivery Management Test Suite', ()
         expect(orderInDb.delivery_fee).toBe(0);
       } finally {
         db.prepare('DELETE FROM orders WHERE order_number=?').run(testOrderNum);
+        db.prepare("UPDATE products SET stock = stock + 1, stock_status = 'in_stock' WHERE id=?").run(prod.id);
+        db.prepare('DELETE FROM inventory_transactions WHERE note LIKE ?').run(`%${testOrderNum}%`);
       }
     });
 

@@ -259,34 +259,41 @@ export const CustomerOrdersView: React.FC<CustomerOrdersViewProps> = ({ orders, 
   // Format readable active date range description
   const activeDateRangeLabel = useMemo(() => {
     if (!startDate && !endDate) return null;
-    if (startDate && endDate && startDate === endDate) {
-      return new Date(`${startDate}T12:00:00`).toLocaleDateString('en-IN', {
+    const parseSafe = (dStr: string) => {
+      const d = new Date(`${dStr}T12:00:00`);
+      return isNaN(d.getTime()) ? null : d;
+    };
+    const sDate = startDate ? parseSafe(startDate) : null;
+    const eDate = endDate ? parseSafe(endDate) : null;
+    if (!sDate && !eDate) return null;
+    if (sDate && eDate && startDate === endDate) {
+      return sDate.toLocaleDateString('en-IN', {
         month: 'short',
         day: 'numeric',
         year: 'numeric',
       });
     }
-    if (startDate && endDate) {
-      const s = new Date(`${startDate}T12:00:00`).toLocaleDateString('en-IN', {
+    if (sDate && eDate) {
+      const s = sDate.toLocaleDateString('en-IN', {
         month: 'short',
         day: 'numeric',
       });
-      const e = new Date(`${endDate}T12:00:00`).toLocaleDateString('en-IN', {
+      const e = eDate.toLocaleDateString('en-IN', {
         month: 'short',
         day: 'numeric',
-        year: 'numeric',
+        year: sDate.getFullYear() !== eDate.getFullYear() ? 'numeric' : undefined,
       });
       return `${s} – ${e}`;
     }
-    if (startDate) {
-      return `From ${new Date(`${startDate}T12:00:00`).toLocaleDateString('en-IN', {
+    if (sDate) {
+      return `From ${sDate.toLocaleDateString('en-IN', {
         month: 'short',
         day: 'numeric',
         year: 'numeric',
       })}`;
     }
-    if (endDate) {
-      return `Until ${new Date(`${endDate}T12:00:00`).toLocaleDateString('en-IN', {
+    if (eDate) {
+      return `Until ${eDate.toLocaleDateString('en-IN', {
         month: 'short',
         day: 'numeric',
         year: 'numeric',
@@ -1056,11 +1063,17 @@ export const CustomerOrdersView: React.FC<CustomerOrdersViewProps> = ({ orders, 
                         </div>
                       )}
 
-                      {item.addons && item.addons.length > 0 && (
-                        <div className="text-[11px] text-[var(--text-subtle)] mt-1">
-                          Add-ons: {item.addons.map((a: any) => (typeof a === 'string' ? a : (a?.name || String(a)))).join(', ')}
-                        </div>
-                      )}
+                      {Array.isArray(item.addons) && item.addons.length > 0 && (() => {
+                        const addonNames = item.addons
+                          .map((a: any) => (typeof a === 'string' ? a : (a?.name || (a?.price ? `Add-on (₹${a.price})` : ''))))
+                          .filter(Boolean);
+                        if (addonNames.length === 0) return null;
+                        return (
+                          <div className="text-[11px] text-[var(--text-subtle)] mt-1">
+                            Add-ons: {addonNames.join(', ')}
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     <div className="text-right font-bold text-xs text-[var(--text-main)]">
@@ -1114,9 +1127,15 @@ export const CustomerOrdersView: React.FC<CustomerOrdersViewProps> = ({ orders, 
                     <div>
                       <div className="font-bold text-[var(--text-main)]">
                         {hist.status}{' '}
-                        <span className="text-[10px] font-normal text-[var(--text-subtle)]">
-                          ({new Date(hist.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })})
-                        </span>
+                        {(() => {
+                          const ts = hist.timestamp || (hist as any).created_at || (hist as any).date;
+                          const valid = ts && !isNaN(new Date(ts).getTime());
+                          return valid ? (
+                            <span className="text-[10px] font-normal text-[var(--text-subtle)]">
+                              ({new Date(ts).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })})
+                            </span>
+                          ) : null;
+                        })()}
                       </div>
                       <div className="text-[11px] text-[var(--text-muted)]">{hist.note}</div>
                     </div>

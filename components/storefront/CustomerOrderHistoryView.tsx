@@ -428,7 +428,7 @@ let ordersUrl = '/api/orders';
         (w) => w.label === item.weight
       ) || fallbackOption;
 
-      const addons: CartItemAddon[] = (item.addons || []).map((addonItem: any, idx) => {
+      const addons: CartItemAddon[] = (Array.isArray(item.addons) ? item.addons : []).map((addonItem: any, idx) => {
         const name = typeof addonItem === 'string' ? addonItem : (addonItem?.name || 'Add-on');
         const price = typeof addonItem === 'object' && addonItem?.price ? Number(addonItem.price) : 0;
         return {
@@ -967,15 +967,16 @@ let ordersUrl = '/api/orders';
                               </div>
                             )}
 
-                            {item.addons && item.addons.length > 0 && (
+                            {Array.isArray(item.addons) && item.addons.length > 0 && (
                               <div className="flex flex-wrap gap-1 mt-1">
                                 {item.addons.map((a: any, aIdx) => {
                                   const addonLabel =
                                     typeof a === 'string'
                                       ? a
-                                      : a?.name
-                                      ? `${a.name}${a.price ? ` (₹${a.price})` : ''}`
-                                      : String(a ?? '');
+                                      : a && typeof a === 'object'
+                                      ? (a.name ? `${a.name}${a.price ? ` (₹${a.price})` : ''}` : (a.price ? `Add-on (₹${a.price})` : 'Add-on'))
+                                      : '';
+                                  if (!addonLabel) return null;
                                   return (
                                     <span
                                       key={aIdx}

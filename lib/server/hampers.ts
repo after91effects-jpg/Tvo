@@ -98,6 +98,25 @@ export function validateCustomHamperOrder(item: any, settings?: HamperSettings):
   }
 
   let totalItemsCount = 0;
+  for (const comp of rawComponents) {
+    const qty = Number(comp.quantity || comp.qty || 1);
+    if (Number.isFinite(qty) && qty > 0) {
+      totalItemsCount += qty;
+    }
+  }
+
+  // Capacity verification
+  if (totalItemsCount > maxCapacity) {
+    throw new OrderInputError(
+      `The selected ${box.name} can hold at most ${maxCapacity} items (selected: ${totalItemsCount})`
+    );
+  }
+  if (totalItemsCount < (currentSettings.minItemsRequired || 1)) {
+    throw new OrderInputError(
+      `Please select at least ${currentSettings.minItemsRequired || 1} item(s) for your hamper`
+    );
+  }
+
   const validatedComponents: HamperComponentItem[] = [];
   const componentDeductions: Array<{ productId: number; deductQty: number; name: string }> = [];
   let componentsPriceTotal = 0;
@@ -154,17 +173,6 @@ export function validateCustomHamperOrder(item: any, settings?: HamperSettings):
     });
   }
 
-  // Capacity verification
-  if (totalItemsCount > maxCapacity) {
-    throw new OrderInputError(
-      `The selected ${box.name} can hold at most ${maxCapacity} items (selected: ${totalItemsCount})`
-    );
-  }
-  if (totalItemsCount < (currentSettings.minItemsRequired || 1)) {
-    throw new OrderInputError(
-      `Please select at least ${currentSettings.minItemsRequired || 1} item(s) for your hamper`
-    );
-  }
 
   // 3. Wrapping validation
   let wrappingPrice = 0;

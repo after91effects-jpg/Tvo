@@ -21,11 +21,15 @@ export async function GET(req: Request) {
   try {
     if (slug) {
       const row = data.prepare(`${BASE_SELECT} WHERE p.slug=? LIMIT 1`).get(slug);
-      return ok(serializeProduct(row));
+      const res = ok(serializeProduct(row));
+      res.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
+      return res;
     }
     if (id) {
       const row = data.prepare(`${BASE_SELECT} WHERE p.id=? LIMIT 1`).get(id);
-      return ok(serializeProduct(row));
+      const res = ok(serializeProduct(row));
+      res.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
+      return res;
     }
     const ids = url.searchParams.get('ids') || '';
     if (ids) {
@@ -127,7 +131,9 @@ export async function GET(req: Request) {
       .prepare(`${BASE_SELECT}${joinClause} WHERE ${where} ORDER BY ${orderBy} LIMIT ? OFFSET ?`)
       .all(...params, limit, offset);
     const count = (data.prepare(`SELECT COUNT(*) AS c FROM products p LEFT JOIN categories c ON p.category_id=c.id${joinClause} WHERE ${where}`).get(...params) as any)?.c ?? 0;
-    return ok({ products: rows.map(serializeProduct), total: count });
+    const res = ok({ products: rows.map(serializeProduct), total: count });
+    res.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
+    return res;
   } catch (e: any) {
     return err(e.message || 'Error fetching products', 500);
   }
