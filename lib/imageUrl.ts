@@ -4,14 +4,16 @@
 // WordPress "resized" variants (e.g. "Pineapple-Cake-100x100.png") are remapped
 // to the full-size file so storefront images are never served from blurry thumbs.
 export function normalizeImageUrl(url: string): string {
-  if (!url) return url;
+  if (!url) return '';
   let u = String(url).trim();
-  if (!u) return u;
+  if (!u) return '';
   // Preserve data URIs and foreign external URLs untouched.
   if (!/^https?:\/\/(www\.)?tvoflavours\.com/i.test(u) && /^[a-z][a-z0-9+.-]*:/i.test(u)) return u;
   // Rewrite the legacy WP origin to the self-hosted static dir.
   u = u.replace(/^https?:\/\/(www\.)?tvoflavours\.com\/wp-content/i, '');
   u = u.replace(/^https?:\/\/(www\.)?tvoflavours\.com/i, '/');
+  // Also strip standalone or relative /wp-content/ prefix
+  u = u.replace(/^\/?wp-content\//i, '/');
   // Strip query parameters
   u = u.split('?')[0];
   // Collapse "." and ".." segments and root-anchor the path.
@@ -52,7 +54,33 @@ export function isSafeMediaUrl(raw: string): boolean {
 
 export const DEFAULT_FALLBACK_IMAGE = '/uploads/2026/05/Belgian-Chocolate-Cake-w700.webp';
 export const DEFAULT_BANNER_FALLBACK = '/images/products/uploads/Banner_3270x320.webp';
-export const DEFAULT_CAKE_FALLBACK = 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=800&q=80';
+export const DEFAULT_CAKE_FALLBACK = '/uploads/2026/05/Belgian-Chocolate-Cake-w700.webp';
+
+/**
+ * Safely resolves the category image URL from any category object, story object, or URL string.
+ * Automatically normalizes legacy paths, strips /wp-content/, selects medium webp if available,
+ * and falls back to DEFAULT_FALLBACK_IMAGE when missing or invalid.
+ */
+export function resolveCategoryImageUrl(categoryOrUrl: any, preferMedium: boolean = true): string {
+  if (!categoryOrUrl) return DEFAULT_FALLBACK_IMAGE;
+
+  let rawUrl = '';
+  if (typeof categoryOrUrl === 'string') {
+    rawUrl = categoryOrUrl;
+  } else if (typeof categoryOrUrl === 'object') {
+    rawUrl = categoryOrUrl.image || categoryOrUrl.imageUrl || categoryOrUrl.thumbnail || '';
+  }
+
+  const normalized = normalizeImageUrl(rawUrl);
+  if (!normalized) return DEFAULT_FALLBACK_IMAGE;
+
+  if (preferMedium) {
+    const medium = mediumImageUrl(normalized);
+    if (medium) return medium;
+  }
+
+  return normalized;
+}
 
 /**
  * Safely resolves the primary image URL for any product or image object.

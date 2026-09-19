@@ -2630,7 +2630,7 @@ export const ALL_FLAT_CATEGORIES: Category[] = MASTER_5_MAIN_CATEGORIES.map((mai
   name: main.name,
   slug: main.slug,
   description: main.shortDescription,
-  image: main.image,
+  image: main.image ? (main.image.replace(/^https?:\/\/(www\.)?tvoflavours\.com\/wp-content/i, '').replace(/^https?:\/\/(www\.)?tvoflavours\.com/i, '/').replace(/^\/?wp-content\//i, '/')) : main.image,
   featured: true,
   itemCount: 20,
   subcategories: main.subcategories.map((sub) => ({

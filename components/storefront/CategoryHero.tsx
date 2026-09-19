@@ -3,7 +3,7 @@
 import React from 'react';
 import { ChevronRight, Sparkles, ShieldCheck, Truck, Home } from 'lucide-react';
 import { MASTER_5_MAIN_CATEGORIES, MainCategoryHierarchy, HierarchySubCategory, HierarchyChildCategory } from '../../lib/masterCatalogHierarchy';
-import { normalizeImageUrl, handleImageFallback, DEFAULT_CAKE_FALLBACK } from '../../lib/imageUrl';
+import { resolveCategoryImageUrl, handleImageFallback, DEFAULT_FALLBACK_IMAGE } from '../../lib/imageUrl';
 
 interface CategoryHeroProps {
   selectedCategorySlug: string;
@@ -49,8 +49,8 @@ export const CategoryHero: React.FC<CategoryHeroProps> = ({
   // Fallback defaults if non-standard slug is passed
   const title = childMatch?.name || subMatch?.name || mainMatch?.name || selectedCategorySlug.replace(/-/g, ' ').toUpperCase();
   const h1 = childMatch?.h1 || subMatch?.h1 || mainMatch?.h1 || `${title} Collection`;
-  const rawHeroImage = childMatch?.image || subMatch?.image || mainMatch?.image || DEFAULT_CAKE_FALLBACK;
-  const heroImage = normalizeImageUrl(rawHeroImage);
+  const rawHeroImage = childMatch?.image || subMatch?.image || mainMatch?.image || DEFAULT_FALLBACK_IMAGE;
+  const heroImage = resolveCategoryImageUrl(rawHeroImage, true);
   const desc = childMatch?.seoDescription || subMatch?.seoDescription || mainMatch?.seoDescription || `Discover our handcrafted ${title.toLowerCase()} baked fresh to order using 100% pure ingredients.`;
 
   const breadcrumbs: { label: string; slug?: string }[] = [{ label: 'Home' }];
@@ -151,7 +151,7 @@ export const CategoryHero: React.FC<CategoryHeroProps> = ({
               <img
                 src={heroImage}
                 alt={title}
-                onError={(e) => handleImageFallback(e, heroImage)}
+                onError={(e) => handleImageFallback(e, rawHeroImage, DEFAULT_FALLBACK_IMAGE)}
                 className="w-full h-full object-cover"
                 loading="lazy"
               />

@@ -1,8 +1,8 @@
 'use client';
 
 import React from 'react';
-import Image from 'next/image';
 import { Sparkles, Heart, Flame, Gift, Cake, Coffee, Leaf, Smile, Sun, Package } from 'lucide-react';
+import { resolveCategoryImageUrl, handleImageFallback, DEFAULT_FALLBACK_IMAGE } from '../../lib/imageUrl';
 
 interface CategoryStory {
   id: string;
@@ -18,67 +18,67 @@ const CATEGORY_STORIES: CategoryStory[] = [
     id: 'story-birthday',
     name: 'Birthday',
     slug: 'birthday',
-    imageUrl: 'https://tvoflavours.com/wp-content/uploads/2026/05/Choco-Chip-Truffle-Cake.png',
+    imageUrl: '/uploads/2026/05/Choco-Chip-Truffle-Cake.png',
     badge: 'POPULAR',
   },
   {
     id: 'story-mango',
     name: 'Mango Special',
     slug: 'mango-cakes',
-    imageUrl: 'https://tvoflavours.com/wp-content/uploads/2026/08/Classic-Mango-cream-cake.png',
+    imageUrl: '/uploads/2026/08/Classic-Mango-cream-cake.png',
     badge: 'SEASONAL',
   },
   {
     id: 'story-chocolate',
     name: 'Chocolate',
     slug: 'chocolate',
-    imageUrl: 'https://tvoflavours.com/wp-content/uploads/2026/05/Belgian-Chocolate-Cake.png',
+    imageUrl: '/uploads/2026/05/Belgian-Chocolate-Cake.png',
     badge: '70% COCOA',
   },
   {
     id: 'story-kunafa',
     name: 'Dubai Kunafa',
     slug: 'trending-cakes',
-    imageUrl: 'https://tvoflavours.com/wp-content/uploads/2026/05/Kunafa-Dubai-Cake.png',
+    imageUrl: '/uploads/2026/05/Kunafa-Dubai-Cake.png',
     badge: 'VIRAL',
   },
   {
     id: 'story-fruit',
     name: 'Fresh Pineapple',
     slug: 'fruit-cakes',
-    imageUrl: 'https://tvoflavours.com/wp-content/uploads/2026/05/Pineapple-Cake.png',
+    imageUrl: '/uploads/2026/05/Pineapple-Cake.png',
   },
   {
     id: 'story-anniversary',
     name: 'Anniversary',
     slug: 'anniversary',
-    imageUrl: 'https://tvoflavours.com/wp-content/uploads/2026/05/Hearts-Of-Love-Chocolate-Cake.png',
+    imageUrl: '/uploads/2026/05/Hearts-Of-Love-Chocolate-Cake.png',
   },
   {
     id: 'story-desserts',
     name: 'Pastries & Slices',
     slug: 'desserts',
-    imageUrl: 'https://tvoflavours.com/wp-content/uploads/2026/05/Blueberry-Cheesecake-Pastry1.webp',
+    imageUrl: '/uploads/2026/05/Blueberry-Cheesecake-Pastry1.webp',
   },
   {
     id: 'story-hampers',
     name: 'Diwali Hampers',
     slug: 'hampers',
-    imageUrl: 'https://tvoflavours.com/wp-content/uploads/2026/05/Golden-Bliss-Diwali-Hamper.png',
+    imageUrl: '/uploads/2026/05/Golden-Bliss-Diwali-Hamper.png',
     badge: 'FESTIVE',
   },
   {
     id: 'story-rakhi',
     name: 'Rakhi Gifts',
     slug: 'rakhi-hampers',
-    imageUrl: 'https://tvoflavours.com/wp-content/uploads/2026/07/Colourful-Peacock-Rakhis-With-Delightful-Treats.png',
+    imageUrl: '/uploads/2026/07/Colourful-Peacock-Rakhis-With-Delightful-Treats.png',
     badge: 'SETS',
   },
   {
     id: 'story-eggless',
     name: '100% Eggless',
     slug: 'eggless',
-    imageUrl: 'https://tvoflavours.com/wp-content/uploads/2026/05/Eggless-Tiramisu-Cake.png',
+    imageUrl: '/uploads/2026/05/Eggless-Tiramisu-Cake.png',
     isEggless: true,
   },
 ];
@@ -97,6 +97,7 @@ export const CategoryStories: React.FC<CategoryStoriesProps> = ({
       <div className="flex items-center justify-between sm:justify-center gap-4 sm:gap-6 min-w-max px-2">
         {CATEGORY_STORIES.map((story) => {
           const isSelected = selectedCategory === story.slug;
+          const displayUrl = resolveCategoryImageUrl(story.imageUrl, true);
 
           return (
             <button
@@ -117,8 +118,9 @@ export const CategoryStories: React.FC<CategoryStoriesProps> = ({
                 >
                   <div className="w-full h-full rounded-full overflow-hidden bg-white dark:bg-zinc-900 border-2 border-white dark:border-zinc-900 relative shadow-inner">
                     <img
-                      src={story.imageUrl}
+                      src={displayUrl}
                       alt={story.name}
+                      onError={(e) => handleImageFallback(e, story.imageUrl, DEFAULT_FALLBACK_IMAGE)}
                       className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                       loading="lazy"
                     />

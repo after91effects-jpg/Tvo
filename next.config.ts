@@ -15,6 +15,14 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  async rewrites() {
+    return [
+      {
+        source: '/wp-content/uploads/:path*',
+        destination: '/uploads/:path*',
+      },
+    ];
+  },
   images: {
     unoptimized: true,
     remotePatterns: [
