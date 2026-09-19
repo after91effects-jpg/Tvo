@@ -428,12 +428,16 @@ let ordersUrl = '/api/orders';
         (w) => w.label === item.weight
       ) || fallbackOption;
 
-      const addons: CartItemAddon[] = (item.addons || []).map((addonName, idx) => ({
-        id: `addon-${idx}`,
-        name: addonName,
-        price: 0,
-        category: 'decor',
-      }));
+      const addons: CartItemAddon[] = (item.addons || []).map((addonItem: any, idx) => {
+        const name = typeof addonItem === 'string' ? addonItem : (addonItem?.name || 'Add-on');
+        const price = typeof addonItem === 'object' && addonItem?.price ? Number(addonItem.price) : 0;
+        return {
+          id: `addon-${idx}`,
+          name,
+          price,
+          category: 'decor',
+        };
+      });
 
       addToCart(
         matchingProduct,
@@ -965,14 +969,22 @@ let ordersUrl = '/api/orders';
 
                             {item.addons && item.addons.length > 0 && (
                               <div className="flex flex-wrap gap-1 mt-1">
-                                {item.addons.map((a, aIdx) => (
-                                  <span
-                                    key={aIdx}
-                                    className="px-1.5 py-0.5 rounded-md bg-[var(--primary-light)] text-[var(--primary)] text-[10px] font-semibold"
-                                  >
-                                    + {a}
-                                  </span>
-                                ))}
+                                {item.addons.map((a: any, aIdx) => {
+                                  const addonLabel =
+                                    typeof a === 'string'
+                                      ? a
+                                      : a?.name
+                                      ? `${a.name}${a.price ? ` (₹${a.price})` : ''}`
+                                      : String(a ?? '');
+                                  return (
+                                    <span
+                                      key={aIdx}
+                                      className="px-1.5 py-0.5 rounded-md bg-[var(--primary-light)] text-[var(--primary)] text-[10px] font-semibold"
+                                    >
+                                      + {addonLabel}
+                                    </span>
+                                  );
+                                })}
                               </div>
                             )}
                           </div>

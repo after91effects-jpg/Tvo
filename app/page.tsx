@@ -59,7 +59,6 @@ import { ProfileView } from '../components/storefront/ProfileView';
 import { AddressBookView } from '../components/storefront/AddressBookView';
 import { OrderNotificationToasts } from '../components/common/OrderNotificationToasts';
 import { useNotifications } from '../context/NotificationContext';
-
 // Admin Components
 import { AdminHeader } from '../components/admin/AdminHeader';
 import { AdminSidebar, AdminTab } from '../components/admin/AdminSidebar';
@@ -123,14 +122,14 @@ function normalizeProductRecord(p: any): Product {
   } catch { rawVideos = []; }
   const normalizedVideos = Array.isArray(rawVideos)
     ? rawVideos.filter((v: any) => v && (typeof v === 'string' ? v : v.url)).map((v: any) => {
-        const rawUrl = typeof v === 'string' ? v : v.url;
-        const url = normalizeImageUrl(rawUrl);
-        return {
-          url,
-          posterUrl: typeof v === 'object' && v.posterUrl ? normalizeImageUrl(v.posterUrl) : '',
-          caption: typeof v === 'object' && v.caption ? v.caption : '',
-        };
-      }).filter((v: any) => v.url)
+      const rawUrl = typeof v === 'string' ? v : v.url;
+      const url = normalizeImageUrl(rawUrl);
+      return {
+        url,
+        posterUrl: typeof v === 'object' && v.posterUrl ? normalizeImageUrl(v.posterUrl) : '',
+        caption: typeof v === 'object' && v.caption ? v.caption : '',
+      };
+    }).filter((v: any) => v.url)
     : [];
 
   let weightOptions: any[] = [];
@@ -489,7 +488,7 @@ export default function Home() {
         setIsLoginOpen(true);
       } else if (view === 'forgot') {
         setIsLoginOpen(true);
-      } else if (view === 'track') {
+      } else if (view === 'track' || view === 'delivery') {
         if (order) setTrackingOrderNumber(order);
         setStoreSubView('track');
       } else if (view === 'wishlist') {
@@ -574,7 +573,7 @@ export default function Home() {
       return;
     }
 
-    if (view === 'track') {
+    if (view === 'track' || view === 'delivery') {
       if (param) setTrackingOrderNumber(param);
       setStoreSubView('track');
       setActiveView('storefront');
@@ -1013,7 +1012,7 @@ export default function Home() {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ type: 'hamper_settings', action: 'save', settings: s }),
-                    }).catch(() => {});
+                    }).catch(() => { });
                   }}
                 />
               )}
@@ -1079,31 +1078,31 @@ export default function Home() {
 
                 {/* Build Your Own Hamper CTA */}
                 {hamperSettings.enabled && (
-                <section className="w-full px-4 sm:px-6 lg:px-8 xl:px-12">
-                  <div
-                    onClick={() => setIsHamperBuilderOpen(true)}
-                    className={`relative overflow-hidden rounded-3xl bg-gradient-to-r ${hamperSettings.banner.gradient} p-6 sm:p-8 cursor-pointer group hover:shadow-2xl transition-all duration-300`}
-                  >
-                    <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4wNSI+PHBhdGggZD0iTTM2IDM0djItSDI0di0yaDEyem0wLTRWMjhIMjR2Mmgxem0tMSA4bC04LTggMS40LTEuNEwyMyAzNS42bDctNyAxLjQgMS40TDI0IDM4aDEyeiIvPjwvZz48L2c+PC9zdmc+')] opacity-30" />
-                    <div className="relative z-10 flex flex-col sm:flex-row items-center gap-4 sm:gap-6">
-                      <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-4xl sm:text-5xl shadow-lg group-hover:scale-110 transition-transform">
-                        {hamperSettings.banner.emoji}
-                      </div>
-                      <div className="text-center sm:text-left flex-1">
-                        <h3 className="text-xl sm:text-2xl font-bold text-white font-display">
-                          {hamperSettings.banner.title}
-                        </h3>
-                        <p className="text-sm text-white/80 mt-1">
-                          {hamperSettings.banner.subtitle}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2 px-5 py-3 rounded-full bg-white text-[var(--primary)] font-bold text-sm shadow-lg group-hover:bg-white/90 transition-colors">
-                        <span>Start Building</span>
-                        <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                  <section className="w-full px-4 sm:px-6 lg:px-8 xl:px-12">
+                    <div
+                      onClick={() => setIsHamperBuilderOpen(true)}
+                      className={`relative overflow-hidden rounded-3xl bg-gradient-to-r ${hamperSettings.banner.gradient} p-6 sm:p-8 cursor-pointer group hover:shadow-2xl transition-all duration-300`}
+                    >
+                      <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4wNSI+PHBhdGggZD0iTTM2IDM0djItSDI0di0yaDEyem0wLTRWMjhIMjR2Mmgxem0tMSA4bC04LTggMS40LTEuNEwyMyAzNS42bDctNyAxLjQgMS40TDI0IDM4aDEyeiIvPjwvZz48L2c+PC9zdmc+')] opacity-30" />
+                      <div className="relative z-10 flex flex-col sm:flex-row items-center gap-4 sm:gap-6">
+                        <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-4xl sm:text-5xl shadow-lg group-hover:scale-110 transition-transform">
+                          {hamperSettings.banner.emoji}
+                        </div>
+                        <div className="text-center sm:text-left flex-1">
+                          <h3 className="text-xl sm:text-2xl font-bold text-white font-display">
+                            {hamperSettings.banner.title}
+                          </h3>
+                          <p className="text-sm text-white/80 mt-1">
+                            {hamperSettings.banner.subtitle}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 px-5 py-3 rounded-full bg-white text-[var(--primary)] font-bold text-sm shadow-lg group-hover:bg-white/90 transition-colors">
+                          <span>Start Building</span>
+                          <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </section>
+                  </section>
                 )}
 
                 {/* Category Stories Circular Bubbles */}
@@ -1292,27 +1291,27 @@ export default function Home() {
           />
 
           {/* Cart Drawer */}
-           <CartDrawer 
-             onCheckout={() => setIsCheckoutOpen(true)} 
-             occasionSlug={activeOccasion?.slug || undefined}
-           />
+          <CartDrawer
+            onCheckout={() => setIsCheckoutOpen(true)}
+            occasionSlug={activeOccasion?.slug || undefined}
+          />
 
-           {/* Custom Hamper Builder */}
-           <CustomHamperBuilder
-             products={products}
-             isOpen={isHamperBuilderOpen}
-             onClose={() => setIsHamperBuilderOpen(false)}
-             onOpenCheckout={() => setIsCheckoutOpen(true)}
-             settings={hamperSettings}
-           />
+          {/* Custom Hamper Builder */}
+          <CustomHamperBuilder
+            products={products}
+            isOpen={isHamperBuilderOpen}
+            onClose={() => setIsHamperBuilderOpen(false)}
+            onOpenCheckout={() => setIsCheckoutOpen(true)}
+            settings={hamperSettings}
+          />
 
-           {/* Checkout Modal */}
-           <CheckoutModal
-             isOpen={isCheckoutOpen}
-             onClose={() => setIsCheckoutOpen(false)}
-             onOrderSuccess={handleOrderSuccess}
-             occasionSlug={activeOccasion?.slug || undefined}
-           />
+          {/* Checkout Modal */}
+          <CheckoutModal
+            isOpen={isCheckoutOpen}
+            onClose={() => setIsCheckoutOpen(false)}
+            onOrderSuccess={handleOrderSuccess}
+            occasionSlug={activeOccasion?.slug || undefined}
+          />
 
           {/* Admin Login Modal */}
           <AdminLoginModal

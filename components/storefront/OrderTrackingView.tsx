@@ -38,6 +38,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { Order, OrderStatus } from '../../lib/types';
+import { normalizeOrders, normalizeOrderRow } from '../../lib/orderNormalizer';
 import { Modal } from '../common/Modal';
 
 interface OrderTrackingViewProps {
@@ -759,7 +760,7 @@ export const PrintableOrderSlip: React.FC<{ order: Order; onPrint?: () => void }
                   )}
                   {item.addons && item.addons.length > 0 && (
                     <div className="text-[10px] text-gray-500 mt-0.5">
-                      Add-ons: {item.addons.join(', ')}
+                      Add-ons: {item.addons.map((a: any) => (typeof a === 'string' ? a : (a?.name || String(a ?? '')))).join(', ')}
                     </div>
                   )}
                 </td>
@@ -847,9 +848,15 @@ export const PrintableOrderSlip: React.FC<{ order: Order; onPrint?: () => void }
                 <span className="text-gray-400">•</span>
                 <div>
                   <strong className="text-gray-900">{hist.status}</strong>{' '}
-                  <span className="text-gray-500 text-[10px]">
-                    ({new Date(hist.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })})
-                  </span>
+                  {(() => {
+                    const ts = hist.timestamp || (hist as any).created_at || (hist as any).date;
+                    const valid = ts && !isNaN(new Date(ts).getTime());
+                    return valid ? (
+                      <span className="text-gray-500 text-[10px]">
+                        ({new Date(ts).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })})
+                      </span>
+                    ) : null;
+                  })()}
                   {hist.note && <div className="text-gray-500 text-[10px]">{hist.note}</div>}
                 </div>
               </div>
@@ -899,40 +906,32 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
         const res = await fetch(url);
         const data = await res.json();
         if (!isMounted) return;
-        const loaded: Order[] = (data.orders || []).map((o: any) => ({
-          id: o.id || o.order_number,
-          orderNumber: o.order_number || o.orderNumber,
-          userId: o.user_id || o.userId,
-          customer: o.customer || {
-            name: o.customer_name,
-            phone: o.customer_phone,
-            email: o.customer_email,
-            address: o.customer_address,
-            pincode: o.pincode,
-            city: o.city,
-            deliveryDate: o.delivery_date,
-            deliverySlot: o.delivery_slot,
-          },
-          items: typeof o.items === 'string' ? JSON.parse(o.items) : (o.items || []),
-          subtotal: o.subtotal,
-          deliveryFee: o.delivery_fee,
-          slotSurcharge: o.slot_surcharge,
-          discount: o.discount,
-          total: o.total,
-          status: o.status,
-          paymentMethod: o.payment_method,
-          paymentStatus: o.payment_status,
-          createdAt: o.created_at || o.createdAt,
-          updatedAt: o.updated_at || o.updatedAt,
-        }));
+        const loaded: Order[] = normalizeOrders(data.orders || []);
         setAllOrders(loaded);
 
-        const activeSearch = activeSearchRef.current.trim() || initialOrderNumber.trim();
+        const activeSearch = (activeSearchRef.current || initialOrderNumber || '').trim();
         if (activeSearch) {
           const found = loaded.find(
-            (o) => o.orderNumber.toLowerCase() === activeSearch.toLowerCase()
+            (o) => (o.orderNumber || '').toLowerCase() === activeSearch.toLowerCase()
           );
-          if (found) setCurrentOrder(found);
+          if (found) {
+            setCurrentOrder(found);
+          } else {
+            // Fetch directly from server by order number if not present in session prefetch
+            try {
+              const directRes = await fetch(`/api/orders?order=${encodeURIComponent(activeSearch)}`);
+              if (directRes.ok) {
+                const directData = await directRes.json();
+                const directRow = directData?.order || directData;
+                if (directRow && (directRow.id || directRow.order_number || directRow.orderNumber)) {
+                  const normalized = normalizeOrderRow(directRow);
+                  if (isMounted) setCurrentOrder(normalized);
+                }
+              }
+            } catch (err) {
+              console.warn('Could not fetch direct order for tracking:', err);
+            }
+          }
         } else if (loaded.length > 0) {
           setCurrentOrder((prev) => prev || loaded[0]);
           setSearchOrderNumber((prev) => prev || loaded[0].orderNumber);
@@ -959,7 +958,7 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
     setIsLoading(true);
     setSearched(true);
     const found = allOrders.find(
-      (o) => o.orderNumber.toLowerCase() === q.toLowerCase()
+      (o) => (o.orderNumber || '').toLowerCase() === q.toLowerCase()
     );
     if (found) {
       setCurrentOrder(found);
@@ -980,39 +979,12 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
         return;
       }
       const o = data?.order || data;
-      if (!o || (!o.id && !o.order_number)) {
+      if (!o || (!o.id && !o.order_number && !o.orderNumber)) {
         setCurrentOrder(null);
         return;
       }
-      const loaded = o
-        ? [{
-            id: o.id || o.order_number,
-            orderNumber: o.order_number || o.orderNumber,
-            userId: o.user_id || o.userId,
-            customer: o.customer || {
-              name: o.customer_name,
-              phone: o.customer_phone,
-              email: o.customer_email,
-              address: o.customer_address,
-              pincode: o.pincode,
-              city: o.city,
-              deliveryDate: o.delivery_date,
-              deliverySlot: o.delivery_slot,
-            },
-            items: typeof o.items === 'string' ? JSON.parse(o.items) : (o.items || []),
-            subtotal: o.subtotal,
-            deliveryFee: o.delivery_fee,
-            slotSurcharge: o.slot_surcharge,
-            discount: o.discount,
-            total: o.total,
-            status: o.status,
-            paymentMethod: o.payment_method,
-            paymentStatus: o.payment_status,
-            createdAt: o.created_at || o.createdAt,
-            updatedAt: o.updated_at || o.updatedAt,
-          }]
-        : [];
-      setCurrentOrder((loaded[0] as unknown as Order | null) || null);
+      const normalized = normalizeOrderRow(o);
+      setCurrentOrder(normalized);
     } catch (err) {
       setCurrentOrder(null);
     } finally {
@@ -1345,12 +1317,18 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
                             withDot={false}
                             withIcon={false}
                           />
-                          <span className="text-[10px] text-[var(--text-subtle)] font-mono">
-                            {new Date(hist.timestamp).toLocaleTimeString('en-IN', {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </span>
+                          {(() => {
+                            const ts = hist.timestamp || (hist as any).created_at || (hist as any).date;
+                            const valid = ts && !isNaN(new Date(ts).getTime());
+                            return valid ? (
+                              <span className="text-[10px] text-[var(--text-subtle)] font-mono">
+                                {new Date(ts).toLocaleTimeString('en-IN', {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}
+                              </span>
+                            ) : null;
+                          })()}
                         </div>
                         {hist.note && (
                           <p className="text-[11px] text-[var(--text-muted)] mt-1">{hist.note}</p>
@@ -1415,7 +1393,7 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
                     )}
                     {item.addons && item.addons.length > 0 && (
                       <div className="text-[10px] text-[var(--text-subtle)] mt-1">
-                        Add-ons: {item.addons.join(', ')}
+                        Add-ons: {item.addons.map((a: any) => (typeof a === 'string' ? a : (a?.name || String(a ?? '')))).join(', ')}
                       </div>
                     )}
                   </div>
@@ -1568,8 +1546,10 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
         </div>
       )}
 
-      {/* Embedded print media CSS to ensure clean printoutput without web app chrome */}
-      <style jsx global>{`
+      {/* Embedded print media CSS to ensure clean print output without web app chrome */}
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
         @media print {
           @page {
             margin: 12mm 15mm;
@@ -1609,7 +1589,9 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
             color: #111827 !important;
           }
         }
-      `}</style>
+      `,
+        }}
+      />
 
       {/* Contact Concierge */}
       <div className="text-center pt-4 print:hidden">
