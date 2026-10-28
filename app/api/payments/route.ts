@@ -4,6 +4,7 @@ import {
   verifyPaymentSignature,
   getSafeConfigStatus,
   getRazorpayKeyId,
+  getRazorpayMode,
 } from '../../../lib/server/razorpay';
 
 export const runtime = 'nodejs';
@@ -20,18 +21,22 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const body = await req.json().catch(() => ({}));
-  const action = body.action || 'create';
-  const user = getCurrentUser(req);
-
   try {
+    const body = await req.json().catch(() => ({}));
+    const action = String(body.action || 'create_order');
+    const user = getCurrentUser(req);
+
     // -------------------------------------------------------------------------
-    // 1. CREATE PAYMENT ORDER (Server Authoritative)
+    // 1. INITIALIZE PAYMENT GATEWAY ORDER
     // -------------------------------------------------------------------------
     if (action === 'create' || action === 'create_order') {
       const safeConfig = getSafeConfigStatus();
       if (!safeConfig.isActive) {
         return err('Online payments are temporarily disabled by the bakery. Please choose Cash on Delivery or contact us.', 400);
+      }
+
+      if (!safeConfig.configured && process.env.NODE_ENV === 'production') {
+        return err('Online payments are currently unavailable. Please select Cash on Delivery or contact bakery support.', 503);
       }
 
       const orderNumber = String(body.orderNumber || '').trim();
@@ -50,6 +55,7 @@ export async function POST(req: Request) {
       }
 
       const amountPaise = Math.round(totalAmount * 100);
+      const isProduction = process.env.NODE_ENV === 'production' || getRazorpayMode() === 'LIVE';
 
       // Check if an existing pending payment attempt can be reused or create new
       const rzOrder = await createRazorpayOrder({
@@ -63,7 +69,7 @@ export async function POST(req: Request) {
         },
       });
 
-      if (rzOrder.error || !rzOrder.id) {
+      if (rzOrder.error || !rzOrder.id || (isProduction && rzOrder.id.startsWith('order_test_'))) {
         return err(rzOrder.error || 'Failed to initialize payment gateway order', 502);
       }
 
@@ -124,6 +130,19 @@ export async function POST(req: Request) {
 
       const order = db.prepare('SELECT * FROM orders WHERE order_number=?').get(orderNumber) as any;
       if (!order) return err('Order not found', 404);
+
+      const isProduction = process.env.NODE_ENV === 'production' || getRazorpayMode() === 'LIVE';
+
+      // Never accept mock order IDs or mock payment IDs in production mode
+      if (isProduction) {
+        if (razorpayOrderId.startsWith('order_test_') || razorpayPaymentId.startsWith('pay_test_')) {
+          logAudit(user, 'PAYMENT_MOCK_REJECTED', 'Payment', order.order_number, 'Attempted mock payment in production');
+          return err('Mock or test payments cannot be accepted in production mode', 400);
+        }
+        if (order.razorpay_order_id && order.razorpay_order_id.startsWith('order_test_')) {
+          return err('Invalid order payment record', 400);
+        }
+      }
 
       // Verify HMAC-SHA256 signature
       const sigCheck = verifyPaymentSignature({

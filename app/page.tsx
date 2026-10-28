@@ -1,5 +1,6 @@
 'use client';
 import { normalizeSellingUnit, isPieceOrDiscreteUnit } from '../lib/sellingUnit';
+import { getProductOptions } from '../lib/productOptions';
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -144,14 +145,7 @@ function normalizeProductRecord(p: any): Product {
   
   const basePrice = Number(p.price ?? p.salePrice ?? p.regularPrice ?? 0);
   const isPiece = isPieceOrDiscreteUnit(p.sellingUnit);
-  const normalizedOptions = weightOptions.length ? weightOptions.map((w: any) => ({
-    label: w.label || w.value || `${w.weightKg || 0.5} kg`,
-    weightKg: isPiece
-      ? Number(w.weightKg ?? w.weight_kg ?? 0)
-      : Number(w.weightKg ?? w.weight_kg ?? (parseFloat(w.label) || 0.5)),
-    price: Number(w.price ?? basePrice),
-    mrp: Number(w.mrp ?? p.regularPrice ?? basePrice),
-  })) : [{ label: isPiece ? '1 piece' : '1 kg', weightKg: isPiece ? 0 : 1, price: basePrice, mrp: Number(p.regularPrice ?? basePrice) }];
+  const normalizedOptions = getProductOptions({ weightOptions, sellingUnit: p.sellingUnit, price: basePrice, regularPrice: p.regularPrice, weightKg: p.weightKg });
 
   return {
     id: String(p.id || p.slug),
@@ -185,6 +179,9 @@ function normalizeProductRecord(p: any): Product {
     featured: Boolean(p.featured),
     addons: p.addons || undefined,
     stock: p.stock ?? 999,
+    trackInventory: p.trackInventory ?? Boolean(p.manageStock ?? p.manage_stock ?? 1),
+    manageStock: p.manageStock ?? p.manage_stock ?? 1,
+    lowStockThreshold: p.lowStockThreshold ?? p.low_stock_threshold ?? 5,
     stockStatus: p.stockStatus || (p.stock <= 0 ? 'out_of_stock' : 'in_stock'),
     badges: Array.isArray(p.badges) ? p.badges : [],
     showFlavour: p.showFlavour !== false,
@@ -502,7 +499,12 @@ export default function Home() {
       } else if (view === 'about' || view === 'contact' || view === 'faq') {
         setStoreSubView(view as any);
       } else if (view === 'admin') {
-        if (isAdmin) setActiveView('admin');
+        if (isAdmin) {
+          setActiveView('admin');
+          const tab = sp.get('tab');
+          const validTabs: AdminTab[] = ['dashboard', 'analytics', 'products', 'categories', 'ingredients', 'media', 'orders', 'payments', 'delivery', 'reviews', 'marketing', 'woocommerce', 'security', 'hamper', 'festival', 'staff', 'health'];
+          if (tab && validTabs.includes(tab as AdminTab)) setAdminTab(tab as AdminTab);
+        }
         else setIsAdminLoginOpen(true);
       }
 

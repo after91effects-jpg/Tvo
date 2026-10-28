@@ -16,19 +16,26 @@ export async function POST(req: Request) {
   const signature = req.headers.get('x-razorpay-signature') || '';
   const webhookSecret = getRazorpayWebhookSecret();
 
-  // If webhook secret is configured, strictly enforce signature verification
-  if (webhookSecret) {
-    const check = verifyWebhookSignature({ rawBody, signature });
-    if (!check.valid) {
-      console.warn('Webhook signature check failed:', check.error);
-      try {
-        db.prepare(`
-          INSERT INTO webhook_events (event_id, event_type, payload, signature, status, error_message, received_at)
-          VALUES (?, 'unverified', ?, ?, 'rejected', ?, datetime('now'))
-        `).run(`unverified_${Date.now()}`, rawBody.slice(0, 1000), signature, check.error || 'Invalid signature');
-      } catch {}
-      return NextResponse.json({ error: 'Invalid webhook signature' }, { status: 400 });
-    }
+  // Strictly enforce server-side webhook signature verification
+  if (!webhookSecret) {
+    console.error('RAZORPAY_WEBHOOK_SECRET is not configured');
+    return NextResponse.json({ error: 'Webhook secret is not configured' }, { status: 500 });
+  }
+
+  if (!signature) {
+    return NextResponse.json({ error: 'Missing x-razorpay-signature header' }, { status: 400 });
+  }
+
+  const check = verifyWebhookSignature({ rawBody, signature });
+  if (!check.valid) {
+    console.warn('Webhook signature check failed:', check.error);
+    try {
+      db.prepare(`
+        INSERT INTO webhook_events (event_id, event_type, payload, signature, status, error_message, received_at)
+        VALUES (?, 'unverified', ?, ?, 'rejected', ?, datetime('now'))
+      `).run(`unverified_${Date.now()}`, rawBody.slice(0, 1000), signature, check.error || 'Invalid signature');
+    } catch {}
+    return NextResponse.json({ error: check.error || 'Invalid webhook signature' }, { status: 400 });
   }
 
   let event: any = null;

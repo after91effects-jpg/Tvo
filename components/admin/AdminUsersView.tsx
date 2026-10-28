@@ -31,44 +31,39 @@ export const AdminUsersView: React.FC = () => {
   const [showModal, setShowModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [showPermissions, setShowPermissions] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: '',
     email: '',
     phone: '',
-    role: 'staff',
+    role: 'catalog_manager',
     status: 'active',
     password: '',
   });
 
-  const fetchUsers = () => {
+  const fetchUsers = async () => {
     setIsLoading(true);
-    fetch('/api/admin?type=admin_users')
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        setUsers(data?.users || []);
-        setIsLoading(false);
-      })
-      .catch(() => setIsLoading(false));
+    setLoadError('');
+    try {
+      const res = await fetch('/api/admin?type=admin_users');
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || 'Could not load staff members.');
+      setUsers(data.users || []);
+      setRoles(data.roles || []);
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : 'Could not load staff members.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const fetchRoles = () => {
-    fetch('/api/admin?type=admin_users')
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        setRoles(data?.roles || []);
-      });
-  };
-
-  useEffect(() => {
-    fetchUsers();
-    fetchRoles();
-  }, []);
+  useEffect(() => { fetchUsers(); }, []);
 
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name.trim() || !form.email.trim()) return;
-    if (form.password && form.password.length < 8) {
+    if (form.password.length < 8) {
       alert('Password must be at least 8 characters long.');
       return;
     }
@@ -76,12 +71,12 @@ export const AdminUsersView: React.FC = () => {
       const res = await fetch('/api/admin?type=admin_users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'create', ...form }),
+        body: JSON.stringify({ type: 'admin_users', action: 'create', ...form }),
       });
       const data = await res.json();
       if (res.ok && data.ok) {
         setShowModal(false);
-        setForm({ name: '', email: '', phone: '', role: 'staff', status: 'active', password: '' });
+        setForm({ name: '', email: '', phone: '', role: 'catalog_manager', status: 'active', password: '' });
         fetchUsers();
       } else {
         alert(data?.error || 'Could not create staff member.');
@@ -97,7 +92,7 @@ export const AdminUsersView: React.FC = () => {
       const res = await fetch('/api/admin?type=admin_users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'update', id: userId, role: newRole }),
+        body: JSON.stringify({ type: 'admin_users', action: 'update', id: userId, role: newRole }),
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
@@ -129,6 +124,7 @@ export const AdminUsersView: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {loadError && <p role="alert" className="text-sm text-[var(--danger)]">{loadError}</p>}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold font-display text-[var(--text-main)]">Staff & Permissions</h1>

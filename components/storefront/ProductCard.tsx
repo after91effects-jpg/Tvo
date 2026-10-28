@@ -1,6 +1,7 @@
 'use client';
 import { getSellingUnitLabel, isPieceOrDiscreteUnit } from '../../lib/sellingUnit';
 import { isProductOutOfStock, isProductLowStock } from '../../lib/inventory';
+import { getProductOptions } from '../../lib/productOptions';
 
 import React, { useState } from 'react';
 import { ShoppingBag, Star, Check, Sparkles, Flame, Eye, Heart, Zap } from 'lucide-react';
@@ -23,10 +24,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onViewProduct
   const isWishlisted = isInWishlist(product.id);
   const [justToggled, setJustToggled] = useState(false);
 
+  const weightOptions = getProductOptions(product);
   const [selectedWeight, setSelectedWeight] = useState<WeightOption>(
-    product.weightOptions?.[0] || (isPieceOrDiscreteUnit(product.sellingUnit)
-      ? { label: '1 piece', weightKg: 0, price: product.price || 699, mrp: product.regularPrice || 0 }
-      : { label: '0.5 kg', weightKg: 0.5, price: product.price || 699, mrp: product.regularPrice || 849 })
+    getProductOptions(product)[0]
   );
   const [isAdding, setIsAdding] = useState(false);
   const [isBuying, setIsBuying] = useState(false);
@@ -201,9 +201,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onViewProduct
           </p>
 
           {/* Weight Option Selector Pills (Desktop only) */}
-          {(product.weightOptions || []).length > 1 && (
+          {weightOptions.length > 1 && (
             <div className="hidden sm:flex mt-3 flex-wrap gap-1" onClick={(e) => e.stopPropagation()}>
-              {(product.weightOptions || []).slice(0, 3).map((w) => (
+              {weightOptions.slice(0, 3).map((w) => (
                 <button
                   key={w.label}
                   type="button"
@@ -230,7 +230,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onViewProduct
               </span>
               {getSellingUnitLabel(product.sellingUnit) && (
                 <span className="text-[11px] sm:text-xs font-normal text-[var(--text-muted)] font-sans">
-                  / {getSellingUnitLabel(product.sellingUnit)}
+                  / {selectedWeight.label}
                 </span>
               )}
               {selectedWeight.mrp && selectedWeight.mrp > selectedWeight.price && (

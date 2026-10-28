@@ -10,14 +10,12 @@ interface RelatedProductsProps {
 }
 
 export const RelatedProducts: React.FC<RelatedProductsProps> = ({ related, onViewProduct }) => {
-  if (!Array.isArray(related) || related.length === 0) return null;
-
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const ids = related.map((r) => r.id).filter(Boolean);
-    if (ids.length === 0) { setLoading(false); return; }
+    const ids = (Array.isArray(related) ? related : []).map((r) => r.id).filter(Boolean);
+    if (ids.length === 0) { setProducts([]); setLoading(false); return; }
 
     let cancelled = false;
     setLoading(true);

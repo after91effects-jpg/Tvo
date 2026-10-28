@@ -63,9 +63,7 @@ export const NewsletterSignup: React.FC = () => {
       setStatus('loading');
       setStatusMessage('');
 
-      // Best-effort subscription (no server dependency)
-      try {
-        await fetch('/api/contact', {
+      const response = await fetch('/api/contact', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -74,8 +72,11 @@ export const NewsletterSignup: React.FC = () => {
             message: `Newsletter subscription (interest: ${selectedInterest})`,
             type: 'newsletter',
           }),
-        });
-      } catch {}
+      });
+      const result = await response.json();
+      if (!response.ok || result.ok === false) {
+        throw new Error(result.error || 'Subscription failed. Please try again.');
+      }
 
       setStatus('success');
       setPromoCode('SWEET10');
@@ -92,18 +93,8 @@ export const NewsletterSignup: React.FC = () => {
       });
     } catch (err: any) {
       console.error('Newsletter subscription error:', err);
-      // Fallback graceful success for reliable user experience
-      setStatus('success');
-      setPromoCode('SWEET10');
-      setStatusMessage('Welcome to the Sweet Circle! Use your 10% welcome discount below.');
-
-      // Trigger Success Toast Notification in fallback mode too
-      showToast({
-        title: 'Welcome to the Sweet Circle! 🎉',
-        message: 'Your subscription is confirmed. Use promo code SWEET10 at checkout for 10% off.',
-        type: 'success',
-        duration: 7000,
-      });
+      setStatus('error');
+      setStatusMessage(err instanceof Error ? err.message : 'Subscription failed. Please try again.');
     }
   };
 

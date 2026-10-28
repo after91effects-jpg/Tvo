@@ -2,7 +2,8 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Product, WeightOption, CartItem, CartItemAddon, PromoCode, FlavourOption } from '../lib/types';
-import { DEFAULT_PROMO_CODES, DEFAULT_STORE_SETTINGS } from '../lib/seedData';
+import { DEFAULT_STORE_SETTINGS } from '../lib/seedData';
+import { validateCartCoupon } from '../lib/couponValidation';
 import { useLocalStorageJSON, useLocalStorageString } from '../lib/useLocalStorage';
 
 interface CartContextType {
@@ -168,8 +169,12 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (existingIndex > -1) {
         const updated = [...prev];
-        updated[existingIndex].quantity += quantity;
-        updated[existingIndex].totalPrice = updated[existingIndex].quantity * unitPrice;
+        const newQuantity = prev[existingIndex].quantity + quantity;
+        updated[existingIndex] = {
+          ...prev[existingIndex],
+          quantity: newQuantity,
+          totalPrice: newQuantity * unitPrice,
+        };
         return updated;
       } else {
         const newItem: CartItem = {
@@ -244,46 +249,13 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     try {
-      let promo: PromoCode | undefined = DEFAULT_PROMO_CODES.find((p) => p.code === cleanCode && p.active);
-      
-      if (!promo) {
-        try {
-          const res = await fetch('/api/coupons');
-          const data = await res.json();
-          const coupons = data.coupons || data || [];
-          const arr = Array.isArray(coupons) ? coupons : [];
-          const found = arr.find((c: any) => (c.code || '').toUpperCase() === cleanCode && (c.active || c.active === 1));
-          if (found) {
-            promo = {
-              code: found.code,
-              discountType: found.discountType || found.discount_type || 'flat',
-              discountValue: found.discountValue || found.discount_value || 0,
-              minOrderValue: found.minOrderValue || found.min_order_value || 0,
-              maxDiscount: found.maxDiscount || found.max_discount || 0,
-              active: true,
-              expiresAt: found.expiresAt || found.expires_at || '',
-              description: found.description || '',
-            };
-          }
-        } catch {}
-      }
-
-      if (!promo) {
-        return { success: false, message: 'Invalid or expired coupon code.' };
-      }
-
       const currentSubtotal = items.reduce((sum, item) => sum + item.totalPrice, 0);
-      if (currentSubtotal < promo.minOrderValue) {
-        return {
-          success: false,
-          message: `This coupon requires a minimum cart value of ₹${promo.minOrderValue}.`,
-        };
-      }
+      const promo = await validateCartCoupon(cleanCode, currentSubtotal);
 
       setAppliedPromo(promo);
       return { success: true, message: `Sweet! Coupon ${promo.code} applied successfully!` };
     } catch (e: any) {
-      return { success: false, message: 'Error checking coupon.' };
+      return { success: false, message: e instanceof Error ? e.message : 'Error checking coupon.' };
     }
   };
 

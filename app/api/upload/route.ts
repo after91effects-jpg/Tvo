@@ -4,10 +4,14 @@ import path from 'path';
 import crypto from 'crypto';
 import { ok, err } from '../../../lib/server/api';
 import { validateMagicBytes, ALLOWED_IMAGE_EXTENSIONS, MAX_UPLOAD_SIZE_BYTES } from '../../../lib/uploadValidation';
+import { rateLimitMiddleware } from '../../../lib/server/rateLimit';
 
 export const runtime = 'nodejs';
 
 export async function POST(req: Request) {
+  const rl = rateLimitMiddleware(req, 'upload');
+  if (!rl.allowed) return rl.response;
+
   try {
     const contentType = req.headers.get('content-type') || '';
     let buffer: Buffer;

@@ -62,7 +62,7 @@ export function decryptSecret(encryptedPayload: string): string {
  * Masks a Razorpay Key ID for safe UI display.
  * Example: 'rzp_test_1234567890abcdef' -> 'rzp_test_••••cdef'
  */
-export function maskKeyId(keyId: string): string {
+export function maskKeyId(keyId?: string | null): string {
   if (!keyId) return 'Not Configured';
   const clean = keyId.trim();
   if (clean.length <= 10) return '••••••••';

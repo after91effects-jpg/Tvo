@@ -1,7 +1,8 @@
 'use client';
 
-import React, { createContext, useContext, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useLocalStorageJSON } from '../lib/useLocalStorage';
+import { useAuth } from './AuthContext';
 
 interface WishlistContextType {
   wishlist: string[];
@@ -19,6 +20,9 @@ const STORAGE_KEY_WISHLIST = 'confetto_wishlist';
 
 export const WishlistProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [wishlist, setWishlist] = useLocalStorageJSON<string[]>(STORAGE_KEY_WISHLIST, []);
+  const auth = useAuth();
+  const user = auth?.user;
+  const lastSyncedUserRef = useRef<string | null>(null);
 
   const isInWishlist = useCallback(
     (productId: string) => {
@@ -93,26 +97,70 @@ export const WishlistProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setWishlist([]);
   }, [setWishlist]);
 
-  // Synchronize with server wishlist if authenticated
-  React.useEffect(() => {
+  // Reset sync tracker on logout
+  useEffect(() => {
+    if (!user) {
+      lastSyncedUserRef.current = null;
+    }
+  }, [user]);
+
+  // Synchronize with server wishlist if authenticated (bidirectional merge)
+  useEffect(() => {
     if (typeof window === 'undefined') return;
+
+    const currentUserId = user?.uid ? String(user.uid) : user?.email ? String(user.email) : null;
+    if (currentUserId && lastSyncedUserRef.current === currentUserId) {
+      return; // Already synced for this session
+    }
+
     fetch('/api/wishlist')
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (!data || data.requiresAuth) return;
-        const serverItems = Array.isArray(data.wishlist)
-          ? data.wishlist.map((w: any) => String(w.product_id))
+        if (currentUserId) {
+          lastSyncedUserRef.current = currentUserId;
+        }
+
+        const serverItems: string[] = Array.isArray(data.wishlist)
+          ? data.wishlist.map((w: any) => String(w.product_id || w.productId || w.id || w))
           : [];
-        if (serverItems.length > 0) {
-          setWishlist((prev) => {
-            const safe = Array.isArray(prev) ? prev : [];
-            const merged = Array.from(new Set([...safe, ...serverItems]));
-            return merged;
-          });
+
+        let localItems = Array.isArray(wishlist) ? wishlist.map(String) : [];
+        if (localItems.length === 0 && typeof window !== 'undefined') {
+          try {
+            const raw = localStorage.getItem(STORAGE_KEY_WISHLIST);
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              if (Array.isArray(parsed)) localItems = parsed.map(String);
+            }
+          } catch {
+            // ignore
+          }
+        }
+        const missingOnServer = localItems.filter((id) => !serverItems.includes(id));
+
+        if (missingOnServer.length > 0) {
+          fetch('/api/wishlist', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'sync', product_ids: localItems }),
+          })
+            .then((syncRes) => (syncRes.ok ? syncRes.json() : null))
+            .then((syncData) => {
+              const merged = syncData?.wishlist && Array.isArray(syncData.wishlist)
+                ? syncData.wishlist.map(String)
+                : Array.from(new Set([...localItems, ...serverItems]));
+              setWishlist(merged);
+            })
+            .catch(() => {
+              setWishlist(Array.from(new Set([...localItems, ...serverItems])));
+            });
+        } else if (serverItems.length > 0) {
+          setWishlist(Array.from(new Set([...localItems, ...serverItems])));
         }
       })
       .catch(() => {});
-  }, [setWishlist]);
+  }, [user?.uid, user?.email, setWishlist]);
 
   const value = useMemo(
     () => ({

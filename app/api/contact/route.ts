@@ -1,8 +1,12 @@
 import { ok, err, db } from '../../../lib/server/api';
+import { rateLimitMiddleware } from '../../../lib/server/rateLimit';
 
 export const runtime = 'nodejs';
 
 export async function POST(req: Request) {
+  const rl = rateLimitMiddleware(req, 'public_forms');
+  if (!rl.allowed) return rl.response;
+
   const body = await req.json().catch(() => ({}));
   const { name, email, subject, message } = body;
   if (!name || !email || !message) return err('Name, email and message are required');

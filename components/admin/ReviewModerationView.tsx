@@ -33,11 +33,13 @@ interface AdminReview {
   product_image?: string;
 }
 
+export type ReviewStatusFilter = 'all' | 'pending' | 'approved' | 'rejected';
+
 export const ReviewModerationView: React.FC = () => {
   const [reviews, setReviews] = useState<AdminReview[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending');
+  const [statusFilter, setStatusFilter] = useState<ReviewStatusFilter>('pending');
   const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
   const [feedbackMessage, setFeedbackMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 

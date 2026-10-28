@@ -279,11 +279,17 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                         </div>
                       )}
 
-                      {item.addons?.length > 0 && (
-                        <div className="text-[10px] text-[var(--text-subtle)] mt-0.5">
-                          + {item.addons.map((a) => a.name).join(', ')}
-                        </div>
-                      )}
+                      {Array.isArray(item.addons) && item.addons.length > 0 && (() => {
+                        const addonNames = item.addons
+                          .map((a: any) => (typeof a === 'string' ? a : (a?.name || '')))
+                          .filter(Boolean);
+                        if (addonNames.length === 0) return null;
+                        return (
+                          <div className="text-[10px] text-[var(--text-subtle)] mt-0.5">
+                            + {addonNames.join(', ')}
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     {/* Pricing & Stepper */}

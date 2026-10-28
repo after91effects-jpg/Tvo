@@ -30,7 +30,7 @@ export default function AdminSystemHealthLayout() {
 
   const handleSelectTab = (tab: AdminTab) => {
     if (tab === 'health') return;
-    router.push('/');
+    router.push(`/?view=admin&tab=${encodeURIComponent(tab)}`);
   };
 
   return (

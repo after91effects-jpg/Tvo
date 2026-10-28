@@ -1242,11 +1242,19 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
                     {Array.isArray(item.addons) && item.addons.length > 0 && (
                       <div className="flex items-center gap-1 flex-wrap mt-1">
-                        {item.addons.map((a: any) => (
-                          <span key={a.id || a.name} className="px-1.5 py-0.5 rounded-md bg-[var(--bg-card)] border border-[var(--border)] text-[9px] text-[var(--text-muted)] font-medium">
-                            + {a.name} (₹{a.price})
-                          </span>
-                        ))}
+                        {item.addons.map((a: any, idx: number) => {
+                          if (!a) return null;
+                          const isStr = typeof a === 'string';
+                          const name = isStr ? a : (a?.name || (typeof a === 'object' ? '' : String(a)));
+                          if (!name) return null;
+                          const price = !isStr && typeof a?.price === 'number' && a.price > 0 ? ` (₹${a.price})` : '';
+                          const key = !isStr && (a.id || a.name) ? `${a.id || a.name}-${idx}` : `${name}-${idx}`;
+                          return (
+                            <span key={key} className="px-1.5 py-0.5 rounded-md bg-[var(--bg-card)] border border-[var(--border)] text-[9px] text-[var(--text-muted)] font-medium">
+                              + {name}{price}
+                            </span>
+                          );
+                        })}
                       </div>
                     )}
                   </div>

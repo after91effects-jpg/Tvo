@@ -10,14 +10,20 @@ export const ContactView: React.FC = () => {
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSent, setIsSent] = useState(false);
+  const [error, setError] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !message) return;
+    setError('');
+    setIsSent(false);
+    if (!name.trim() || !email.trim() || !message.trim()) {
+      setError('Please enter your name, email and message.');
+      return;
+    }
 
     try {
       setIsSubmitting(true);
-      await fetch('/api/contact', {
+      const response = await fetch('/api/contact', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -27,6 +33,10 @@ export const ContactView: React.FC = () => {
           message: message.trim(),
         }),
       });
+      const result = await response.json();
+      if (!response.ok || result.ok === false) {
+        throw new Error(result.error || 'Your message could not be sent. Please try again.');
+      }
       setIsSent(true);
       setName('');
       setPhone('');
@@ -34,7 +44,7 @@ export const ContactView: React.FC = () => {
       setMessage('');
       setTimeout(() => setIsSent(false), 4000);
     } catch (e) {
-      setIsSent(true);
+      setError(e instanceof Error ? e.message : 'Your message could not be sent. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -152,10 +162,11 @@ export const ContactView: React.FC = () => {
 
             <div>
               <label className="block text-xs font-semibold text-[var(--text-main)] mb-1">
-                Email Address
+                Email Address *
               </label>
               <input
                 type="email"
+                required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="rahul@example.com"
@@ -177,6 +188,7 @@ export const ContactView: React.FC = () => {
               />
             </div>
 
+            {error && <p role="alert" className="text-sm text-[var(--danger)]">{error}</p>}
             {isSent && (
               <p className="text-xs text-[var(--success)] font-medium flex items-center gap-1.5 animate-in fade-in">
                 <CheckCircle className="w-4 h-4" />

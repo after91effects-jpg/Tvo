@@ -13,22 +13,28 @@ export async function GET(req: Request) {
   const category = url.searchParams.get('category') || '';
   const slug = url.searchParams.get('slug') || '';
   const id = url.searchParams.get('id') || '';
-  const limit = Math.min(parseInt(url.searchParams.get('limit') || '100'), 200);
-  const offset = parseInt(url.searchParams.get('offset') || '0');
+  const rawLimit = Number(url.searchParams.get('limit') ?? 100);
+  const rawOffset = Number(url.searchParams.get('offset') ?? 0);
+  const limit = Number.isFinite(rawLimit) ? Math.max(1, Math.min(Math.floor(rawLimit), 200)) : 100;
+  const offset = Number.isFinite(rawOffset) ? Math.max(0, Math.floor(rawOffset)) : 0;
   const order = url.searchParams.get('order') || '';
   const occasionParam = url.searchParams.get('occasion') || '';
 
   try {
+    const currentUser = getCurrentUser(req);
+    const adminListingAll = url.searchParams.get('include_drafts') === '1' &&
+      currentUser && isAdminRole(currentUser.role);
+    const visibility = adminListingAll ? 'p.deleted_at IS NULL' : 'p.deleted_at IS NULL AND p.published = 1';
     if (slug) {
-      const row = data.prepare(`${BASE_SELECT} WHERE p.slug=? LIMIT 1`).get(slug);
+      const row = data.prepare(`${BASE_SELECT} WHERE ${visibility} AND p.slug=? LIMIT 1`).get(slug);
       const res = ok(serializeProduct(row));
-      res.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
+      res.headers.set('Cache-Control', adminListingAll ? 'private, no-store' : 'public, s-maxage=60, stale-while-revalidate=300');
       return res;
     }
     if (id) {
-      const row = data.prepare(`${BASE_SELECT} WHERE p.id=? LIMIT 1`).get(id);
+      const row = data.prepare(`${BASE_SELECT} WHERE ${visibility} AND p.id=? LIMIT 1`).get(id);
       const res = ok(serializeProduct(row));
-      res.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
+      res.headers.set('Cache-Control', adminListingAll ? 'private, no-store' : 'public, s-maxage=60, stale-while-revalidate=300');
       return res;
     }
     const ids = url.searchParams.get('ids') || '';
@@ -73,18 +79,13 @@ export async function GET(req: Request) {
     // Admin-only visibility: when requested by an authenticated admin with
     // ?include_drafts=1, drafts (published=0) are included. Customers can never
     // request this — the flag is ignored unless the admin session cookie is valid.
-    const currentUser = getCurrentUser(req);
-    const adminListingAll =
-      url.searchParams.get('include_drafts') === '1' &&
-      currentUser &&
-      isAdminRole(currentUser.role);
     if (adminListingAll) {
       where = 'p.deleted_at IS NULL';
     }
 
     // Stock/availability filter for occasion-aware requests (respects existing rules)
     if (joinClause) {
-      where += ` AND p.stock_status != 'out_of_stock' AND (p.stock > 0 OR p.enable_stock = 0)`;
+      where += ` AND (p.manage_stock = 0 OR p.enable_stock = 0 OR (p.stock_status != 'out_of_stock' AND p.stock > 0))`;
     }
 
     const minPrice = parseFloat(url.searchParams.get('min_price') || '');
@@ -104,7 +105,7 @@ export async function GET(req: Request) {
       where += ` AND (p.eggless = 1 OR p.tags LIKE '%eggless%')`;
     }
     if (inStock) {
-      where += ` AND p.stock_status != 'out_of_stock' AND (p.stock > 0 OR p.enable_stock = 0)`;
+      where += ` AND (p.manage_stock = 0 OR p.enable_stock = 0 OR (p.stock_status != 'out_of_stock' AND p.stock > 0))`;
     }
 
     if (search) {
@@ -132,7 +133,7 @@ export async function GET(req: Request) {
       .all(...params, limit, offset);
     const count = (data.prepare(`SELECT COUNT(*) AS c FROM products p LEFT JOIN categories c ON p.category_id=c.id${joinClause} WHERE ${where}`).get(...params) as any)?.c ?? 0;
     const res = ok({ products: rows.map(serializeProduct), total: count });
-    res.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
+    res.headers.set('Cache-Control', adminListingAll ? 'private, no-store' : 'public, s-maxage=60, stale-while-revalidate=300');
     return res;
   } catch (e: any) {
     return err(e.message || 'Error fetching products', 500);

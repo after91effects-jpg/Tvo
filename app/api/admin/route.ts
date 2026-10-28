@@ -4,6 +4,7 @@ import { hasPerm } from '../../../lib/server/authorization';
 import * as ops from '../../../lib/server/admin-ops';
 import { getHamperSettings, saveHamperSettings } from '../../../lib/server/hampers';
 import { logError } from '../../../lib/server/logger';
+import { createDatabaseBackup, listDatabaseBackups, verifyDatabaseBackup } from '../../../lib/server/backup';
 
 export const runtime = 'nodejs';
 
@@ -20,7 +21,8 @@ export async function GET(req: Request) {
     if (type === 'orders') {
       const q = search ? `%${search}%` : null;
       let rows: any[];
-      if (status) rows = db.prepare('SELECT * FROM orders WHERE status=? ORDER BY created_at DESC LIMIT 300').all(status);
+      if (status && q) rows = db.prepare('SELECT * FROM orders WHERE status=? AND (order_number LIKE ? OR customer_name LIKE ? OR customer_phone LIKE ? OR customer_email LIKE ?) ORDER BY created_at DESC LIMIT 300').all(status, q, q, q, q);
+      else if (status) rows = db.prepare('SELECT * FROM orders WHERE status=? ORDER BY created_at DESC LIMIT 300').all(status);
       else if (q) rows = db.prepare(`SELECT * FROM orders WHERE order_number LIKE ? OR customer_name LIKE ? OR customer_phone LIKE ? OR customer_email LIKE ? ORDER BY created_at DESC LIMIT 300`).all(q, q, q, q);
       else rows = db.prepare('SELECT * FROM orders ORDER BY created_at DESC LIMIT 300').all();
       for (const o of rows) { o.items = jsonParseSafe(o.items, []); o.timeline = jsonParseSafe(o.timeline, []); }
@@ -91,7 +93,7 @@ export async function GET(req: Request) {
       const search = url.searchParams.get('search') || '';
       const payment = url.searchParams.get('payment') || '';
       const page = url.searchParams.get('page') || '1';
-      const r = ops.listOrders(user, { status: statusParam || undefined, search: search || undefined, payment: payment || undefined, page: Number(page) });
+      const r = ops.listOrders(user, { status: statusParam || undefined, search: search || undefined, payment: payment || undefined, page: Number(page), limit: Number(url.searchParams.get('limit') || '50') });
       return ok(r);
     }
     if (type === 'order_statuses') return ok({ statuses: ops.ORDER_STATUSES, paymentStatuses: ops.PAYMENT_STATUSES });
@@ -101,7 +103,7 @@ export async function GET(req: Request) {
       return ok({ customer: c });
     }
     if (type === 'customers_page') {
-      const r = ops.listCustomers(user, { search: url.searchParams.get('search') || undefined, page: Number(url.searchParams.get('page') || '1') });
+      const r = ops.listCustomers(user, { search: url.searchParams.get('search') || undefined, page: Number(url.searchParams.get('page') || '1'), limit: Number(url.searchParams.get('limit') || '50') });
       return ok(r);
     }
     if (type === 'delivery') return ok(ops.listDelivery(user));
@@ -127,6 +129,7 @@ export async function GET(req: Request) {
     if (type === 'admin_users') { if (!isSuper(user)) return err('Super admin access required', 403); return ok({ users: ops.listAdminUsers(user), roles: ops.listRoles(user) }); }
     if (type === 'settings_full') { if (!isSuper(user)) return err('Super admin access required', 403); return ok({ settings: ops.getAllSettings(user) }); }
     if (type === 'audit_full') return ok({ audit: ops.listAudit(user, Number(url.searchParams.get('limit') || '300')) });
+    if (type === 'backups') return ok({ backups: listDatabaseBackups(user) });
     if (type === 'tickets') return ok({ tickets: ops.listTickets(user, url.searchParams.get('status') || undefined) });
     if (type === 'notifications') return ok({ notifications: ops.getNotifications(user) });
     if (type === 'customers_simple') return ok({ customers: db.prepare('SELECT id, name, email, phone FROM customers ORDER BY name LIMIT 500').all() });
@@ -380,8 +383,8 @@ export async function POST(req: Request) {
     if (type === 'pages' && action === 'delete') { db.prepare('DELETE FROM pages WHERE id=?').run(body.id); return ok({ ok: true }); }
 
     if (type === 'media' && action === 'add') {
-      db.prepare('INSERT INTO media (file_name, url, alt_text, folder) VALUES (?,?,?,?)').run(body.file_name, body.url, body.alt_text || null, body.folder || 'General');
-      return ok({ ok: true });
+      const result = db.prepare('INSERT INTO media (file_name, url, alt_text, folder) VALUES (?,?,?,?)').run(body.file_name, body.url, body.alt_text || null, body.folder || 'General');
+      return ok({ ok: true, id: Number(result.lastInsertRowid) });
     }
     if (type === 'media' && action === 'delete') { db.prepare('DELETE FROM media WHERE id=?').run(body.id); return ok({ ok: true }); }
     if (type === 'hamper_settings' && action === 'save') {
@@ -497,6 +500,16 @@ export async function POST(req: Request) {
      if (type === 'product_occasions' && action === 'map') return ok(ops.mapProductToOccasion(user, Number(body.product_id), Number(body.occasion_id), Number(body.priority) || 0));
      if (type === 'product_occasions' && action === 'unmap') return ok(ops.removeProductMapping(user, Number(body.product_id), Number(body.occasion_id)));
      if (type === 'product_occasions' && action === 'priority') return ok(ops.updateProductMappingPriority(user, Number(body.product_id), Number(body.occasion_id), Number(body.priority) || 0));
+
+     // ---- Database Backups & Recovery ----
+     if (type === 'backup' && action === 'create') {
+       const res = await createDatabaseBackup(user);
+       return res.ok ? ok(res) : err(res.error || 'Backup creation failed', 400);
+     }
+     if (type === 'backup' && action === 'verify') {
+       const res = verifyDatabaseBackup(user, body.filename);
+       return res.ok ? ok(res) : err(res.error || 'Verification failed', 400);
+     }
 
       return err('Unknown admin action');
   } catch (e: any) { logError('admin_post_error', e?.message || e); return err('Internal server error', 500); }

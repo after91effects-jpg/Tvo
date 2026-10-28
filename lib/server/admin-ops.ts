@@ -1,3 +1,4 @@
+import { normalizePagination } from '../pagination';
 import { isPieceOrDiscreteUnit } from '../sellingUnit';
 import { logAudit, slugify, jsonParseSafe } from './api';
 import { db } from './db';
@@ -50,9 +51,7 @@ export const PAYMENT_STATUSES = ['Pending', 'Paid', 'Refunded', 'Partially Refun
 
 export function listOrders(user: User, opts: { status?: string; search?: string; payment?: string; limit?: number; page?: number }) {
   const { status, search, payment } = opts;
-  const limit = Math.min(Number(opts.limit) || 50, 500);
-  const page = Math.max(Number(opts.page) || 1, 1);
-  const offset = (page - 1) * limit;
+  const { limit, page, offset } = normalizePagination(opts.limit, opts.page);
   const where: string[] = [];
   const params: any[] = [];
   if (status) { where.push('o.status=?'); params.push(status); }
@@ -195,9 +194,7 @@ export function cancelOrder(user: User, id: number, reason?: string) {
 // CUSTOMERS
 // ---------------------------------------------------------------------------
 export function listCustomers(user: User, opts: { search?: string; limit?: number; page?: number }) {
-  const limit = Math.min(Number(opts.limit) || 50, 500);
-  const page = Math.max(Number(opts.page) || 1, 1);
-  const offset = (page - 1) * limit;
+  const { limit, page, offset } = normalizePagination(opts.limit, opts.page);
   const params: any[] = [];
   let w = '';
   if (opts.search) { const q = `%${opts.search}%`; w = 'WHERE name LIKE ? OR email LIKE ? OR phone LIKE ?'; params.push(q, q, q); }
@@ -411,8 +408,8 @@ export function bulkSetSlotCapacity(user: User, data: any) {
 // FLEET & DRIVER MANAGEMENT
 // ---------------------------------------------------------------------------
 export function listDrivers(user: User) {
-  const drivers = all<Row>('SELECT * FROM drivers ORDER BY active DESC, name ASC');
-  return drivers.map(d => ({
+  const drivers = all<any>('SELECT * FROM drivers ORDER BY active DESC, name ASC');
+  return drivers.map((d: any) => ({
     ...d,
     active_deliveries_count: count("SELECT COUNT(*) c FROM orders WHERE driver_id=? AND delivery_status IN ('assigned', 'out_for_delivery')", d.id),
   }));
@@ -546,7 +543,7 @@ export function listDeliveries(user: User, filter?: { date?: string; status?: st
 
   const rows = all<Row>(query, ...params);
   return rows.map((r) => {
-    let parsedItems = [];
+    let parsedItems: any[] = [];
     try {
       const raw = JSON.parse(r.items || '[]');
       parsedItems = Array.isArray(raw) ? raw.map((it: any) => ({
@@ -604,6 +601,12 @@ export function listCoupons(user: User) {
     c.product_ids = jsonParseSafe(c.product_ids, []);
     c.category_ids = jsonParseSafe(c.category_ids, []);
     c.customer_ids = jsonParseSafe(c.customer_ids, []);
+    c.is_first_order_only = Boolean(
+      (c.description && /first(\s+|-)?order/i.test(c.description)) ||
+      (c.description && /first celebration order/i.test(c.description)) ||
+      c.code.toUpperCase().startsWith('FIRST') ||
+      c.code.toUpperCase().startsWith('WELCOME')
+    );
   }
   return rows;
 }
@@ -611,6 +614,12 @@ export function listCoupons(user: User) {
 export function saveCoupon(user: User, data: any) {
   const code = (data.code || '').toUpperCase().trim();
   if (!code) return { ok: false, error: 'Coupon code is required' };
+  let description = data.description || '';
+  if (data.is_first_order_only) {
+    if (!description.toLowerCase().includes('first order') && !description.toLowerCase().includes('[first_order]')) {
+      description = `[first_order] ${description}`.trim();
+    }
+  }
   const obj = {
     code,
     discount_type: data.discount_type || 'percent',
@@ -619,7 +628,7 @@ export function saveCoupon(user: User, data: any) {
     max_discount: data.max_discount != null && data.max_discount !== '' ? Number(data.max_discount) : null,
     max_uses: data.max_uses != null && data.max_uses !== '' ? Number(data.max_uses) : null,
     active: data.active ? 1 : 0,
-    description: data.description || null,
+    description: description || null,
     starts_at: data.starts_at || null,
     ends_at: data.ends_at || null,
     product_ids: JSON.stringify(data.product_ids || []),
@@ -1006,7 +1015,8 @@ export function deleteIngredient(user: User, id: number) {
 // ADMIN USERS & ROLES
 // ---------------------------------------------------------------------------
 export function listAdminUsers(user: User) {
-  return all("SELECT id, name, email, phone, role, status, created_at, last_login_at FROM users WHERE role IN ('super_admin','admin','staff','manager') ORDER BY id");
+  const roles = [...ADMIN_ROLES, 'staff', 'manager', 'read_only'];
+  return all(`SELECT id, name, email, phone, role, status, created_at, last_login_at FROM users WHERE role IN (${roles.map(() => '?').join(',')}) ORDER BY id`, ...roles);
 }
 
 export function listRoles(user: User) {

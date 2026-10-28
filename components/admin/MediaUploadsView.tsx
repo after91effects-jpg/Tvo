@@ -37,7 +37,7 @@ export const MediaUploadsView: React.FC = () => {
     fetch('/api/media')
       .then((res) => res.json())
       .then((data) => {
-        if (data.media && data.media.length > 0) {
+        if (Array.isArray(data.media)) {
           const loaded: MediaAsset[] = data.media.map((m: any) => ({
             id: String(m.id),
             fileName: m.file_name || m.name || '',
@@ -96,8 +96,7 @@ export const MediaUploadsView: React.FC = () => {
         usedInProductIds: [],
       };
 
-      try {
-        await fetch('/api/admin', {
+      const response = await fetch('/api/admin', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -108,10 +107,12 @@ export const MediaUploadsView: React.FC = () => {
             alt_text: file.name,
             folder: 'uploads',
           }),
-        }).catch(() => {});
-        // Refresh to get server-assigned id/created_at
-        fetchAssets();
-      } catch (e) {}
+      });
+      const saved = await response.json();
+      if (!response.ok || !saved.ok || !saved.id) {
+        throw new Error(saved.error || 'Could not save the uploaded image. Please try again.');
+      }
+      newAsset.id = String(saved.id);
 
       await logAuditEvent({
         actorUid: user?.uid,

@@ -77,8 +77,8 @@ describe('Step 10: Reviews, Ratings & Customer Feedback System', () => {
         body: JSON.stringify({ rating: 5, comment: 'Delicious cake!' }),
       });
       const res = await postReviews(req);
-      expect(res.status).toBe(400);
-      const data = await res.json();
+      expect(res!.status).toBe(400);
+      const data = await res!.json();
       expect(data.error).toContain('Valid product and rating');
     });
 
@@ -89,8 +89,8 @@ describe('Step 10: Reviews, Ratings & Customer Feedback System', () => {
         body: JSON.stringify({ product_id: 999999, rating: 5, comment: 'Delicious cake!' }),
       });
       const res = await postReviews(req);
-      expect(res.status).toBe(404);
-      const data = await res.json();
+      expect(res!.status).toBe(404);
+      const data = await res!.json();
       expect(data.error).toContain('Product not found');
     });
 
@@ -101,7 +101,7 @@ describe('Step 10: Reviews, Ratings & Customer Feedback System', () => {
         body: JSON.stringify({ product_id: 1, rating: 6, comment: 'Super!' }),
       });
       const res1 = await postReviews(req1);
-      expect(res1.status).toBe(400);
+      expect(res1!.status).toBe(400);
 
       const req2 = new Request('http://localhost/api/reviews', {
         method: 'POST',
@@ -109,7 +109,7 @@ describe('Step 10: Reviews, Ratings & Customer Feedback System', () => {
         body: JSON.stringify({ product_id: 1, rating: 0, comment: 'Bad!' }),
       });
       const res2 = await postReviews(req2);
-      expect(res2.status).toBe(400);
+      expect(res2!.status).toBe(400);
     });
 
     it('rejects submission with too short comment', async () => {
@@ -119,8 +119,8 @@ describe('Step 10: Reviews, Ratings & Customer Feedback System', () => {
         body: JSON.stringify({ product_id: 1, rating: 5, comment: 'ok' }),
       });
       const res = await postReviews(req);
-      expect(res.status).toBe(400);
-      const data = await res.json();
+      expect(res!.status).toBe(400);
+      const data = await res!.json();
       expect(data.error).toContain('at least 5 characters');
     });
 
@@ -136,8 +136,8 @@ describe('Step 10: Reviews, Ratings & Customer Feedback System', () => {
         }),
       });
       const res = await postReviews(req);
-      expect(res.status).toBe(200);
-      const data = await res.json();
+      expect(res!.status).toBe(200);
+      const data = await res!.json();
       expect(data.ok).toBe(true);
 
       const saved = db.prepare(
@@ -169,8 +169,8 @@ describe('Step 10: Reviews, Ratings & Customer Feedback System', () => {
         }),
       });
       const res = await postReviews(req);
-      expect(res.status).toBe(200);
-      const data = await res.json();
+      expect(res!.status).toBe(200);
+      const data = await res!.json();
       expect(data.ok).toBe(true);
 
       const saved = db.prepare(
@@ -188,7 +188,7 @@ describe('Step 10: Reviews, Ratings & Customer Feedback System', () => {
         body: JSON.stringify({ product_id: 1, rating: 5, comment: 'First celebration review!' }),
       });
       const res1 = await postReviews(req1);
-      expect(res1.status).toBe(200);
+      expect(res1!.status).toBe(200);
 
       // Duplicate attempt
       const req2 = new Request('http://localhost/api/reviews', {
@@ -197,8 +197,8 @@ describe('Step 10: Reviews, Ratings & Customer Feedback System', () => {
         body: JSON.stringify({ product_id: 1, rating: 4, comment: 'Second celebration review!' }),
       });
       const res2 = await postReviews(req2);
-      expect(res2.status).toBe(400);
-      const data2 = await res2.json();
+      expect(res2!.status).toBe(400);
+      const data2 = await res2!.json();
       expect(data2.error).toContain('already submitted a review');
     });
   });

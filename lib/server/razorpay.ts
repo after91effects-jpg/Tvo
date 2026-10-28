@@ -76,6 +76,11 @@ export function getActiveGatewayConfig(): ActivePaymentConfig {
         logError('payment_crypto_decrypt_webhook_error', 'Failed to decrypt webhook secret');
       }
 
+      // If webhookSecret is not set in DB config, fallback to environment variable
+      if (!webhookSecret && process.env.RAZORPAY_WEBHOOK_SECRET) {
+        webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET.trim();
+      }
+
       const mode: 'TEST' | 'LIVE' | 'SANDBOX' = 
         row.environment?.toLowerCase() === 'live' ? 'LIVE' : 'TEST';
 
@@ -205,9 +210,20 @@ export async function createRazorpayOrder(params: {
 
   const keyId = config.keyId;
   const secret = config.keySecret;
+  const isProduction = process.env.NODE_ENV === 'production' || config.mode === 'LIVE';
 
   if (!keyId || !secret) {
-    // Sandbox / Test Mode fallback when environment variables are not yet injected
+    if (isProduction) {
+      logError('razorpay_order_create_missing_credentials', 'Razorpay credentials missing in production/LIVE mode');
+      return {
+        id: '',
+        amount: params.amountPaise,
+        currency,
+        error: 'Online payment gateway is unconfigured for live transactions. Please select Cash on Delivery or contact bakery support.',
+      };
+    }
+
+    // Sandbox / Test Mode fallback strictly for non-production environments when keys are not injected
     const mockId = `order_test_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     return {
       id: mockId,
@@ -234,7 +250,7 @@ export async function createRazorpayOrder(params: {
     });
 
     const data = await res.json();
-    if (!res.ok || !data.id) {
+    if (!res.ok || !data.id || (isProduction && typeof data.id === 'string' && data.id.startsWith('order_test_'))) {
       const errMsg = data.error?.description || data.message || `Razorpay order creation failed (HTTP ${res.status})`;
       logError('razorpay_order_create_failed', errMsg);
       return { id: '', amount: params.amountPaise, currency, error: errMsg };
@@ -261,7 +277,19 @@ export function verifyPaymentSignature(params: {
   signature: string;
 }): { valid: boolean; error?: string } {
   const secret = getRazorpayKeySecret();
+  const config = getActiveGatewayConfig();
+  const isProduction = process.env.NODE_ENV === 'production' || config.mode === 'LIVE';
+
+  if (isProduction) {
+    if (params.razorpayOrderId?.startsWith('order_test_') || params.razorpayPaymentId?.startsWith('pay_test_')) {
+      return { valid: false, error: 'Test or mock payments cannot be verified in production mode' };
+    }
+  }
+
   if (!secret) {
+    if (isProduction) {
+      return { valid: false, error: 'Razorpay secret key not configured' };
+    }
     // If running in local sandbox test mode without keys, validate format
     if (params.razorpayOrderId && params.razorpayPaymentId) {
       return { valid: true };
@@ -299,6 +327,10 @@ export function verifyWebhookSignature(params: {
   const secret = getRazorpayWebhookSecret();
   if (!secret) {
     return { valid: false, error: 'RAZORPAY_WEBHOOK_SECRET is not configured' };
+  }
+
+  if (!params.signature) {
+    return { valid: false, error: 'Missing webhook signature' };
   }
 
   try {

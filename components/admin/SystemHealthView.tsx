@@ -16,6 +16,9 @@ import {
   Loader2,
   Globe,
   Fingerprint,
+  Archive,
+  HardDrive,
+  FileCheck,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -42,6 +45,14 @@ interface ReadyData {
   correlationId?: string;
 }
 
+interface BackupItem {
+  filename: string;
+  sizeBytes: number;
+  sizeFormatted: string;
+  createdAt: string;
+  integrityOk: boolean;
+}
+
 const ENV_COLORS: Record<string, string> = {
   production: 'var(--success)',
   staging: 'var(--primary)',
@@ -56,6 +67,73 @@ export const SystemHealthView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastCheck, setLastCheck] = useState<string | null>(null);
+
+  // Backup management state
+  const [backups, setBackups] = useState<BackupItem[]>([]);
+  const [loadingBackups, setLoadingBackups] = useState(false);
+  const [creatingBackup, setCreatingBackup] = useState(false);
+  const [verifyingFilename, setVerifyingFilename] = useState<string | null>(null);
+  const [backupMessage, setBackupMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const fetchBackups = useCallback(async () => {
+    setLoadingBackups(true);
+    try {
+      const res = await fetch('/api/admin?type=backups');
+      const data = await res.json();
+      if (res.ok && data.backups) {
+        setBackups(data.backups);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoadingBackups(false);
+    }
+  }, []);
+
+  const handleCreateBackup = async () => {
+    setCreatingBackup(true);
+    setBackupMessage(null);
+    try {
+      const res = await fetch('/api/admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'backup', action: 'create' }),
+      });
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        setBackupMessage({ type: 'success', text: `Backup created: ${data.backup?.filename || 'Success'}` });
+        fetchBackups();
+      } else {
+        setBackupMessage({ type: 'error', text: data.error || 'Failed to create backup' });
+      }
+    } catch (e: any) {
+      setBackupMessage({ type: 'error', text: e?.message || 'Error creating backup' });
+    } finally {
+      setCreatingBackup(false);
+    }
+  };
+
+  const handleVerifyBackup = async (filename: string) => {
+    setVerifyingFilename(filename);
+    setBackupMessage(null);
+    try {
+      const res = await fetch('/api/admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'backup', action: 'verify', filename }),
+      });
+      const data = await res.json();
+      if (res.ok && data.valid) {
+        setBackupMessage({ type: 'success', text: `${filename}: Integrity Verified (${data.details || 'PRAGMA quick_check OK'})` });
+      } else {
+        setBackupMessage({ type: 'error', text: `${filename}: Integrity check failed: ${data.error || 'Corrupted'}` });
+      }
+    } catch (e: any) {
+      setBackupMessage({ type: 'error', text: e?.message || 'Error verifying backup' });
+    } finally {
+      setVerifyingFilename(null);
+    }
+  };
 
   const checkHealth = useCallback(async () => {
     try {
@@ -100,9 +178,10 @@ export const SystemHealthView: React.FC = () => {
 
   useEffect(() => {
     checkHealth();
+    fetchBackups();
     const interval = setInterval(checkHealth, 30000);
     return () => clearInterval(interval);
-  }, [checkHealth]);
+  }, [checkHealth, fetchBackups]);
 
   if (!isAdmin) {
     return (
@@ -304,6 +383,112 @@ export const SystemHealthView: React.FC = () => {
               </div>
             </div>
           )}
+
+          {/* Database Backup & Recovery Panel */}
+          <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-5 space-y-4 shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[var(--border)] pb-3">
+              <div>
+                <h2 className="text-sm font-bold text-[var(--text-main)] flex items-center gap-2">
+                  <Archive className="w-4 h-4 text-[var(--primary)]" />
+                  Database Snapshots & Disaster Recovery
+                </h2>
+                <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                  Hot online snapshots using SQLite backup API. Verifies PRAGMA integrity without table locks.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleCreateBackup}
+                  disabled={creatingBackup}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--primary)] text-white text-xs font-semibold shadow-xs hover:opacity-95 transition-opacity disabled:opacity-50"
+                >
+                  {creatingBackup ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Creating Snapshot...</span>
+                    </>
+                  ) : (
+                    <>
+                      <HardDrive className="w-3.5 h-3.5" />
+                      <span>Create New Snapshot</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {backupMessage && (
+              <div
+                className={`p-3 rounded-xl border text-xs font-medium ${
+                  backupMessage.type === 'success'
+                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600'
+                    : 'bg-red-500/10 border-red-500/20 text-red-600'
+                }`}
+              >
+                {backupMessage.text}
+              </div>
+            )}
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs text-[var(--text-main)]">
+                <thead className="bg-[var(--bg-subtle)] text-[11px] font-bold uppercase text-[var(--text-muted)] border-b border-[var(--border)]">
+                  <tr>
+                    <th className="py-2.5 px-3">Snapshot File</th>
+                    <th className="py-2.5 px-3">File Size</th>
+                    <th className="py-2.5 px-3">Created At</th>
+                    <th className="py-2.5 px-3">Integrity</th>
+                    <th className="py-2.5 px-3 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--border)]">
+                  {backups.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="py-6 text-center text-xs text-[var(--text-muted)]">
+                        {loadingBackups ? 'Loading snapshots...' : 'No snapshots created yet. Click "Create New Snapshot" above.'}
+                      </td>
+                    </tr>
+                  ) : (
+                    backups.map((b) => (
+                      <tr key={b.filename} className="hover:bg-[var(--bg-subtle)]/50 transition-colors">
+                        <td className="py-2.5 px-3 font-mono font-bold text-[11px] text-[var(--primary)]">
+                          {b.filename}
+                        </td>
+                        <td className="py-2.5 px-3 font-semibold">{b.sizeFormatted}</td>
+                        <td className="py-2.5 px-3 text-[11px] text-[var(--text-muted)]">
+                          {new Date(b.createdAt).toLocaleString('en-IN')}
+                        </td>
+                        <td className="py-2.5 px-3">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                            <CheckCircle className="w-3 h-3" /> QuickCheck OK
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 text-right">
+                          <button
+                            onClick={() => handleVerifyBackup(b.filename)}
+                            disabled={verifyingFilename === b.filename}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-[var(--border)] hover:bg-[var(--bg-subtle)] text-[11px] font-semibold text-[var(--text-main)] disabled:opacity-50"
+                          >
+                            {verifyingFilename === b.filename ? (
+                              <>
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                                <span>Verifying...</span>
+                              </>
+                            ) : (
+                              <>
+                                <FileCheck className="w-3 h-3 text-[var(--primary)]" />
+                                <span>Verify Integrity</span>
+                              </>
+                            )}
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
 
           <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-4">
             <div className="flex items-center justify-between">

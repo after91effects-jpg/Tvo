@@ -8,6 +8,7 @@
     "build": "next build && rm -rf .next/standalone/.next/static && cp -R .next/static .next/standalone/.next/static",
     "start": "node .next/standalone/server.js",
     "lint": "eslint .",
+    "test": "vitest run",
     "clean": "rm -rf .next"
   },
   "dependencies": {

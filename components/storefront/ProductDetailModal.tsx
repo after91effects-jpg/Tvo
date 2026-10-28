@@ -1,5 +1,7 @@
 'use client';
 import { getSellingUnitLabel, isPieceOrDiscreteUnit } from '../../lib/sellingUnit';
+import { getProductOptions } from '../../lib/productOptions';
+import { DEFAULT_STORE_SETTINGS } from '../../lib/seedData';
 
 import React, { useState, useRef, useMemo } from 'react';
 import {
@@ -119,21 +121,8 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   const isLowStock = isProductLowStock(product);
   const isWishlisted = product ? isInWishlist(product.id) : false;
 
-  const weightOptionsList: WeightOption[] = React.useMemo(() => {
-    if (!product) return [];
-    if (Array.isArray(product.weightOptions)) return product.weightOptions;
-    if (product.weightOptions && Array.isArray((product.weightOptions as any).options)) {
-      return (product.weightOptions as any).options;
-    }
-    return [];
-  }, [product]);
-
-  const [selectedWeight, setSelectedWeight] = useState<WeightOption>(() => {
-    const list = Array.isArray(product?.weightOptions) ? product.weightOptions : (product?.weightOptions as any)?.options;
-    return (list && list[0]) || (isPieceOrDiscreteUnit(product?.sellingUnit)
-      ? { label: '1 piece', weightKg: 0, price: product?.price || 699, mrp: product?.regularPrice || 0 }
-      : { label: '0.5 kg', weightKg: 0.5, price: product?.price || 699, mrp: product?.regularPrice || 849 });
-  });
+  const weightOptionsList = React.useMemo(() => product ? getProductOptions(product) : [], [product]);
+  const [selectedWeight, setSelectedWeight] = useState<WeightOption>(() => getProductOptions(product || {})[0]);
   const initialDefaultFlavour =
     product?.flavourOptions?.find(f => f.isDefault && f.isActive !== false && (f as any).enabled !== false) ||
     product?.flavourOptions?.find(f => f.isActive !== false && (f as any).enabled !== false) ||
@@ -709,7 +698,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   </span>
                   {getSellingUnitLabel(product.sellingUnit) && (
                     <span className="text-xs sm:text-sm font-medium text-[var(--text-muted)] font-sans">
-                      / {getSellingUnitLabel(product.sellingUnit)}
+                      / {selectedWeight.label}
                     </span>
                   )}
                 </div>
@@ -725,7 +714,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                 )}
               </div>
               <div className="text-[10px] text-[var(--text-muted)] mt-1">
-                Inclusive of all taxes • Free delivery on orders above ₹999
+                Inclusive of all taxes • Free delivery on orders of ₹{DEFAULT_STORE_SETTINGS.thresholds.freeDeliveryAbove} or more
               </div>
             </div>
 
@@ -1325,7 +1314,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                 <div className="p-4 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border)] space-y-3">
                   <h3 className="text-xs font-bold text-[var(--text-main)] uppercase tracking-wider">Delivery Policy</h3>
                   {[
-                    { icon: '🚚', text: 'Free delivery on orders above ₹999' },
+                    { icon: '🚚', text: `Free delivery on orders of ₹${DEFAULT_STORE_SETTINGS.thresholds.freeDeliveryAbove} or more` },
                     { icon: '❄️', text: 'Temperature-controlled cold-chain vans' },
                     { icon: '📍', text: 'Live GPS tracking for your order' },
                     { icon: '🔄', text: 'Easy rescheduling up to 4 hours before delivery' },

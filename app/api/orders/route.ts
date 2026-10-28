@@ -2,6 +2,7 @@ import { isPieceOrDiscreteUnit } from '../../../lib/sellingUnit';
 import { ok, err, db, generateOrderNumber, jsonParseSafe, getCurrentUser, logAudit } from '../../../lib/server/api';
 import { createOrder, OrderInputError, extractPieceCount } from '../../../lib/server/order-engine';
 import { logError } from '../../../lib/server/logger';
+import { rateLimitMiddleware } from '../../../lib/server/rateLimit';
 
 export const runtime = 'nodejs';
 
@@ -83,6 +84,9 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const rl = rateLimitMiddleware(req, 'orders');
+  if (!rl.allowed) return rl.response;
+
   const body = await req.json().catch(() => ({}));
   const items = body.items || [];
   if (!Array.isArray(items) || items.length === 0) return err('Cart is empty');

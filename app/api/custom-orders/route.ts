@@ -1,4 +1,5 @@
 import { ok, err, db, getCurrentUser, logAudit } from '../../../lib/server/api';
+import { rateLimitMiddleware } from '../../../lib/server/rateLimit';
 
 export const runtime = 'nodejs';
 
@@ -40,6 +41,9 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const rl = rateLimitMiddleware(req, 'public_forms');
+  if (!rl.allowed) return rl.response;
+
   const body = await req.json().catch(() => ({}));
   const user = getCurrentUser(req);
   let customerId = null;

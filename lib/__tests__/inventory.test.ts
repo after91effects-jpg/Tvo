@@ -146,9 +146,9 @@ describe('TVO Flavours — Inventory Management System Tests', () => {
 
     const serialized = serializeProduct(legacyRow as any);
     expect(serialized).toBeDefined();
-    expect(serialized.name).toBe('Legacy Cake');
-    expect(typeof serialized.stock).toBe('number');
-    expect(serialized.stockStatus).toBeDefined();
+    expect(serialized!.name).toBe('Legacy Cake');
+    expect(typeof serialized!.stock).toBe('number');
+    expect(serialized!.stockStatus).toBeDefined();
 
     const adminSerialized = serializeAdminProduct(legacyRow as any);
     expect(adminSerialized).toBeDefined();
@@ -161,12 +161,12 @@ describe('TVO Flavours — Inventory Management System Tests', () => {
     expect(cake).toBeDefined();
 
     const serialized = serializeProduct(cake);
-    const options = Array.isArray(serialized.weightOptions)
-      ? serialized.weightOptions
-      : (serialized.weightOptions as any)?.options || [];
+    const options = Array.isArray(serialized!.weightOptions)
+      ? serialized!.weightOptions
+      : (serialized!.weightOptions as any)?.options || [];
     expect(options.length).toBeGreaterThan(0);
-    expect(serialized.stock).toBeDefined();
-    expect(typeof serialized.stock).toBe('number');
+    expect(serialized!.stock).toBeDefined();
+    expect(typeof serialized!.stock).toBe('number');
   });
 
   // TEST L: Selling Unit + inventory -> both remain correct and independent.
@@ -175,8 +175,8 @@ describe('TVO Flavours — Inventory Management System Tests', () => {
     expect(row).toBeDefined();
 
     const serialized = serializeProduct(row);
-    expect(serialized.sellingUnit).toBeDefined();
-    expect(serialized.stock).toBeDefined();
-    expect(serialized.trackInventory).toBeDefined();
+    expect(serialized!.sellingUnit).toBeDefined();
+    expect(serialized!.stock).toBeDefined();
+    expect(serialized!.trackInventory).toBeDefined();
   });
 });

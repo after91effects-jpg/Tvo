@@ -1,5 +1,6 @@
 'use client';
-import { normalizeSellingUnit, isPieceOrDiscreteUnit } from '../../../lib/sellingUnit';
+import { normalizeSellingUnit } from '../../../lib/sellingUnit';
+import { getProductOptions } from '../../../lib/productOptions';
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
@@ -91,12 +92,14 @@ export default function ProductPage() {
           const basePrice = Number(p.price ?? p.salePrice ?? p.regularPrice ?? 0);
           const baseMrp = Number(p.regularPrice ?? p.regular_price ?? (basePrice || 0));
           const badges = Array.isArray(p.badges) ? p.badges : [];
-          const isPiece = isPieceOrDiscreteUnit(p.sellingUnit);
           const normalized: Product = {
             id: p.id || p.slug,
             slug: p.slug,
             name: p.name,
             sku: p.sku || '',
+            price: basePrice,
+            regularPrice: baseMrp,
+            salePrice: p.salePrice,
             shortDescription: p.shortDescription || p.short_description || p.description || '',
             description: p.description || '',
             category: categorySlug || 'cakes',
@@ -107,14 +110,7 @@ export default function ProductPage() {
             flavours: flavours.length ? flavours : flavourOptionsArr.map((fo: any) => fo.name),
             eggless: !!p.eggless,
             sellingUnit: normalizeSellingUnit(p.sellingUnit),
-            weightOptions: weightOptionsArr.length ? weightOptionsArr.map((w: any) => ({
-              label: w.label || w.value || `${w.weightKg || 0.5} kg`,
-              weightKg: isPiece
-                ? Number(w.weightKg ?? w.weight_kg ?? 0)
-                : Number(w.weightKg ?? w.weight_kg ?? (parseFloat(w.label) || 0.5)),
-              price: Number(w.price ?? basePrice),
-              mrp: Number(w.mrp ?? baseMrp),
-            })) : [{ label: isPiece ? '1 piece' : '0.5 kg', weightKg: isPiece ? 0 : 0.5, price: basePrice, mrp: Math.max(basePrice, baseMrp) }],
+            weightOptions: getProductOptions({ weightOptions: weightOptionsArr, sellingUnit: p.sellingUnit, price: basePrice, regularPrice: baseMrp, weightKg: p.weightKg }),
             images: images.map((im: any) => {
               const rawUrl = typeof im === 'string' ? im : (im.url || '');
               const url = normalizeImageUrl(rawUrl);
@@ -142,9 +138,9 @@ export default function ProductPage() {
             stockStatus: (p.manage_stock === 0 || p.enable_stock === 0)
               ? "in_stock"
               : (p.stockStatus || (p.stock > 0 ? "in_stock" : "out_of_stock")),
-            trackInventory: p.manage_stock !== 0 && p.enable_stock !== 0,
-            manageStock: p.manage_stock ?? 1,
-            lowStockThreshold: p.low_stock_threshold ?? 5,
+            trackInventory: p.trackInventory ?? Boolean(p.manageStock ?? p.manage_stock ?? 1),
+            manageStock: p.manageStock ?? p.manage_stock ?? 1,
+            lowStockThreshold: p.lowStockThreshold ?? p.low_stock_threshold ?? 5,
             badges,
             published: p.published !== undefined ? !!p.published : true,
             createdAt: p.createdAt || new Date().toISOString(),
@@ -225,6 +221,8 @@ export default function ProductPage() {
       router.push('/?view=orders');
     } else if (view === 'addresses') {
       router.push('/?view=addresses');
+    } else if (view === 'profile') {
+      router.push('/?view=profile');
     } else if (view === 'admin') {
       router.push('/?view=admin');
     } else if (view === 'about' || view === 'contact' || view === 'faq') {

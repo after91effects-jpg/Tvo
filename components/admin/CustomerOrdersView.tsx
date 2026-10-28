@@ -39,6 +39,8 @@ import { Order, OrderStatus } from '../../lib/types';
 import { logAuditEvent } from '../../lib/audit';
 import { useAuth } from '../../context/AuthContext';
 import { Modal } from '../common/Modal';
+import { updateAdminOrderStatuses } from '../../lib/adminOrderUpdates';
+import { formatLocalDate } from '../../lib/localDate';
 
 type DatePreset = 'all' | 'today' | 'yesterday' | '7days' | '30days' | 'thisMonth' | 'custom';
 
@@ -76,7 +78,7 @@ export const CustomerOrdersView: React.FC<CustomerOrdersViewProps> = ({ orders, 
   const handleApplyPreset = (preset: DatePreset) => {
     setDatePreset(preset);
     const now = new Date();
-    const todayStr = now.toISOString().split('T')[0];
+    const todayStr = formatLocalDate(now);
 
     if (preset === 'all') {
       setStartDate('');
@@ -88,23 +90,25 @@ export const CustomerOrdersView: React.FC<CustomerOrdersViewProps> = ({ orders, 
       setShowCustomDateInputs(false);
     } else if (preset === 'yesterday') {
       const yest = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-      const yestStr = yest.toISOString().split('T')[0];
+      const yestStr = formatLocalDate(yest);
       setStartDate(yestStr);
       setEndDate(yestStr);
       setShowCustomDateInputs(false);
     } else if (preset === '7days') {
-      const d7 = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-      setStartDate(d7.toISOString().split('T')[0]);
+      const d7 = new Date(now);
+      d7.setDate(now.getDate() - 6);
+      setStartDate(formatLocalDate(d7));
       setEndDate(todayStr);
       setShowCustomDateInputs(false);
     } else if (preset === '30days') {
-      const d30 = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-      setStartDate(d30.toISOString().split('T')[0]);
+      const d30 = new Date(now);
+      d30.setDate(now.getDate() - 29);
+      setStartDate(formatLocalDate(d30));
       setEndDate(todayStr);
       setShowCustomDateInputs(false);
     } else if (preset === 'thisMonth') {
       const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
-      setStartDate(firstDay.toISOString().split('T')[0]);
+      setStartDate(formatLocalDate(firstDay));
       setEndDate(todayStr);
       setShowCustomDateInputs(false);
     } else if (preset === 'custom') {
@@ -367,24 +371,13 @@ export const CustomerOrdersView: React.FC<CustomerOrdersViewProps> = ({ orders, 
         bulkStatusNote.trim() ||
         `Bulk updated to "${bulkTargetStatus}" by ${user?.name || 'Chef Administrator'}`;
 
-      const batchSize = 100;
-
-      for (let i = 0; i < ordersToUpdate.length; i += batchSize) {
-        const chunk = ordersToUpdate.slice(i, i + batchSize);
-        try {
-          await Promise.all(chunk.map((ord) =>
-            fetch('/api/orders', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                action: 'update-status',
-                orderNumber: ord.orderNumber,
-                status: bulkTargetStatus,
-                note: noteToSave,
-              }),
-            }).catch(() => {})
-          ));
-        } catch (e) {}
+      const { succeeded, failed } = await updateAdminOrderStatuses(ordersToUpdate, bulkTargetStatus, noteToSave);
+      onRefresh();
+      setSelectedOrderIds(failed.map(order => order.id));
+      if (failed.length > 0) {
+        setBulkSuccessMessage(null);
+        alert(`Updated ${succeeded.length} of ${ordersToUpdate.length} orders. ${failed.length} failed; those orders remain selected so you can retry.`);
+        return;
       }
 
       await logAuditEvent({

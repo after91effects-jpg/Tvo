@@ -324,6 +324,7 @@ export interface Order {
   status: OrderStatus;
   paymentMethod: 'Card' | 'UPI' | 'NetBanking' | 'COD';
   paymentStatus: 'Paid' | 'Pending' | 'Refunded';
+  payment_status?: string;
   transactionId?: string;
   statusHistory: OrderStatusHistoryItem[];
   createdAt: string;
@@ -429,10 +430,10 @@ export interface StoreSettings {
 export interface HamperBoxOption {
   id: string;
   name: string;
-  description: string;
+  description?: string;
   price: number;
   maxItems: number;
-  icon: string;
+  icon?: string;
   popular?: boolean;
   enabled: boolean;
 }
@@ -440,7 +441,7 @@ export interface HamperBoxOption {
 export interface HamperCategoryOption {
   id: string;
   name: string;
-  icon: string;
+  icon?: string;
   enabled: boolean;
   keywords: string[];
 }
@@ -449,15 +450,15 @@ export interface HamperWrappingOption {
   id: string;
   name: string;
   price: number;
-  icon: string;
+  icon?: string;
   enabled: boolean;
 }
 
 export interface HamperThemeOption {
   id: string;
   name: string;
-  description: string;
-  gradient: string;
+  description?: string;
+  gradient?: string;
   enabled: boolean;
 }
 

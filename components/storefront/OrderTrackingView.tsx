@@ -40,6 +40,7 @@ import {
 import { Order, OrderStatus } from '../../lib/types';
 import { normalizeOrders, normalizeOrderRow } from '../../lib/orderNormalizer';
 import { Modal } from '../common/Modal';
+import { getOrderStatusKey } from '../../lib/orderStatus';
 
 interface OrderTrackingViewProps {
   initialOrderNumber?: string;
@@ -73,13 +74,11 @@ export interface OrderStatusTheme {
  * Returns distinct, high-contrast visual styling, badges, and icons for each order status
  */
 export function getOrderStatusTheme(status: OrderStatus | string): OrderStatusTheme {
-  const normalized = (status || '').toLowerCase().trim();
+  const statusKey = getOrderStatusKey(status);
 
   // 1. Delivered
   if (
-    normalized.includes('deliver') ||
-    normalized.includes('completed') ||
-    normalized.includes('received')
+    statusKey === 'delivered'
   ) {
     return {
       key: 'delivered',
@@ -100,11 +99,7 @@ export function getOrderStatusTheme(status: OrderStatus | string): OrderStatusTh
 
   // 2. Out for Delivery
   if (
-    normalized.includes('transit') ||
-    normalized.includes('out for delivery') ||
-    normalized.includes('dispatched') ||
-    normalized.includes('en route') ||
-    normalized.includes('delivery fleet')
+    statusKey === 'out_for_delivery'
   ) {
     return {
       key: 'out_for_delivery',
@@ -125,12 +120,7 @@ export function getOrderStatusTheme(status: OrderStatus | string): OrderStatusTh
 
   // 3. In Preparation / Baking in Kitchen
   if (
-    normalized.includes('baking') ||
-    normalized.includes('kitchen') ||
-    normalized.includes('prep') ||
-    normalized.includes('preparation') ||
-    normalized.includes('handcraft') ||
-    normalized.includes('icing')
+    statusKey === 'preparing'
   ) {
     return {
       key: 'preparing',
@@ -150,7 +140,7 @@ export function getOrderStatusTheme(status: OrderStatus | string): OrderStatusTh
   }
 
   // 4. Cancelled
-  if (normalized.includes('cancel') || normalized.includes('void')) {
+  if (statusKey === 'cancelled') {
     return {
       key: 'cancelled',
       primaryLabel: 'Cancelled',
@@ -1010,10 +1000,10 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
   };
 
   const getStepIndex = (status: OrderStatus | string) => {
-    const normalized = (status || '').toLowerCase();
-    if (normalized.includes('deliver') || normalized.includes('completed')) return 3;
-    if (normalized.includes('transit') || normalized.includes('out for delivery') || normalized.includes('dispatched')) return 2;
-    if (normalized.includes('baking') || normalized.includes('kitchen') || normalized.includes('prep')) return 1;
+    const key = getOrderStatusTheme(status).key;
+    if (key === 'delivered') return 3;
+    if (key === 'out_for_delivery') return 2;
+    if (key === 'preparing') return 1;
     return 0; // Order Placed / Pending
   };
 

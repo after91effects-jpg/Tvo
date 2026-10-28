@@ -327,3 +327,93 @@ export async function importProductsFromWooCommerce(
     };
   }
 }
+
+/**
+ * Exports orders to CSV and triggers browser download
+ */
+export function exportOrdersToCSV(orders: any[], filename: string = 'tvo_flavours_orders.csv'): string {
+  const rows = orders.map((o) => ({
+    'Order Number': o.order_number || o.id,
+    'Date': o.created_at || '',
+    'Customer Name': o.customer_name || '',
+    'Customer Email': o.customer_email || '',
+    'Customer Phone': o.customer_phone || '',
+    'Status': o.status || '',
+    'Payment Status': o.payment_status || '',
+    'Payment Method': o.payment_method || '',
+    'Subtotal': o.subtotal != null ? o.subtotal : '',
+    'Discount': o.discount != null ? o.discount : 0,
+    'Delivery Fee': o.delivery_fee != null ? o.delivery_fee : 0,
+    'Total': o.total != null ? o.total : '',
+    'Delivery Date': o.delivery_date || '',
+    'Delivery Slot': o.delivery_slot || '',
+    'Delivery Address': [o.address_line1, o.address_line2, o.city, o.pincode].filter(Boolean).join(', ')
+  }));
+  const csv = Papa.unparse(rows, { quotes: true });
+  if (typeof document !== 'undefined') {
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+  return csv;
+}
+
+/**
+ * Exports customers to CSV and triggers browser download
+ */
+export function exportCustomersToCSV(customers: any[], filename: string = 'tvo_flavours_customers.csv'): string {
+  const rows = customers.map((c) => ({
+    'ID': c.id,
+    'Name': c.name || '',
+    'Email': c.email || '',
+    'Phone': c.phone || '',
+    'Group': c.group_name || 'Regular',
+    'Total Spend (₹)': c.total_spend || 0,
+    'Total Orders': c.order_count || 0,
+    'Created At': c.created_at || '',
+    'Notes': c.notes || ''
+  }));
+  const csv = Papa.unparse(rows, { quotes: true });
+  if (typeof document !== 'undefined') {
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+  return csv;
+}
+
+/**
+ * Exports sales analytics summary to CSV and triggers browser download
+ */
+export function exportSalesToCSV(salesRecords: any[], filename: string = 'tvo_flavours_sales_report.csv'): string {
+  const rows = salesRecords.map((s) => ({
+    'Date': s.date || '',
+    'Orders Count': s.ordersCount || s.count || 0,
+    'Gross Revenue (₹)': s.revenue || s.gross || 0,
+    'Discounts (₹)': s.discounts || 0,
+    'Net Revenue (₹)': s.netRevenue || s.net || (s.revenue || 0) - (s.discounts || 0),
+    'Average Order Value (₹)': s.aov || (s.ordersCount ? Math.round((s.revenue || 0) / s.ordersCount) : 0)
+  }));
+  const csv = Papa.unparse(rows, { quotes: true });
+  if (typeof document !== 'undefined') {
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+  return csv;
+}
