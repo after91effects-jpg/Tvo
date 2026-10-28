@@ -491,13 +491,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { success: false, error: 'Please enter a valid email address.' };
       }
 
-      // Use Firebase Auth for password reset email
-      const actionCodeSettings = {
-        url: typeof window !== 'undefined' ? `${window.location.origin}/?view=reset` : '/?view=reset',
-        handleCodeInApp: true,
-      };
-
-      await sendPasswordResetEmail(auth, trimmedEmail, actionCodeSettings);
+      // Use Firebase's hosted recovery page. The former custom continue URL
+      // failed with unauthorized-continue-uri and prevented reset emails.
+      await sendPasswordResetEmail(auth, trimmedEmail);
 
       return { success: true };
     } catch (err: any) {

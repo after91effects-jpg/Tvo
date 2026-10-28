@@ -19,3 +19,6 @@ public/uploads/
 /data/*.db-wal
 /data/*.dev.db
 /data/import-validation-report.json
+
+# Private live snapshots and database migration recovery exports
+/data/backups/

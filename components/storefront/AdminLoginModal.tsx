@@ -16,12 +16,27 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
   onClose,
   onSuccess,
 }) => {
-  const { loginAdmin } = useAuth();
+  const { loginAdmin, sendPasswordReset } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [isResetting, setIsResetting] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
+
+  const handlePasswordReset = async () => {
+    setIsResetting(true);
+    setError('');
+    setResetSent(false);
+    try {
+      const result = await sendPasswordReset(email);
+      if (!result.success) setError(result.error || 'Unable to send a reset email. Please try again.');
+      else setResetSent(true);
+    } finally {
+      setIsResetting(false);
+    }
+  };
 
   const handleCustomLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,17 +80,25 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
               {error}
             </div>
           )}
+          {resetSent && (
+            <p role="status" className="p-3 rounded-xl bg-emerald-500/10 text-emerald-700 text-xs">
+              If this email has an account, a password reset link has been sent. Check your inbox and spam folder.
+            </p>
+          )}
 
           <div>
-            <label className="block text-xs font-semibold text-[var(--text-main)] mb-1">
+            <label htmlFor="admin-login-email" className="block text-xs font-semibold text-[var(--text-main)] mb-1">
               Email Address
             </label>
             <div className="relative">
               <Mail className="w-4 h-4 text-[var(--text-subtle)] absolute left-3 top-1/2 -translate-y-1/2" />
               <input
+                id="admin-login-email"
+                name="email"
+                autoComplete="username"
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => { setEmail(e.target.value); setResetSent(false); }}
                 required
                 className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
               />
@@ -83,12 +106,15 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-[var(--text-main)] mb-1">
+            <label htmlFor="admin-login-password" className="block text-xs font-semibold text-[var(--text-main)] mb-1">
               Password
             </label>
             <div className="relative">
               <Lock className="w-4 h-4 text-[var(--text-subtle)] absolute left-3 top-1/2 -translate-y-1/2" />
               <input
+                id="admin-login-password"
+                name="password"
+                autoComplete="current-password"
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -108,8 +134,17 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
           </div>
 
           <button
+            type="button"
+            onClick={handlePasswordReset}
+            disabled={isLoading || isResetting || resetSent}
+            className="text-xs font-semibold text-[var(--primary)] hover:underline disabled:opacity-50"
+          >
+            {isResetting ? 'Sending reset link...' : 'Forgot password?'}
+          </button>
+
+          <button
             type="submit"
-            disabled={isLoading}
+            disabled={isLoading || isResetting}
             className="w-full py-2.5 rounded-xl bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white text-xs font-semibold shadow-xs active:scale-98 transition-all cursor-pointer disabled:opacity-50"
           >
             {isLoading ? 'Authenticating...' : 'Sign In to Dashboard'}
@@ -119,7 +154,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
         {/* Security Footer Note */}
         <div className="text-center text-[10px] text-[var(--text-subtle)] flex items-center justify-center gap-1">
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-          <span>Role Gate Protected • Activity logged to Firestore Audit Stream</span>
+          <span>Secure sign-in • Role-based admin access</span>
         </div>
       </div>
     </Modal>
