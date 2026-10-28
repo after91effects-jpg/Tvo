@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import fs from 'fs';
 import path from 'path';
+import Database from 'better-sqlite3';
 import { createDatabaseBackup, listDatabaseBackups, verifyDatabaseBackup } from '../server/backup';
 import type { UserProfile } from '../types';
 
@@ -66,5 +67,24 @@ describe('Database Backup & Recovery Engine', () => {
     const res = verifyDatabaseBackup(mockSuperAdmin, 'non_existent_snapshot_123.db');
     expect(res.ok).toBe(false);
     expect(res.valid).toBe(false);
+  });
+
+  it('rejects an unreferenced page instead of treating a non-empty check result as success', () => {
+    const filename = `tvoflavours_backup_integrity_test_${Date.now()}.db`;
+    const filepath = path.join(process.cwd(), 'data', 'backups', filename);
+    fs.mkdirSync(path.dirname(filepath), { recursive: true });
+    const fixture = new Database(filepath);
+    fixture.exec('CREATE TABLE example (id INTEGER PRIMARY KEY, name TEXT)');
+    fixture.close();
+    createdBackups.push(filepath);
+    const original = fs.readFileSync(filepath);
+    const pageSize = original.readUInt16BE(16) || 65536;
+    const damaged = Buffer.concat([original, Buffer.alloc(pageSize)]);
+    damaged.writeUInt32BE(original.readUInt32BE(28) + 1, 28);
+    fs.writeFileSync(filepath, damaged);
+    const result = verifyDatabaseBackup(mockSuperAdmin, filename);
+    expect(result.ok).toBe(true);
+    expect(result.valid).toBe(false);
+    expect(result.details).toContain('never used');
   });
 });

@@ -1,4 +1,4 @@
-import { db } from './db';
+import { db, IS_MYSQL } from './db';
 import { importCatalog } from './importer';
 
 // ---------------------------------------------------------------------------
@@ -44,6 +44,7 @@ function slugify(s: string): string {
 let seeded = false;
 
 export function seedIfEmpty() {
+  if (IS_MYSQL) return true; // Never seed or replace migrated live data.
   if (seeded) return true;
   try {
     const row = db.prepare('SELECT value FROM settings WHERE key=?').get('seeded_v1');

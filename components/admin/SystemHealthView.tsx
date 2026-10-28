@@ -24,7 +24,7 @@ import { useAuth } from '../../context/AuthContext';
 
 interface HealthData {
   ok: boolean;
-  db: { reachable: boolean; check?: string };
+  db: { reachable: boolean; check?: string; driver?: string };
   firebase: { adminAuth: boolean };
   environment: string;
   timestamp: string;
@@ -50,7 +50,7 @@ interface BackupItem {
   sizeBytes: number;
   sizeFormatted: string;
   createdAt: string;
-  integrityOk: boolean;
+  integrityOk: boolean | null;
 }
 
 const ENV_COLORS: Record<string, string> = {
@@ -124,8 +124,10 @@ export const SystemHealthView: React.FC = () => {
       });
       const data = await res.json();
       if (res.ok && data.valid) {
+        setBackups(items => items.map(item => item.filename === filename ? { ...item, integrityOk: true } : item));
         setBackupMessage({ type: 'success', text: `${filename}: Integrity Verified (${data.details || 'PRAGMA quick_check OK'})` });
       } else {
+        setBackups(items => items.map(item => item.filename === filename ? { ...item, integrityOk: false } : item));
         setBackupMessage({ type: 'error', text: `${filename}: Integrity check failed: ${data.error || 'Corrupted'}` });
       }
     } catch (e: any) {
@@ -393,11 +395,13 @@ export const SystemHealthView: React.FC = () => {
                   Database Snapshots & Disaster Recovery
                 </h2>
                 <p className="text-xs text-[var(--text-muted)] mt-0.5">
-                  Hot online snapshots using SQLite backup API. Verifies PRAGMA integrity without table locks.
+                  {healthData?.db.driver === 'mysql'
+                    ? 'Permanent MySQL storage. Manage database backups and restores in Hostinger hPanel → Backups.'
+                    : 'Create a local database snapshot and verify its integrity before relying on it.'}
                 </p>
               </div>
 
-              <div className="flex items-center gap-2">
+              {healthData?.db.driver !== 'mysql' && <div className="flex items-center gap-2">
                 <button
                   onClick={handleCreateBackup}
                   disabled={creatingBackup}
@@ -415,7 +419,7 @@ export const SystemHealthView: React.FC = () => {
                     </>
                   )}
                 </button>
-              </div>
+              </div>}
             </div>
 
             {backupMessage && (
@@ -445,7 +449,7 @@ export const SystemHealthView: React.FC = () => {
                   {backups.length === 0 ? (
                     <tr>
                       <td colSpan={5} className="py-6 text-center text-xs text-[var(--text-muted)]">
-                        {loadingBackups ? 'Loading snapshots...' : 'No snapshots created yet. Click "Create New Snapshot" above.'}
+                        {healthData?.db.driver === 'mysql' ? 'Database backups are managed in Hostinger hPanel.' : loadingBackups ? 'Loading snapshots...' : 'No snapshots created yet. Click "Create New Snapshot" above.'}
                       </td>
                     </tr>
                   ) : (
@@ -459,8 +463,9 @@ export const SystemHealthView: React.FC = () => {
                           {new Date(b.createdAt).toLocaleString('en-IN')}
                         </td>
                         <td className="py-2.5 px-3">
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full">
-                            <CheckCircle className="w-3 h-3" /> QuickCheck OK
+                          <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${b.integrityOk === true ? 'text-emerald-600 bg-emerald-500/10' : 'text-amber-600 bg-amber-500/10'}`}>
+                            {b.integrityOk === true ? <CheckCircle className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
+                            {b.integrityOk === true ? 'Verified' : b.integrityOk === false ? 'Check failed' : 'Not verified'}
                           </span>
                         </td>
                         <td className="py-2.5 px-3 text-right">

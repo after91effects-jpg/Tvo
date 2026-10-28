@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { checkDbHealth } from '../../../lib/server/db';
+import { checkDbHealth, DATABASE_DRIVER } from '../../../lib/server/db';
 import { getFirebaseAdminAuth } from '../../../lib/server/firebaseAdmin';
 import { getCurrentUser, isAdminRole } from '../../../lib/server/auth';
 import { logInfo, logWarn, logError, withCorrelationId } from '../../../lib/server/logger';
@@ -25,7 +25,7 @@ export async function GET(req: Request) {
     logInfo('health_check', 'Health check completed', correlationId, { elapsed, dbOk: dbHealth.reachable, firebaseOk: !!fbAuth });
     return NextResponse.json({
       ok: true,
-      db: { reachable: dbHealth.reachable, check: dbHealth.check },
+      db: { reachable: dbHealth.reachable, check: dbHealth.check, driver: DATABASE_DRIVER },
       firebase: { adminAuth: !!fbAuth },
       environment: process.env.NODE_ENV || 'development',
       timestamp: new Date().toISOString(),

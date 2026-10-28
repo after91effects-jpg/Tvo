@@ -3,11 +3,12 @@ import type {NextConfig} from 'next';
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   output: 'standalone',
-  serverExternalPackages: ['better-sqlite3'],
+  serverExternalPackages: ['better-sqlite3', 'mysql2'],
   // Hostinger runs the standalone server; public/ is not copied there by default,
   // so bundle the static uploads into .next/standalone/public and serve them from the server.
   outputFileTracingIncludes: {
-    '/**': ['./public/**/*'],
+    '/**': ['./public/**/*', './lib/server/*.cjs',
+      './node_modules/{mysql2,aws-ssl-profiles,generate-function,iconv-lite,long,lru.min,named-placeholders,sql-escaper,is-property,safer-buffer}/**/*'],
   },
   eslint: {
     ignoreDuringBuilds: true,

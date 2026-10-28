@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import Database from 'better-sqlite3';
-import { db } from './db';
+import { db, IS_MYSQL } from './db';
 import { hasPermission } from './permissions';
 import { logAudit } from './api';
 import type { UserProfile } from '../types';
@@ -14,7 +14,7 @@ export interface BackupMetadata {
   sizeBytes: number;
   sizeFormatted: string;
   createdAt: string;
-  integrityOk: boolean;
+  integrityOk: boolean | null;
 }
 
 function ensureBackupDir(): string {
@@ -39,14 +39,16 @@ export async function createDatabaseBackup(user: UserProfile | any): Promise<{ o
   }
 
   try {
+    if (IS_MYSQL) return { ok: false, error: 'MySQL backups are managed in Hostinger hPanel → Backups. Local SQLite snapshots do not back up the live MySQL database.' };
     ensureBackupDir();
     const now = new Date();
     const timestamp = now.toISOString().replace(/[-:T]/g, '').slice(0, 14); // YYYYMMDDHHmmss
     const filename = `tvoflavours_backup_${timestamp}.db`;
     const destPath = path.join(BACKUP_DIR, filename);
 
-    // SQLite online backup via better-sqlite3
-    await db.backup(destPath);
+    // VACUUM INTO takes a consistent snapshot and rebuilds unused page maps.
+    // It never changes the source database. Verify the resulting copy strictly.
+    db.prepare('VACUUM INTO ?').run(destPath);
 
     // Verify integrity of the created snapshot
     let integrityOk = false;
@@ -54,7 +56,7 @@ export async function createDatabaseBackup(user: UserProfile | any): Promise<{ o
       const verifyDb = new Database(destPath, { readonly: true });
       const check = verifyDb.prepare('PRAGMA quick_check').get() as any;
       const rawRes = String(check?.quick_check || check?.integrity_check || '');
-      integrityOk = Boolean(rawRes === 'ok' || (!/error|corrupt/i.test(rawRes) && rawRes.length > 0));
+      integrityOk = rawRes === 'ok';
       verifyDb.close();
     } catch {
       integrityOk = false;
@@ -90,6 +92,8 @@ export function listDatabaseBackups(user: UserProfile | any): BackupMetadata[] {
     return [];
   }
 
+  if (IS_MYSQL) return [];
+
   ensureBackupDir();
   const files = fs.readdirSync(BACKUP_DIR).filter((f) => f.endsWith('.db') && f.startsWith('tvoflavours_backup_'));
   
@@ -104,7 +108,7 @@ export function listDatabaseBackups(user: UserProfile | any): BackupMetadata[] {
         sizeBytes: stat.size,
         sizeFormatted: formatBytes(stat.size),
         createdAt: stat.mtime.toISOString(),
-        integrityOk: true, // evaluated on demand in verifyDatabaseBackup
+        integrityOk: null, // evaluated on demand in verifyDatabaseBackup
       });
     } catch {
       // skip unreadable file
@@ -136,7 +140,7 @@ export function verifyDatabaseBackup(user: UserProfile | any, filename: string):
     backupDb.close();
 
     const rawRes = String(check?.quick_check || check?.integrity_check || '');
-    const isValid = Boolean(rawRes === 'ok' || (!/error|corrupt/i.test(rawRes) && rawRes.length > 0));
+    const isValid = rawRes === 'ok';
     return {
       ok: true,
       valid: Boolean(isValid),

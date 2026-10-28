@@ -1,7 +1,7 @@
 import { normalizePagination } from '../pagination';
 import { isPieceOrDiscreteUnit } from '../sellingUnit';
 import { logAudit, slugify, jsonParseSafe } from './api';
-import { db } from './db';
+import { db, IS_MYSQL } from './db';
 import { hashPassword } from './auth';
 import { extractPieceCount } from './order-engine';
 import { ADMIN_ROLES } from './permissions';
@@ -375,8 +375,8 @@ export function saveProductionCapacity(user: User, data: any) {
 }
 
 export function setSlotCapacity(user: User, data: any) {
-  run("INSERT INTO slot_capacity (slot_id, date, capacity, books, closed) VALUES (?,?,?,COALESCE((SELECT books FROM slot_capacity WHERE slot_id=? AND date=?),0),?) ON CONFLICT(slot_id,date) DO UPDATE SET capacity=excluded.capacity, closed=excluded.closed",
-    data.slot_id, data.date, Number(data.capacity) || 0, data.slot_id, data.date, data.closed ? 1 : 0);
+  run("INSERT INTO slot_capacity (slot_id, date, capacity, books, closed) VALUES (?,?,?,0,?) ON CONFLICT(slot_id,date) DO UPDATE SET capacity=excluded.capacity, closed=excluded.closed",
+    data.slot_id, data.date, Number(data.capacity) || 0, data.closed ? 1 : 0);
   audit(user, 'SLOT_CAPACITY_SAVE', 'SlotCapacity', `${data.slot_id}:${data.date}`);
   return { ok: true };
 }
@@ -394,8 +394,8 @@ export function bulkSetSlotCapacity(user: User, data: any) {
   tx(() => {
     for (const d of dates) {
       for (const sId of slotIds) {
-        run("INSERT INTO slot_capacity (slot_id, date, capacity, books, closed) VALUES (?,?,?,COALESCE((SELECT books FROM slot_capacity WHERE slot_id=? AND date=?),0),?) ON CONFLICT(slot_id,date) DO UPDATE SET capacity=excluded.capacity, closed=excluded.closed",
-          sId, d, capacity, sId, d, closed);
+        run("INSERT INTO slot_capacity (slot_id, date, capacity, books, closed) VALUES (?,?,?,0,?) ON CONFLICT(slot_id,date) DO UPDATE SET capacity=excluded.capacity, closed=excluded.closed",
+          sId, d, capacity, closed);
       }
     }
   });
@@ -1174,6 +1174,7 @@ export function getNotifications(user: User) {
 // ============================================================================
 
 function ensureOccasionTables() {
+  if (IS_MYSQL) return; // Created and checked by the explicit MySQL migration.
   db.exec(`
     CREATE TABLE IF NOT EXISTS occasions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

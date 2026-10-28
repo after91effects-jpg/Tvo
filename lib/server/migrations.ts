@@ -1,4 +1,4 @@
-import { db } from './db';
+import { db, IS_MYSQL } from './db';
 
 // Safe, idempotent additive migrations. Adds new columns/tables only if missing,
 // never drops or alters existing data, and never touches importer-managed columns.
@@ -30,6 +30,7 @@ function addTable(ddl: string) {
 }
 
 export function runMigrations() {
+  if (IS_MYSQL) return; // MySQL schema is migrated and verified explicitly.
   // Never mutate the on-disk DB during test runs; migrations belong to the
   // live server boot path only. Tests use synthetic rows and must not dirty
   // the committed data/tvoflavours.db file.

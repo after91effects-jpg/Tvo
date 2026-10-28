@@ -1,14 +1,14 @@
 import { NextResponse } from 'next/server';
-import { db, initDb } from './db';
+import { db, initDb, IS_MYSQL } from './db';
 import { runMigrations } from './migrations';
 import { getCurrentUser, isAdminRole } from './auth';
 export { getCurrentUser, isAdminRole } from './auth';
 
 initDb();
-runMigrations();
+if (!IS_MYSQL) runMigrations();
 
 import { seedIfEmpty } from './seed';
-seedIfEmpty();
+if (!IS_MYSQL) seedIfEmpty();
 
 export function ok(data: unknown, status = 200) {
   return NextResponse.json(data, { status });

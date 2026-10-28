@@ -1,6 +1,11 @@
 import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
+import { createMysqlDatabase } from './mysql';
+
+export const DATABASE_DRIVER = process.env.DATABASE_DRIVER || 'sqlite';
+if (!['sqlite', 'mysql'].includes(DATABASE_DRIVER)) throw new Error('Unsupported DATABASE_DRIVER');
+export const IS_MYSQL = DATABASE_DRIVER === 'mysql';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
 const DB_PATH = path.join(DATA_DIR, 'tvoflavours.db');
@@ -8,7 +13,8 @@ const DB_PATH = path.join(DATA_DIR, 'tvoflavours.db');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 export let db: Database.Database;
-for (let attempt = 0; attempt < 3; attempt++) {
+if (IS_MYSQL) db = createMysqlDatabase();
+for (let attempt = 0; !IS_MYSQL && attempt < 3; attempt++) {
   try {
     db = new Database(DB_PATH);
     db.pragma('journal_mode = WAL');
@@ -29,6 +35,7 @@ export function checkDbHealth(): { reachable: boolean; check: string } {
     if (ping?.ok !== 1) {
       return { reachable: false, check: 'SELECT 1' };
     }
+    if (IS_MYSQL) return { reachable: true, check: 'MySQL SELECT 1; verified migration' };
 
     try {
       const result = db.prepare('PRAGMA quick_check').get() as { quick_check: string } | undefined;
@@ -759,6 +766,11 @@ CREATE TABLE IF NOT EXISTS payment_gateway_configs (
 `;
 
 export function initDb() {
+  if (IS_MYSQL) {
+    // The worker checks the migration marker before its first query. Keeping
+    // this lazy also lets Next build without reaching the runtime DB network.
+    return;
+  }
   db.exec(SCHEMA);
 }
 

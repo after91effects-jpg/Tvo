@@ -166,7 +166,7 @@ export function listProducts(opts: any) {
   } as Record<string, string>;
   const sortKey = (opts.sort || 'newest') as string;
   const sortField = orderBy[sortKey] || 'p.updated_at DESC';
-  const rows = db.prepare(`${LIST_BASE} ${where} ORDER BY ${orderBy} LIMIT ? OFFSET ?`).all(...p, per, (page - 1) * per);
+  const rows = db.prepare(`${LIST_BASE} ${where} ORDER BY ${sortField} LIMIT ? OFFSET ?`).all(...p, per, (page - 1) * per);
   const countFrom = `products p LEFT JOIN categories c ON p.category_id=c.id LEFT JOIN brands b ON p.brand_id=b.id`;
   const totalRow = db.prepare(`SELECT COUNT(*) AS c FROM ${countFrom} ${where}`).get(...p) as any;
   return { products: rows.map(serializeAdminProduct), total: totalRow?.c || 0, page, per };

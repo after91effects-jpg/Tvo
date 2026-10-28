@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 const mock = vi.hoisted(() => ({ prepare: vi.fn(), all: vi.fn() }));
-vi.mock('../db', () => ({ db: { prepare: mock.prepare, exec: vi.fn() } }));
+vi.mock('../db', () => ({ IS_MYSQL: false, db: { prepare: mock.prepare, exec: vi.fn() } }));
 vi.mock('../api', () => ({ logAudit: vi.fn(), slugify: vi.fn(), jsonParseSafe: (s: string) => JSON.parse(s || '[]') }));
 vi.mock('../auth', () => ({ hashPassword: vi.fn() }));
 vi.mock('../order-engine', () => ({ extractPieceCount: vi.fn() }));
