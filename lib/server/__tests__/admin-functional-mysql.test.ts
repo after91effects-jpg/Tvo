@@ -66,6 +66,9 @@ describe.skipIf(!process.env.MYSQL_TEST_SOCKET)('Admin functional MySQL rehearsa
     const summary=await call(csv.POST,'/api/admin/csv/import',{rows:[row],duplicateStrategy:'skip'}); expect(summary.created).toBe(1);
     const saved=db.prepare('SELECT * FROM products WHERE sku=?').get(prefix+'CSV');
     expect(saved.regular_price).toBe(600); expect(saved.sale_price).toBe(450); expect(saved.category_id).toBe(categoryId); expect(saved.images_json).toContain('row-one.webp'); expect(saved.published).toBe(0);
+    const partial=await call(csv.POST,'/api/admin/csv/import',{rows:[{SKU:row.SKU,Name:row.Name}],duplicateStrategy:'update'});expect(partial.updated).toBe(1);
+    const preserved=db.prepare('SELECT regular_price,sale_price,stock,published,images_json FROM products WHERE id=?').get(saved.id);
+    expect(preserved).toMatchObject({regular_price:600,sale_price:450,stock:3,published:0});expect(preserved.images_json).toContain('row-one.webp');
     const old=db.prepare('SELECT sku,name FROM products WHERE sku IS NOT NULL ORDER BY id LIMIT 1 OFFSET 25').get();
     const skipped=await call(csv.POST,'/api/admin/csv/import',{rows:[{SKU:old.sku,Name:old.name}],duplicateStrategy:'skip'});expect(skipped.skipped).toBe(1);
     const copied=await call(csv.POST,'/api/admin/csv/import',{rows:[row],duplicateStrategy:'create_new'});expect(copied.created, JSON.stringify(copied.errors)).toBe(1);

@@ -112,14 +112,14 @@ export async function POST(req: Request) {
           (skuVal && inFileSeen.get(skuVal.toLowerCase())) ||
           (nameVal && inFileSeen.get(nameVal.toLowerCase()));
 
-        const regularPrice = toNum(row[mapping['regularPrice']], 0);
-        const salePrice = toNum(row[mapping['salePrice']], regularPrice || 0);
+        const regularPrice = toNum(row[mapping['regularPrice']], Number(existing?.regular_price) || 0);
+        const salePrice = toNum(row[mapping['salePrice']], mapping['regularPrice'] ? regularPrice : Number(existing?.sale_price ?? regularPrice));
         const rawCategory = (row[mapping['category']] || '').toString().trim();
         if (rawCategory && !categoryMap.has(rawCategory.toLowerCase()) && !categoryMap.has(rawCategory.toLowerCase().replace(/\s+/g, '-'))) throw new Error(`Unknown category: ${rawCategory}. Create the category first.`);
         const categorySlug = rawCategory.toLowerCase().replace(/\s+/g, '-');
         const shortDesc = (row[mapping['shortDescription']] || '').toString().trim();
         const fullDesc = (row[mapping['description']] || '').toString().trim();
-        const rawStock = toNum(row[mapping['stock']], 20);
+        const rawStock = toNum(row[mapping['stock']], Number(existing?.stock) || 0);
         const stock = Math.max(0, Math.round(rawStock));
         const stockStatusVal = (row[mapping['stockStatus']] || '').toString().toLowerCase();
         const stockStatus = stockStatusVal.includes('out') || stockStatusVal === '0' || stock <= 0 ? 'out_of_stock' : 'in_stock';
@@ -148,7 +148,7 @@ export async function POST(req: Request) {
         const weightOptions = previousOptions?.length
           ? previousOptions.map((option: any, i: number) => i === 0 ? { ...option, price: salePrice, mrp: regularPrice } : option)
           : [{ label: `${rawWeight} kg`, weightKg: rawWeight, price: salePrice, mrp: regularPrice }];
-        const publishedVal = (row[mapping['published']] || row['Published'] || row['published'] || '1').toString();
+        const publishedVal = (row[mapping['published']] ?? row['Published'] ?? row['published'] ?? existing?.published ?? '1').toString();
         const published = publishedVal === '0' || publishedVal.toLowerCase() === 'false' ? false : true;
 
         const productData = {

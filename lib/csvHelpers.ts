@@ -194,8 +194,8 @@ export function transformCSVRowToProduct(
     return Number.isFinite(n) ? n : fallback;
   };
 
-  const regularPrice = toNum(getValue('regularPrice'), 0);
-  const salePrice = toNum(getValue('salePrice'), regularPrice || 0);
+  const regularPrice = toNum(getValue('regularPrice'), existingProduct?.weightOptions?.[0]?.mrp || 0);
+  const salePrice = toNum(getValue('salePrice'), getValue('regularPrice') ? regularPrice : existingProduct?.weightOptions?.[0]?.price || regularPrice);
 
   const rawCategory = getValue('category') || 'birthday';
   const categorySlug = rawCategory.toLowerCase().replace(/\s+/g, '-');
@@ -203,7 +203,7 @@ export function transformCSVRowToProduct(
   const shortDesc = getValue('shortDescription') || 'Freshly baked artisan confection by TVO Flavours.';
   const fullDesc = getValue('description') || shortDesc;
 
-  const rawStock = toNum(getValue('stock'), 20);
+  const rawStock = toNum(getValue('stock'), existingProduct?.stock || 0);
   const stock = Math.max(0, Math.round(rawStock));
   const stockStatus = getValue('stockStatus').toLowerCase().includes('out') || stock <= 0 ? 'out_of_stock' : 'in_stock';
 
@@ -223,19 +223,12 @@ export function transformCSVRowToProduct(
         thumbUrl: url,
         alt: `${name} View ${i + 1}`,
       }))
-    : existingProduct?.images || [
-        {
-          url: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=1000&q=80',
-          thumbUrl: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=300&q=70',
-          alt: name,
-        }
-      ];
+    : existingProduct?.images || [];
 
   const rawWeight = parseFloat(getValue('weight')) || 0.5;
-  const weightOptions: WeightOption[] = [
-    { label: `${rawWeight} kg (Serves 4-6)`, weightKg: rawWeight, price: salePrice, mrp: regularPrice },
-    { label: `${(rawWeight * 2).toFixed(1)} kg (Serves 8-10)`, weightKg: rawWeight * 2, price: Math.round(salePrice * 1.85), mrp: Math.round(regularPrice * 1.85) },
-  ];
+  const weightOptions: WeightOption[] = existingProduct?.weightOptions?.length
+    ? existingProduct.weightOptions.map((option, index) => index === 0 ? { ...option, price: salePrice, mrp: regularPrice } : option)
+    : [{ label: `${rawWeight} kg`, weightKg: rawWeight, price: salePrice, mrp: regularPrice }];
 
   const published = getValue('published') === '0' || getValue('published').toLowerCase() === 'false' ? false : true;
 
