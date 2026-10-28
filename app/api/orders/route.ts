@@ -1,18 +1,11 @@
+import { changeOrderStatus } from '../../../lib/server/order-status';
 import { hasPermission } from '../../../lib/server/permissions';
-import { isPieceOrDiscreteUnit } from '../../../lib/sellingUnit';
 import { ok, err, db, generateOrderNumber, jsonParseSafe, getCurrentUser, logAudit } from '../../../lib/server/api';
-import { createOrder, OrderInputError, extractPieceCount } from '../../../lib/server/order-engine';
+import { createOrder, OrderInputError } from '../../../lib/server/order-engine';
 import { logError } from '../../../lib/server/logger';
 import { rateLimitMiddleware } from '../../../lib/server/rateLimit';
 
 export const runtime = 'nodejs';
-
-const PRODUCTION_STATUSES = [
-  'Order Placed', 'Payment Confirmed', 'Accepted', 'In Preparation',
-  'Baking in Kitchen', 'Baking', 'Decorating', 'Quality Check',
-  'Packed', 'Ready for Dispatch', 'Dispatched', 'Out for Delivery',
-  'Delivered', 'Cancelled'
-];
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
@@ -117,84 +110,16 @@ export async function POST(req: Request) {
 
 export async function PUT(req: Request) {
   const body = await req.json().catch(() => ({}));
-  const action = body.action;
   const user = getCurrentUser(req);
-  const isAuthorized = user && hasPermission(user.role, 'update_order_status');
-
-  if (!isAuthorized) {
-    return err('Unauthorized to modify order', 403);
+  if (!user || !hasPermission(user.role, 'update_order_status')) return err('Unauthorized to modify order', 403);
+  if (body.action !== 'status') return err('Unknown action');
+  const order = db.prepare('SELECT id FROM orders WHERE order_number=?').get(body.orderNumber) as { id:number } | undefined;
+  if (!order) return err('Order not found',404);
+  try {
+    const result = changeOrderStatus(user,order.id,body.status,body.note);
+    return result.ok ? ok(result) : err(result.error || 'Status update failed',result.httpStatus || 400);
+  } catch (error) {
+    logError('order_status_failed',error instanceof Error ? error.message : String(error));
+    return err('Could not update order',500);
   }
-
-  if (action === 'status') {
-    const order = db.prepare('SELECT * FROM orders WHERE order_number=?').get(body.orderNumber) as any;
-    if (!order) return err('Order not found', 404);
-    const newStatus = body.status;
-    if (!PRODUCTION_STATUSES.includes(newStatus)) return err('Invalid status', 400);
-
-    const currentIdx = PRODUCTION_STATUSES.indexOf(order.status);
-    const nextIdx = PRODUCTION_STATUSES.indexOf(newStatus);
-    const isCancellation = String(newStatus).toLowerCase() === 'cancelled';
-    const isTerminal = currentIdx >= PRODUCTION_STATUSES.indexOf('Delivered');
-    if (currentIdx !== -1 && nextIdx !== -1) {
-      if (isTerminal && nextIdx !== currentIdx) {
-        return err('This order is already ' + order.status + ' and is final', 400);
-      }
-      if (!isCancellation && nextIdx < currentIdx) {
-        return err('Invalid transition: cannot move this order to a prior stage', 400);
-      }
-    }
-    if (newStatus === order.status) {
-      return ok({ ok: true, status: newStatus, noOp: true });
-    }
-
-    db.prepare('UPDATE orders SET status=?, updated_at=datetime(\'now\') WHERE id=?').run(newStatus, order.id);
-    db.prepare('INSERT INTO order_status_history (order_id, status, note, user_id) VALUES (?,?,?,?)').run(order.id, newStatus, body.note || null, user?.id ?? null);
-
-    // restore stock + slot booking when an order is cancelled
-    if (String(newStatus).toLowerCase() === 'cancelled') {
-      const lineItems = jsonParseSafe(order.items, []);
-      for (const it of lineItems) {
-        if (!it || !it.productId) continue;
-        const qty = Number(it.qty) || 1;
-        if (it.isCustomHamper && Array.isArray(it.components)) {
-          for (const comp of it.components) {
-            const compProdId = Number(comp.productId);
-            if (!compProdId) continue;
-            const compQty = (Number(comp.qty) || 1) * qty;
-            const cProd = db.prepare('SELECT selling_unit, manage_stock, enable_stock FROM products WHERE id=?').get(compProdId) as any;
-            const cManage = cProd ? (cProd.manage_stock !== 0 && cProd.enable_stock !== 0) : true;
-            if (!cManage) continue;
-            db.prepare(
-              "UPDATE products SET stock = stock + ?, stock_status = CASE " +
-              "WHEN stock + ? <= 0 THEN 'out_of_stock' " +
-              "WHEN stock + ? <= low_stock_threshold THEN 'low_stock' ELSE 'in_stock' END WHERE id=?"
-            ).run(compQty, compQty, compQty, compProdId);
-            db.prepare('INSERT INTO inventory_transactions (product_id, type, quantity, note) VALUES (?,?,?,?)')
-              .run(compProdId, 'restock', compQty, `Cancelled order ${order.order_number} (hamper component)`);
-          }
-          continue;
-        }
-
-        const prod = db.prepare('SELECT selling_unit, manage_stock, enable_stock FROM products WHERE id=?').get(it.productId) as any;
-        const manageStock = prod ? (prod.manage_stock !== 0 && prod.enable_stock !== 0) : true;
-        if (!manageStock) continue; // Skip restock for untracked inventory
-        const isPiece = isPieceOrDiscreteUnit(it.sellingUnit || prod?.selling_unit);
-        const pieceMultiplier = isPiece ? extractPieceCount(it.weight) : 1;
-        const restockQty = qty * pieceMultiplier;
-        db.prepare(
-          "UPDATE products SET stock = stock + ?, stock_status = CASE " +
-          "WHEN stock + ? <= 0 THEN 'out_of_stock' " +
-          "WHEN stock + ? <= low_stock_threshold THEN 'low_stock' ELSE 'in_stock' END WHERE id=?"
-        ).run(restockQty, restockQty, restockQty, it.productId);
-        db.prepare('INSERT INTO inventory_transactions (product_id, type, quantity, note) VALUES (?,?,?,?)').run(it.productId, 'restock', restockQty, `Cancelled order ${order.order_number}`);
-      }
-      if (order.delivery_date && order.delivery_slot_id) {
-        const dayCap = db.prepare('SELECT * FROM slot_capacity WHERE slot_id=? AND date=?').get(order.delivery_slot_id, order.delivery_date) as any;
-        if (dayCap && dayCap.books > 0) db.prepare('UPDATE slot_capacity SET books=books-1 WHERE id=?').run(dayCap.id);
-      }
-    }
-    logAudit(user, 'ORDER_STATUS_UPDATE', 'Order', order.order_number, `→ ${newStatus}`);
-    return ok({ ok: true, status: newStatus });
-  }
-  return err('Unknown action');
 }

@@ -392,8 +392,15 @@ export default function Home() {
       // include_drafts flag for non-admin sessions.
       if (isAdmin) {
         try {
-          const adminProdRes = await fetch('/api/products?limit=1000&include_drafts=1');
-          const adminProdData = await adminProdRes.json();
+          const adminProdData: { products: any[] } = { products: [] };
+          for (let offset = 0; ; offset += 200) {
+            const response = await fetch(`/api/products?limit=200&offset=${offset}&include_drafts=1`);
+            if (!response.ok) throw new Error('Could not load admin products');
+            const page = await response.json();
+            const rows = Array.isArray(page.products) ? page.products : [];
+            adminProdData.products.push(...rows);
+            if (rows.length < 200) break;
+          }
           if (adminProdData.products && adminProdData.products.length > 0) {
             setAdminProducts(adminProdData.products.map(normalizeProductRecord));
           } else {

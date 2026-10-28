@@ -1,4 +1,5 @@
-import { ok, err, db, requireAdmin, logAudit, jsonParseSafe, slugify } from '../../../lib/server/api';
+import { businessDateSql } from '../../../lib/server/business-date';
+import { ok as jsonOk, err, db, requireAdmin, logAudit, jsonParseSafe, slugify } from '../../../lib/server/api';
 import { getCatalogSourceConfig } from '../../../lib/server/catalog-sources';
 import { canAccessAdminRequest } from '../../../lib/server/admin-access';
 import { hasPerm } from '../../../lib/server/authorization';
@@ -9,6 +10,10 @@ import { logError } from '../../../lib/server/logger';
 import { createDatabaseBackup, listDatabaseBackups, verifyDatabaseBackup } from '../../../lib/server/backup';
 
 export const runtime = 'nodejs';
+
+function ok(data: any, status = 200) {
+  return jsonOk(data, data?.ok === false ? (data.httpStatus || 400) : status);
+}
 
 function isSuper(user: any) { return !!user && user.role === 'super_admin'; }
 
@@ -151,10 +156,10 @@ export async function GET(req: Request) {
     if (type === 'occasions_default') { ops.seedDefaultOccasions(user); return ok({ ok: true }); }
     if (type === 'analytics') {
       const range = url.searchParams.get('range') || '30d';
-      let dateFilter = "date(created_at) >= date('now', '-30 days')";
+      let dateFilter = `${businessDateSql('created_at')} >= ${businessDateSql('now',-30)}`;
       switch (range) {
-        case '7d': dateFilter = "date(created_at) >= date('now', '-7 days')"; break;
-        case '90d': dateFilter = "date(created_at) >= date('now', '-90 days')"; break;
+        case '7d': dateFilter = `${businessDateSql('created_at')} >= ${businessDateSql('now',-7)}`; break;
+        case '90d': dateFilter = `${businessDateSql('created_at')} >= ${businessDateSql('now',-90)}`; break;
         case 'all': dateFilter = '1=1'; break;
       }
       const topOccasions = db.prepare(`
@@ -168,10 +173,10 @@ export async function GET(req: Request) {
         LIMIT 20
       `).all() as any[];
       const dailyTrends = db.prepare(`
-        SELECT date(created_at) as day, COUNT(*) as orders, ROUND(SUM(total), 2) as revenue
+        SELECT ${businessDateSql('created_at')} as day, COUNT(*) as orders, ROUND(SUM(total), 2) as revenue
         FROM orders
         WHERE ${dateFilter}
-        GROUP BY date(created_at)
+        GROUP BY ${businessDateSql('created_at')}
         ORDER BY day DESC
         LIMIT 30
       `).all() as any[];
@@ -197,12 +202,7 @@ export async function POST(req: Request) {
   if (!canAccessAdminRequest(user.role, 'POST', type, action)) return err('Permission denied for this admin action', 403);
   try {
     // ---- ORDERS ----
-    if (type === 'orders' && action === 'status') {
-      db.prepare('UPDATE orders SET status=?, updated_at=datetime(\'now\') WHERE id=?').run(body.status, body.id);
-      db.prepare('INSERT INTO order_status_history (order_id, status, note, user_id) VALUES (?,?,?,?)').run(body.id, body.status, body.note || null, user.id);
-      logAudit(user, 'ORDER_STATUS_UPDATE', 'Order', String(body.id), body.status);
-      return ok({ ok: true });
-    }
+    if (type === 'orders' && action === 'status') return ok(ops.updateOrderStatus(user,body.id,body.status,body.note));
     if (type === 'orders' && action === 'note') {
       db.prepare('UPDATE orders SET tracking_note=?, updated_at=datetime(\'now\') WHERE id=?').run(body.note, body.id);
       return ok({ ok: true });
@@ -430,7 +430,7 @@ export async function POST(req: Request) {
 
     // ---- Customers ----
     if (type === 'customers' && action === 'create') return ok(ops.createCustomer(user, body));
-    if (type === 'customers' && action === 'update') return ok(ops.updateCustomer(user, body.id, body));
+    if (type === 'customers' && action === 'update') return ok(ops.updateCustomer(user, body.id, body.fields || body));
 
     // ---- Delivery ----
     if (type === 'delivery_slots' && action === 'save') return ok(ops.saveSlot(user, body));

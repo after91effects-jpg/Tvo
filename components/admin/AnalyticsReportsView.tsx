@@ -18,6 +18,7 @@ import {
   ArrowUpRight,
   ArrowDownRight,
 } from 'lucide-react';
+import { formatLocalDate } from '../../lib/localDate';
 import { useAuth } from '../../context/AuthContext';
 import {
   exportSalesToCSV,
@@ -62,6 +63,7 @@ interface AnalyticsData {
 
 export const AnalyticsReportsView: React.FC = () => {
   const { user } = useAuth();
+  const [error, setError] = useState('');
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [datePreset, setDatePreset] = useState<'7d' | '30d' | '90d' | 'all' | 'custom'>('30d');
@@ -72,7 +74,7 @@ export const AnalyticsReportsView: React.FC = () => {
   // Compute dates based on preset
   useEffect(() => {
     const today = new Date();
-    const formatDate = (d: Date) => d.toISOString().split('T')[0];
+    const formatDate = formatLocalDate;
 
     if (datePreset === '7d') {
       const past = new Date();
@@ -98,6 +100,7 @@ export const AnalyticsReportsView: React.FC = () => {
   // Fetch Analytics
   const fetchAnalytics = useCallback(async () => {
     setLoading(true);
+    setError('');
     try {
       let query = '/api/analytics?scope=reports';
       if (startDate) query += `&startDate=${startDate}`;
@@ -105,13 +108,15 @@ export const AnalyticsReportsView: React.FC = () => {
 
       const res = await fetch(query);
       const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Could not load analytics');
       if (res.ok && json.data) {
         setData(json.data);
       } else if (res.ok && json.summary) {
         setData(json);
       }
     } catch (e) {
-      console.error('Failed to load analytics', e);
+      setError(e instanceof Error ? e.message : 'Could not load analytics');
+      setData(null);
     } finally {
       setLoading(false);
     }
@@ -125,11 +130,14 @@ export const AnalyticsReportsView: React.FC = () => {
   const handleExportOrders = async () => {
     setIsExporting(true);
     try {
-      const res = await fetch('/api/admin?type=orders');
+      const res = await fetch(`/api/admin/export?type=orders&startDate=${startDate}&endDate=${endDate}`);
       const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Export failed');
       if (res.ok && json.orders) {
         exportOrdersToCSV(json.orders, `tvo_flavours_orders_${startDate || 'all'}_to_${endDate || 'all'}.csv`);
       }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Export failed');
     } finally {
       setIsExporting(false);
     }
@@ -138,11 +146,14 @@ export const AnalyticsReportsView: React.FC = () => {
   const handleExportCustomers = async () => {
     setIsExporting(true);
     try {
-      const res = await fetch('/api/admin?type=customers_page&limit=500');
+      const res = await fetch('/api/admin/export?type=customers');
       const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Export failed');
       if (res.ok && json.customers) {
         exportCustomersToCSV(json.customers, 'tvo_flavours_customers_crm.csv');
       }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Export failed');
     } finally {
       setIsExporting(false);
     }
@@ -151,11 +162,14 @@ export const AnalyticsReportsView: React.FC = () => {
   const handleExportProducts = async () => {
     setIsExporting(true);
     try {
-      const res = await fetch('/api/admin/products');
+      const res = await fetch('/api/admin/export?type=products');
       const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Export failed');
       if (res.ok && json.products) {
         exportProductsToWooCommerceCSV(json.products, 'tvo_flavours_products_catalog.csv');
       }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Export failed');
     } finally {
       setIsExporting(false);
     }
@@ -163,6 +177,7 @@ export const AnalyticsReportsView: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {error && <p role="alert" className="p-3 rounded-xl bg-red-500/10 text-red-600 text-sm">{error}</p>}
       {/* Top Header & Date Presets */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[var(--border)] pb-4">
         <div>

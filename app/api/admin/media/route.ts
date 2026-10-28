@@ -2,7 +2,8 @@ import { hasPermission } from '../../../../lib/server/permissions';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { ok, err, requireAdmin } from '../../../../lib/server/api';
+import { ok, err, requireAdmin, db } from '../../../../lib/server/api';
+import { mediaDirectory, mediaFileCandidates } from '../../../../lib/server/product-media-storage';
 import {
   ALLOWED_IMAGE_EXTENSIONS,
   MAX_UPLOAD_SIZE_BYTES,
@@ -13,8 +14,8 @@ import {
 
 export const runtime = 'nodejs';
 
-const PRODUCT_IMAGE_DIR = path.join(process.cwd(), 'public', 'uploads', 'product-images');
-const PRODUCT_VIDEO_DIR = path.join(process.cwd(), 'public', 'uploads', 'product-videos');
+const PRODUCT_IMAGE_DIR = mediaDirectory('image');
+const PRODUCT_VIDEO_DIR = mediaDirectory('video');
 
 // Only these subdirectories are ever managed (or deleted) through this endpoint.
 const MANAGED_DIRS: Record<string, string> = {
@@ -28,7 +29,8 @@ function ensureDir(dir: string) {
 
 function safeManagedPath(url: string, wantedKind?: string): string | null {
   if (!url || typeof url !== 'string') return null;
-  const decoded = decodeURIComponent(url.trim()).replace(/\\/g, '/');
+  let decoded: string;
+  try { decoded = decodeURIComponent(url.trim()).replace(/\\/g, '/'); } catch { return null; }
   // Only touch paths that live under the app-managed product media dirs.
   let match: RegExpMatchArray | null;
   let dir: string;
@@ -111,6 +113,7 @@ export async function POST(req: Request) {
 
     let targetDir = kind === 'video' ? PRODUCT_VIDEO_DIR : PRODUCT_IMAGE_DIR;
     const safeFolder = folder && MANAGED_DIRS[folder] ? folder : undefined;
+    if (safeFolder && safeFolder !== (kind === 'video' ? 'product-videos' : 'product-images')) return err('Media folder does not match the file type', 400);
     if (safeFolder) targetDir = MANAGED_DIRS[safeFolder];
 
     ensureDir(targetDir);
@@ -145,8 +148,13 @@ export async function DELETE(req: Request) {
     if (!target) {
       return ok({ ok: true, deleted: false, reason: 'not-managed' });
     }
-    if (fs.existsSync(target)) {
-      fs.unlinkSync(target);
+    const publicUrl = String(body.url || body.fileName);
+    const references = db.prepare('SELECT id,images_json,videos_json FROM products WHERE images_json LIKE ? OR videos_json LIKE ?').all(`%${publicUrl}%`, `%${publicUrl}%`) as any[];
+    if (references.some(row => [row.images_json,row.videos_json].some(raw => {
+      try { return JSON.parse(raw || '[]').some((item: any) => (typeof item === 'string' ? [item] : [item.url,item.thumbUrl,item.mediumUrl,item.posterUrl]).filter(Boolean).some(value => { try { return new URL(value, 'https://tvoflavours.com').pathname === publicUrl; } catch { return false; } })); } catch { return false; }
+    }))) return err('This media is still used by a product. Remove its references and save the product first.', 409);
+    for (const candidate of mediaFileCandidates(body.kind === 'video' ? 'video' : 'image', path.basename(target))) {
+      if (fs.existsSync(candidate)) fs.unlinkSync(candidate);
     }
     return ok({ ok: true, deleted: true });
   } catch (error: any) {

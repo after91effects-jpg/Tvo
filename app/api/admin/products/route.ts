@@ -40,9 +40,9 @@ export async function GET(req: Request) {
 }
 
 // Legacy action aliases used by the older single-page admin
-function asLegacyAction(body: any, user: any): boolean {
-  if (body.action === 'toggle_publish') { setStatus({ id: body.id, status: body.published ? 'publish' : 'draft' }, user); return true; }
-  if (body.action === 'delete') { setStatus({ id: body.id, status: 'trash' }, user); return true; }
+function asLegacyAction(body: any, user: any): any {
+  if (body.action === 'toggle_publish') { return setStatus({ id: body.id, status: body.published ? 'publish' : 'draft' }, user); }
+  if (body.action === 'delete') { return setStatus({ id: body.id, status: 'trash' }, user); }
   if (body.action === 'create' || body.action === 'update') {
     // map legacy name-based body into the structured editor shape
     const structured = {
@@ -50,9 +50,7 @@ function asLegacyAction(body: any, user: any): boolean {
       name: body.name,
       sku: body.sku,
       slug: body.slug,
-      images_json: body.images_json ?? '[]',
-      published: body.published !== undefined ? body.published : 1,
-      stock: body.stock ?? 0,
+      ...(body.action === 'create' ? { published: body.published ?? 1, stock: body.stock ?? 0 } : {}),
     };
     // preserve existing SKU when omitted
     if (!structured.sku && body.id) {
@@ -60,9 +58,9 @@ function asLegacyAction(body: any, user: any): boolean {
       if (ex) structured.sku = ex.sku;
     }
     const r = upsertProduct(structured, user);
-    return true;
+    return r;
   }
-  return false;
+  return null;
 }
 
 export async function POST(req: Request) {
@@ -78,7 +76,8 @@ export async function POST(req: Request) {
     : ['delete', 'delete_permanently'].includes(requestedAction) ? 'archive_products' : 'edit_products';
   if (!hasPermission(user.role, permission)) return err('Permission denied', 403);
   try {
-    if (asLegacyAction(body, user)) return ok({ ok: true });
+    const legacyResult = asLegacyAction(body, user);
+    if (legacyResult) return ok(legacyResult);
 
     const action = body.action || (body.id ? 'update' : 'create');
     switch (action) {

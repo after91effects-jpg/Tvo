@@ -45,7 +45,7 @@ export function serializeAdminProduct(row: any) {
         const raw = typeof i === 'string' ? i : (i?.url || '');
         if (!raw) return i;
         const url = normalizeImageUrl(raw);
-        if (typeof i === 'string') return url;
+        if (typeof i === 'string') return { url, alt: row.name || '' };
         return { ...(typeof i === 'object' && i ? i : {}), url, mediumUrl: mediumImageUrl(url) };
       }).filter((i: any) => i?.url);
       // Backward-compat: first image is primary when the row carries no marker.
@@ -190,12 +190,12 @@ function ensureUniqueSlug(slug: string, exceptId?: number): string {
 function toPrice(v: any): number | null {
   if (v === undefined || v === null || v === '') return null;
   const n = Number(v);
-  if (isNaN(n) || n < 0) throw new Error('Invalid price: must be a non-negative number');
+  if (!Number.isFinite(n) || n < 0) throw new Error('Invalid price: must be a non-negative number');
   return n;
 }
 function toStock(v: any): number {
   const n = Number(v);
-  if (isNaN(n) || !isFinite(n)) throw new Error('Invalid stock: must be a number');
+  if (!Number.isFinite(n) || n < 0) throw new Error('Invalid stock: must be a number');
   return Math.floor(n);
 }
 
@@ -380,6 +380,8 @@ function buildProductPayload(body: any, existing: any, user: any) {
   for (const b of ['published', 'featured', 'bestseller', 'new_arrival', 'deal', 'eggless', 'custom_order', 'enable_stock', 'manage_stock', 'same_day_eligible']) {
     if (body[b] !== undefined) payload[b] = body[b] ? 1 : 0;
   }
+
+  if (body.published !== undefined && body.status === undefined) payload.status = body.published ? 'publish' : 'draft';
 
   // JSON fields
   for (const jf of ['flavours', 'badges', 'tags', 'images_json', 'variations_json', 'attributes_json', 'related_products', 'upsells', 'cross_sells', 'customization_json', 'flavour_options_json', 'dietary_json', 'videos_json']) {

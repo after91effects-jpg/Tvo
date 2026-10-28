@@ -25,6 +25,7 @@ import {
   DollarSign,
   FileText
 } from 'lucide-react';
+import { hasPermission } from '../../lib/server/permissions';
 import { useAuth } from '../../context/AuthContext';
 import { exportCustomersToCSV } from '../../lib/csvHelpers';
 
@@ -164,6 +165,7 @@ export const MarketingManagerView: React.FC = () => {
 
   // Fetch Customers for CRM
   const fetchCustomers = useCallback(async () => {
+    if (!user || !hasPermission(user.role, 'view_customers')) return;
     try {
       const res = await fetch('/api/admin?type=customers_page&limit=200');
       const data = await res.json();
@@ -173,7 +175,7 @@ export const MarketingManagerView: React.FC = () => {
     } catch (e) {
       console.error('Failed to load customers', e);
     }
-  }, []);
+  }, [user?.role]);
 
   useEffect(() => {
     fetchCoupons();
@@ -278,7 +280,7 @@ export const MarketingManagerView: React.FC = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          type: 'customer',
+          type: 'customers',
           action: 'update',
           id: selectedCustomer.id,
           fields: {
@@ -395,6 +397,7 @@ export const MarketingManagerView: React.FC = () => {
           >
             Banners ({banners.length})
           </button>
+          {user && hasPermission(user.role, 'view_customers') && (
           <button
             onClick={() => setActiveTab('crm')}
             className={`px-3 py-1.5 rounded-lg transition-all ${
@@ -405,6 +408,7 @@ export const MarketingManagerView: React.FC = () => {
           >
             Customer CRM ({customers.length})
           </button>
+          )}
           <button
             onClick={() => setActiveTab('communication')}
             className={`px-3 py-1.5 rounded-lg transition-all ${

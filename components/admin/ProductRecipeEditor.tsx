@@ -168,7 +168,8 @@ export const ProductRecipeEditor: React.FC<ProductRecipeEditorProps> = ({
       setError(null);
 
       // Validate lines
-      const validItems = lines.filter((l) => l.ingredient_id && l.quantity > 0);
+      if (lines.some(l => !l.ingredient_id || !Number.isFinite(l.quantity) || l.quantity <= 0)) throw new Error('Every ingredient needs a positive quantity. Remove unused lines before saving.');
+      const validItems = lines;
 
       const res = await fetch('/api/admin/recipes', {
         method: 'POST',

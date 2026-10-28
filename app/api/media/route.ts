@@ -1,10 +1,11 @@
+import { hasPermission } from '../../../lib/server/permissions';
 import { ok, err, db, getCurrentUser, isAdminRole } from '../../../lib/server/api';
 
 export const runtime = 'nodejs';
 
 export async function GET(req: Request) {
   const user = getCurrentUser(req);
-  if (!user || !isAdminRole(user.role)) {
+  if (!user || !isAdminRole(user.role) || !hasPermission(user.role, 'view_media')) {
     return err('Admin access required', 403);
   }
 

@@ -22,3 +22,4 @@ public/uploads/
 
 # Private live snapshots and database migration recovery exports
 /data/backups/
+/data/product-media/

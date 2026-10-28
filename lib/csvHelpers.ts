@@ -118,8 +118,8 @@ export function exportProductsToWooCommerceCSV(products: Product[], filename: st
       'Description': prod.description || '',
       'In stock?': prod.stockStatus === 'in_stock' ? '1' : '0',
       'Stock': prod.stock?.toString() || '15',
-      'Regular price': regularPrice.toString(),
-      'Sale price': salePrice.toString(),
+      'Regular price': String((prod as any).regular_price ?? regularPrice),
+      'Sale price': String((prod as any).sale_price ?? salePrice),
       'Categories': prod.category || 'Cakes',
       'Tags': prod.tags?.join(', ') || '',
       'Images': imageUrls,
@@ -134,7 +134,7 @@ export function exportProductsToWooCommerceCSV(products: Product[], filename: st
     };
   });
 
-  const csv = Papa.unparse(exportRows, { quotes: true });
+  const csv = Papa.unparse(exportRows, { quotes: true, escapeFormulae: true });
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
@@ -314,7 +314,7 @@ export async function importProductsFromWooCommerce(
       throw new Error(data.error || 'Import failed');
     }
 
-    return data.data;
+    return data.data || data;
   } catch (err: any) {
     logError('csv_import_error', err?.message || err);
     // Return a failed summary with the error
@@ -349,7 +349,7 @@ export function exportOrdersToCSV(orders: any[], filename: string = 'tvo_flavour
     'Delivery Slot': o.delivery_slot || '',
     'Delivery Address': [o.address_line1, o.address_line2, o.city, o.pincode].filter(Boolean).join(', ')
   }));
-  const csv = Papa.unparse(rows, { quotes: true });
+  const csv = Papa.unparse(rows, { quotes: true, escapeFormulae: true });
   if (typeof document !== 'undefined') {
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -378,7 +378,7 @@ export function exportCustomersToCSV(customers: any[], filename: string = 'tvo_f
     'Created At': c.created_at || '',
     'Notes': c.notes || ''
   }));
-  const csv = Papa.unparse(rows, { quotes: true });
+  const csv = Papa.unparse(rows, { quotes: true, escapeFormulae: true });
   if (typeof document !== 'undefined') {
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -404,7 +404,7 @@ export function exportSalesToCSV(salesRecords: any[], filename: string = 'tvo_fl
     'Net Revenue (₹)': s.netRevenue || s.net || (s.revenue || 0) - (s.discounts || 0),
     'Average Order Value (₹)': s.aov || (s.ordersCount ? Math.round((s.revenue || 0) / s.ordersCount) : 0)
   }));
-  const csv = Papa.unparse(rows, { quotes: true });
+  const csv = Papa.unparse(rows, { quotes: true, escapeFormulae: true });
   if (typeof document !== 'undefined') {
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);

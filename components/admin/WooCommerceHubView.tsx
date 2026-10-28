@@ -53,13 +53,16 @@ export const WooCommerceHubView: React.FC<WooCommerceHubViewProps> = ({
   const handleExportCSV = async () => {
     try {
       setIsExporting(true);
-      let productsToExport = [...products];
+      const response = await fetch('/api/admin/export?type=products');
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Could not export products');
+      let productsToExport = data.products || [];
 
       if (exportCategory !== 'all') {
-        productsToExport = productsToExport.filter((p) => p.category === exportCategory);
+        productsToExport = productsToExport.filter((p: any) => p.category === exportCategory);
       }
       if (exportOnlyPublished) {
-        productsToExport = productsToExport.filter((p) => p.published);
+        productsToExport = productsToExport.filter((p: any) => p.published);
       }
 
       exportProductsToWooCommerceCSV(productsToExport);

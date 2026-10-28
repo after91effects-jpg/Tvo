@@ -1,3 +1,4 @@
+import { changeOrderStatus } from './order-status';
 import { normalizePagination } from '../pagination';
 import { isPieceOrDiscreteUnit } from '../sellingUnit';
 import { logAudit, slugify, jsonParseSafe } from './api';
@@ -86,18 +87,7 @@ export function getOrder(user: User, id: number) {
 }
 
 export function updateOrderStatus(user: User, id: number, status: string, note?: string) {
-  const order = one<Row>('SELECT * FROM orders WHERE id=?', id);
-  if (!order) return { ok: false, error: 'Order not found' };
-  if (!ORDER_STATUSES.includes(status)) return { ok: false, error: `Invalid status: ${status}` };
-  const now = new Date().toISOString();
-  tx(() => {
-    run('UPDATE orders SET status=?, updated_at=? WHERE id=?', status, now, id);
-    run('INSERT INTO order_status_history (order_id, status, note, user_id) VALUES (?,?,?,?)', id, status, note || null, user?.id ?? null);
-    run('INSERT INTO order_notes (order_id, author_id, author_name, body, is_internal) VALUES (?,?,?,?,?)', id, user?.id ?? null, user?.name ?? 'admin', `Status → ${status}`, 1);
-    run('INSERT INTO notifications (type, title, message) VALUES (?,?,?)', 'order', `Order ${order.order_number} status`, `Order status changed to ${status}`);
-  });
-  audit(user, 'ORDER_STATUS_UPDATE', 'Order', String(id), `→ ${status}`);
-  return { ok: true, status };
+  return changeOrderStatus(user, id, status, note);
 }
 
 export function updateOrderPayment(user: User, id: number, paymentStatus: string, method?: string, transactionId?: string, amount?: number) {
@@ -167,27 +157,7 @@ export function updateRefundStatus(user: User, refundId: number, status: string)
 }
 
 export function cancelOrder(user: User, id: number, reason?: string) {
-  const order = one<Row>('SELECT * FROM orders WHERE id=?', id);
-  if (!order) return { ok: false, error: 'Order not found' };
-  tx(() => {
-    run("UPDATE orders SET status=?, payment_status=CASE WHEN payment_status='Paid' THEN 'Refunded' ELSE payment_status END, updated_at=datetime('now') WHERE id=?", 'Cancelled', id);
-    run('INSERT INTO order_status_history (order_id, status, note, user_id) VALUES (?,?,?,?)', id, 'Cancelled', reason || null, user?.id ?? null);
-    run('INSERT INTO order_notes (order_id, author_id, author_name, body, is_internal) VALUES (?,?,?,?,?)', id, user?.id ?? null, user?.name ?? 'admin', `Order cancelled. ${reason || ''}`.trim(), 1);
-    for (const it of jsonParseSafe(order.items, [])) {
-      const prod = one<Row>('SELECT selling_unit, low_stock_threshold FROM products WHERE id=?', it.productId);
-      const isPiece = isPieceOrDiscreteUnit(it.sellingUnit || prod?.selling_unit);
-      const pieceMultiplier = isPiece ? extractPieceCount(it.weight) : 1;
-      const restockQty = (Number(it.qty) || 0) * pieceMultiplier;
-      run(
-        "UPDATE products SET stock = stock + ?, stock_status = CASE " +
-        "WHEN stock + ? <= 0 THEN 'out_of_stock' " +
-        "WHEN stock + ? <= low_stock_threshold THEN 'low_stock' ELSE 'in_stock' END WHERE id = ?",
-        restockQty, restockQty, restockQty, it.productId
-      );
-    }
-  });
-  audit(user, 'ORDER_CANCEL', 'Order', String(id), reason || undefined);
-  return { ok: true };
+  return changeOrderStatus(user, id, 'Cancelled', reason);
 }
 
 // ---------------------------------------------------------------------------
@@ -272,14 +242,21 @@ export function getSlots(user: User) {
 }
 
 export function saveSlot(user: User, data: any) {
-  const days = JSON.stringify(data.days && data.days.length ? data.days : [0, 1, 2, 3, 4, 5, 6]);
-  const cutoff = Number(data.cutoff_minutes) || 120;
+  if (!String(data.name || '').trim() || !/^([01]\d|2[0-3]):[0-5]\d$/.test(data.start_time || '') || !/^([01]\d|2[0-3]):[0-5]\d$/.test(data.end_time || '') || data.start_time >= data.end_time) return { ok:false, error:'Enter a slot name and a valid start/end time' };
+  let selectedDays = data.days ?? [0,1,2,3,4,5,6];
+  try { if (typeof selectedDays === 'string') selectedDays = JSON.parse(selectedDays); } catch { return {ok:false,error:'Invalid slot weekdays'}; }
+  if (!Array.isArray(selectedDays) || selectedDays.some(day => !Number.isInteger(day) || day < 0 || day > 6)) return {ok:false,error:'Invalid slot weekdays'};
+  const days = JSON.stringify(selectedDays);
+  const cutoff = Number(data.cutoff_minutes ?? 120);
+  const capacity = Number(data.capacity ?? 10);
+  const fee = Number(data.fee ?? 0);
+  if (![cutoff,capacity,fee].every(value => Number.isFinite(value) && value >= 0)) return {ok:false,error:'Slot capacity, fee and cutoff must be non-negative numbers'};
   if (data.id) {
     run('UPDATE delivery_slots SET name=?, start_time=?, end_time=?, capacity=?, fee=?, cutoff_minutes=?, available=?, days=? WHERE id=?',
-      data.name, data.start_time, data.end_time, Number(data.capacity) || 10, Number(data.fee) || 0, cutoff, data.available ? 1 : 0, days, data.id);
+      data.name, data.start_time, data.end_time, capacity, fee, cutoff, data.available ? 1 : 0, days, data.id);
   } else {
     run('INSERT INTO delivery_slots (name, start_time, end_time, capacity, fee, cutoff_minutes, available, days) VALUES (?,?,?,?,?,?,?,?)',
-      data.name, data.start_time, data.end_time, Number(data.capacity) || 10, Number(data.fee) || 0, cutoff, data.available ? 1 : 0, days);
+      data.name, data.start_time, data.end_time, capacity, fee, cutoff, data.available ? 1 : 0, days);
   }
   audit(user, 'DELIVERY_SLOT_SAVE', 'DeliverySlot', data.id ? String(data.id) : undefined);
   return { ok: true };
@@ -452,7 +429,7 @@ export function assignDriverToOrder(user: User, orderId: number, driverId: numbe
     const driver = one<Row>('SELECT id, name, phone FROM drivers WHERE id=? AND active=1', driverId);
     if (!driver) return { ok: false, error: 'Driver not found or inactive' };
 
-    run("UPDATE orders SET driver_id=?, delivery_status='assigned', status=CASE WHEN status IN ('Order Placed', 'Confirmed') THEN 'Processing' ELSE status END, updated_at=? WHERE id=?",
+    run("UPDATE orders SET driver_id=?, delivery_status='assigned', updated_at=? WHERE id=?",
       driverId, now, orderId);
 
     // Update driver status to on_delivery if currently available
@@ -614,6 +591,10 @@ export function listCoupons(user: User) {
 export function saveCoupon(user: User, data: any) {
   const code = (data.code || '').toUpperCase().trim();
   if (!code) return { ok: false, error: 'Coupon code is required' };
+  const discount = Number(data.discount_value);
+  if (!['percent','flat','fixed'].includes(data.discount_type || 'percent') || !Number.isFinite(discount) || discount <= 0 || ((data.discount_type || 'percent') === 'percent' && discount > 100)) return { ok:false, error:'Enter a valid discount; percentage discounts must be between 0 and 100' };
+  for (const key of ['min_order','max_discount','max_uses']) { if (data[key] !== undefined && data[key] !== null && data[key] !== '' && (!Number.isFinite(Number(data[key])) || Number(data[key]) < 0)) return { ok:false, error:'Coupon limits must be finite non-negative numbers' }; }
+  if (data.starts_at && data.ends_at && data.starts_at > data.ends_at) return { ok:false, error:'Coupon expiry must be after its start date' };
   let description = data.description || '';
   if (data.is_first_order_only) {
     if (!description.toLowerCase().includes('first order') && !description.toLowerCase().includes('[first_order]')) {
@@ -1354,7 +1335,7 @@ export function saveOccasion(user: User, data: any) {
 }
 
 export function archiveOccasion(user: User, id: number, archive = true) {
-  const existing = one<Row>('SELECT id, name FROM occasions WHERE id=? AND deleted_at IS NULL', id);
+  const existing = one<Row>('SELECT id, name FROM occasions WHERE id=?', id);
   if (!existing) return { ok: false, error: 'Occasion not found' };
   tx(() => {
     if (archive) {
@@ -1362,7 +1343,6 @@ export function archiveOccasion(user: User, id: number, archive = true) {
     } else {
       run("UPDATE occasions SET deleted_at=NULL, updated_at=? WHERE id=?", new Date().toISOString(), id);
     }
-    run('DELETE FROM product_occasions WHERE occasion_id=?', id);
   });
   audit(user, archive ? 'OCCASION_ARCHIVE' : 'OCCASION_RESTORE', 'Occasion', String(id));
   return { ok: true, id };

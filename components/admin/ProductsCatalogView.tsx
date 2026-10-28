@@ -224,16 +224,7 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
       .then((r) => (r.ok ? r.json() : null))
       .then((data: any) => {
         if (data?.categories?.length) {
-          const map: Record<string, number> = {
-            'cakes': 71,
-            'desserts-pastries': 88,
-            'cheesecakes': 88,
-            'hampers-gifts': 71,
-            'party-supplies': 113,
-            'party-essentials': 113,
-            'baking-store': 121,
-            'baking-accessories': 121,
-          };
+          const map: Record<string, number> = {};
           for (const c of data.categories) {
             if (c?.slug) map[c.slug] = Number(c.id);
             if (c?.name) map[c.name.toLowerCase()] = Number(c.id);
@@ -575,32 +566,12 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
               .replace(/[^a-z0-9]+/g, '-')
               .replace(/(^-|-$)+/g, '');
 
-            const weightOptions: WeightOption[] = [
-              {
-                label: '0.5 kg (Serves 4-6)',
-                weightKg: 0.5,
-                price: row.price,
-                mrp: row.mrp,
-              },
-              {
-                label: '1.0 kg (Serves 8-10)',
-                weightKg: 1.0,
-                price: Math.round(row.price * 1.85),
-                mrp: Math.round(row.mrp * 1.85),
-              },
-              {
-                label: '1.5 kg (Serves 12-14)',
-                weightKg: 1.5,
-                price: Math.round(row.price * 2.7),
-                mrp: Math.round(row.mrp * 2.7),
-              },
-              {
-                label: '2.0 kg (Serves 16-20)',
-                weightKg: 2.0,
-                price: Math.round(row.price * 3.5),
-                mrp: Math.round(row.mrp * 3.5),
-              },
-            ];
+            const existingProduct = isUpdating ? products.find(p => p.id === row.existingId) : undefined;
+            const weightOptions: WeightOption[] = existingProduct?.weightOptions?.length
+              ? existingProduct.weightOptions.map((option, index) => index === 0 ? { ...option, price: row.price, mrp: row.mrp } : option)
+              : [{ label: '0.5 kg', weightKg: 0.5, price: row.price, mrp: row.mrp }];
+            const importedCategoryId = categoryIdMap[row.category] || categoryIdMap[row.category.toLowerCase()];
+            if (!importedCategoryId) throw new Error(`Unknown category: ${row.category}. Create or select a valid category first.`);
 
             const productPayload: Product = {
               id: prodId,
@@ -654,20 +625,8 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
                 flavours: productPayload.flavours,
                 badges: productPayload.badges,
                 tags: productPayload.tags,
-images_json: (formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
-              url: i.url.trim(),
-              thumbUrl: i.thumbUrl?.trim() || i.url.trim(),
-              mediumUrl: i.mediumUrl?.trim() || i.url.trim(),
-              alt: i.alt?.trim() || formName.trim(),
-              caption: i.caption?.trim() || '',
-              isPrimary: !!i.isPrimary,
-            }))).map((img, idx, arr) => (arr.some((x) => x.isPrimary) ? img : idx === 0 ? { ...img, isPrimary: true } : img)),
-            videos_json: formVideos.filter((v) => v.url && v.url.trim()).map((v) => ({
-              url: v.url.trim(),
-              posterUrl: v.posterUrl?.trim() || '',
-              caption: v.caption?.trim() || '',
-              isPrimary: !!v.isPrimary,
-            })),
+                category_id: importedCategoryId,
+                images_json: productPayload.images,
                 variations_json: {
                   attribute: 'Select Weight',
                   options: weightOptions.map((w) => ({
@@ -1251,21 +1210,12 @@ images_json: (formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
   };
 
   const handleRemoveImage = async (index: number) => {
-    const target = formImages[index];
     setFormImages((prev) => {
       const next = prev.filter((_, i) => i !== index);
       if (next.length && !next.some((i) => i.isPrimary)) next[0] = { ...next[0], isPrimary: true };
       return next;
     });
-    if (target?.url && target.url.startsWith('/uploads/')) {
-      try {
-        await fetch('/api/admin/media', {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: target.url, kind: 'image' }),
-        });
-      } catch { /* orphan file cleanup is best-effort; DB already updated on save */ }
-    }
+
   };
 
   const handleMoveImage = (index: number, dir: -1 | 1) => {
@@ -1323,17 +1273,8 @@ images_json: (formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
   };
 
   const handleRemoveVideo = async (index: number) => {
-    const target = formVideos[index];
     setFormVideos((prev) => prev.filter((_, i) => i !== index));
-    if (target?.url && target.url.startsWith('/uploads/product-videos/')) {
-      try {
-        await fetch('/api/admin/media', {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: target.url, kind: 'video' }),
-        });
-      } catch { /* best-effort */ }
-    }
+
   };
 
   const handleUpdateVideo = (index: number, patch: Partial<ProductVideo>) => {
@@ -1491,7 +1432,8 @@ images_json: (formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
           value: bulkPriceMode === 'clear' ? undefined : Number(bulkPriceValue),
         };
       } else if (bulkActionType === 'category') {
-        const catId = categoryIdMap[bulkTargetCategory] || categoryIdMap[bulkTargetCategory.toLowerCase()] || categoryIdMap['cakes'] || 71;
+        const catId = categoryIdMap[bulkTargetCategory] || categoryIdMap[bulkTargetCategory.toLowerCase()];
+        if (!catId) throw new Error('Select a valid category before applying the bulk change.');
         payload = {
           ...payload,
           subaction: 'category',

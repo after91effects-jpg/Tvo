@@ -34,7 +34,8 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     const productId = Number(body.productId || body.product_id);
-    const items = Array.isArray(body.items) ? body.items : [];
+    if (!Array.isArray(body.items)) return err('Recipe items must be an array', 400);
+    const items = body.items;
     const updateCostPrice = Boolean(body.updateCostPrice || body.update_cost_price);
 
     if (!productId) {

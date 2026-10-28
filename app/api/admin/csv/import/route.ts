@@ -1,5 +1,5 @@
 import { hasPermission } from '../../../../../lib/server/permissions';
-import { ok, err, requireAdmin } from '../../../../../lib/server/api';
+import { ok, err, requireAdmin, db } from '../../../../../lib/server/api';
 import { upsertProduct } from '../../../../../lib/server/admin-catalog';
 
 export const runtime = 'nodejs';
@@ -10,7 +10,9 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    const { rows, duplicateStrategy } = body;
+    const { rows } = body;
+    const duplicateStrategy = body.duplicateStrategy || 'skip';
+    if (!['skip', 'overwrite', 'update', 'create_new'].includes(duplicateStrategy)) return err('Invalid duplicate strategy', 400);
 
     if (!rows || !Array.isArray(rows) || rows.length === 0) {
       return err('No rows provided');
@@ -25,8 +27,10 @@ export async function POST(req: Request) {
     };
 
     // Get existing products from database to check for duplicates
-    const { listProducts } = await import('../../../../../lib/server/admin-catalog');
-    const existingProducts = listProducts({ limit: 10000 }).products || [];
+    const existingProducts = db.prepare('SELECT * FROM products').all() as any[];
+    const categories = db.prepare('SELECT id, name, slug FROM categories').all() as any[];
+    const categoryMap = new Map<string, number>();
+    for (const category of categories) { categoryMap.set(category.slug.toLowerCase(), category.id); categoryMap.set(category.name.toLowerCase(), category.id); }
     const existingMap = new Map<string, any>();
     existingProducts.forEach((p: any) => {
       if (p.sku) existingMap.set(p.sku.trim().toLowerCase(), p);
@@ -111,6 +115,7 @@ export async function POST(req: Request) {
         const regularPrice = toNum(row[mapping['regularPrice']], 0);
         const salePrice = toNum(row[mapping['salePrice']], regularPrice || 0);
         const rawCategory = (row[mapping['category']] || '').toString().trim();
+        if (rawCategory && !categoryMap.has(rawCategory.toLowerCase()) && !categoryMap.has(rawCategory.toLowerCase().replace(/\s+/g, '-'))) throw new Error(`Unknown category: ${rawCategory}. Create the category first.`);
         const categorySlug = rawCategory.toLowerCase().replace(/\s+/g, '-');
         const shortDesc = (row[mapping['shortDescription']] || '').toString().trim();
         const fullDesc = (row[mapping['description']] || '').toString().trim();
@@ -135,17 +140,14 @@ export async function POST(req: Request) {
               thumbUrl: url,
               alt: `${nameVal} View ${i + 1}`,
             }))
-          : [{
-              url: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=1000&q=80',
-              thumbUrl: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=300&q=70',
-              alt: nameVal,
-            }];
+          : existing?.images_json ? JSON.parse(existing.images_json) : [];
         
         const rawWeight = parseFloat((row[mapping['weight']] || row['Weight (kg)'] || row['weight'] || 0.5).toString()) || 0.5;
-        const weightOptions = [
-          { label: `${rawWeight} kg (Serves 4-6)`, weightKg: rawWeight, price: salePrice, mrp: regularPrice },
-          { label: `${(rawWeight * 2).toFixed(1)} kg (Serves 8-10)`, weightKg: rawWeight * 2, price: Math.round(salePrice * 1.85), mrp: Math.round(regularPrice * 1.85) },
-        ];
+        const previousVariations = existing?.variations_json ? JSON.parse(existing.variations_json) : null;
+        const previousOptions = Array.isArray(previousVariations) ? previousVariations : previousVariations?.options;
+        const weightOptions = previousOptions?.length
+          ? previousOptions.map((option: any, i: number) => i === 0 ? { ...option, price: salePrice, mrp: regularPrice } : option)
+          : [{ label: `${rawWeight} kg`, weightKg: rawWeight, price: salePrice, mrp: regularPrice }];
         const publishedVal = (row[mapping['published']] || row['Published'] || row['published'] || '1').toString();
         const published = publishedVal === '0' || publishedVal.toLowerCase() === 'false' ? false : true;
 
@@ -156,7 +158,12 @@ export async function POST(req: Request) {
           slug: makeSlug(nameVal || 'imported-artisan-cake'),
           shortDescription: shortDesc,
           description: fullDesc,
-          category: categorySlug,
+          category_id: rawCategory ? categoryMap.get(categorySlug) ?? categoryMap.get(rawCategory.toLowerCase()) : undefined,
+          regular_price: regularPrice, sale_price: salePrice,
+          short_description: shortDesc, images_json: images,
+          variations_json: { attribute: 'Select Weight', options: weightOptions },
+          seo_title: row[mapping['seoTitle']] || undefined,
+          seo_description: row[mapping['seoDescription']] || undefined,
           tags,
           flavours,
           eggless,
@@ -179,6 +186,8 @@ export async function POST(req: Request) {
             continue;
           } else if (duplicateStrategy === 'create_new') {
             delete productData.id;
+            const suffix = `-C-${Date.now().toString(36)}-${index.toString(36)}`;
+            productData.sku = productData.sku.slice(0, 32 - suffix.length) + suffix;
             const r = upsertProduct(productData, user);
             if (skuVal) inFileSeen.set(skuVal.toLowerCase(), { id: r?.id, sku: skuVal });
             if (nameVal) inFileSeen.set(nameVal.toLowerCase(), { id: r?.id, name: nameVal });

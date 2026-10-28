@@ -39,12 +39,13 @@ export function saveIngredient(user: User, data: {
   }
 
   const unit = (data.unit || 'g').trim();
-  const stock = Number(data.stock) || 0;
-  const lowStock = Number(data.low_stock_threshold) || 0;
+  const stock = data.stock == null || data.stock === ('' as any) ? 0 : Number(data.stock);
+  const lowStock = data.low_stock_threshold == null || data.low_stock_threshold === ('' as any) ? 0 : Number(data.low_stock_threshold);
   const cost = data.cost_per_unit !== undefined && data.cost_per_unit !== null && data.cost_per_unit !== ('' as any)
     ? Number(data.cost_per_unit)
     : null;
   const category = (data.category || '').trim() || null;
+  if (!Number.isFinite(stock) || stock < 0 || !Number.isFinite(lowStock) || lowStock < 0 || (cost !== null && (!Number.isFinite(cost) || cost < 0))) throw new Error('Stock, threshold and cost must be finite non-negative numbers');
 
   if (data.id) {
     const existing = getIngredientById(data.id);
@@ -90,6 +91,8 @@ export function deleteIngredient(user: User, id: number) {
  * Adjusts stock (+ or -) for an ingredient with audit logging.
  */
 export function adjustIngredientStock(user: User, id: number, delta: number, note?: string) {
+  if (!Number.isFinite(delta)) throw new Error('Stock adjustment must be a finite number');
+  return db.transaction(() => {
   const ing = getIngredientById(id);
   if (!ing) throw new Error('Ingredient not found');
 
@@ -106,6 +109,7 @@ export function adjustIngredientStock(user: User, id: number, delta: number, not
   );
 
   return { ok: true, id, previousStock: currentStock, newStock };
+  })();
 }
 
 /**
@@ -186,7 +190,11 @@ export function saveProductRecipe(
   const prod = db.prepare('SELECT id, name FROM products WHERE id = ?').get(productId) as any;
   if (!prod) throw new Error('Product not found');
 
-  db.transaction(() => {
+  for (const item of recipeItems) {
+    if (!Number.isSafeInteger(Number(item.ingredient_id)) || Number(item.ingredient_id) < 1 || !Number.isFinite(Number(item.quantity)) || Number(item.quantity) <= 0) throw new Error('Every recipe line needs a valid ingredient and positive finite quantity');
+    if (!getIngredientById(Number(item.ingredient_id))) throw new Error('Recipe ingredient not found');
+  }
+  return db.transaction(() => {
     // Clear existing recipe lines for this product
     db.prepare('DELETE FROM recipes WHERE product_id = ?').run(productId);
 
@@ -203,7 +211,6 @@ export function saveProductRecipe(
         insertStmt.run(productId, ingId, qty, (item.unit || 'g').trim());
       }
     }
-  })();
 
   // Calculate new total cost
   const updatedRecipe = getProductRecipe(productId);
@@ -228,6 +235,7 @@ export function saveProductRecipe(
     itemsCount: updatedRecipe.items.length,
     costPriceUpdated: updateCostPrice,
   };
+  })();
 }
 
 /**
