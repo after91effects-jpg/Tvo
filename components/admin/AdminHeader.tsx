@@ -26,20 +26,22 @@ interface AdminHeaderProps {
 export const AdminHeader:React.FC<AdminHeaderProps> = ({ onNavigateToStore, onToggleSidebar, isSidebarOpen }) => {
   const { user, role, logout } = useAuth();
   const isMobile = useIsMobile();
-  const [latencyMs, setLatencyMs] = useState<number>(42);
-  const [isConnected, setIsConnected] = useState<boolean>(true);
+  const [latencyMs, setLatencyMs] = useState<number | null>(null);
+  const [isConnected, setIsConnected] = useState<boolean>(false);
 
   // Measure live connection ping to local API
   useEffect(() => {
     const pingKitchen = async () => {
       const start = performance.now();
       try {
-        await fetch('/api/settings', { method: 'GET' });
+        const response = await fetch('/api/settings', { method: 'GET', signal: AbortSignal.timeout(10000), cache: 'no-store' });
+        if (!response.ok) throw new Error('Connection check failed');
         const end = performance.now();
-        setLatencyMs(Math.max(12, Math.round(end - start)));
+        setLatencyMs(Math.round(end - start));
         setIsConnected(true);
       } catch (e) {
-        setIsConnected(true); // resilient fallback
+        setIsConnected(false);
+        setLatencyMs(null);
       }
     };
 
@@ -81,10 +83,10 @@ export const AdminHeader:React.FC<AdminHeaderProps> = ({ onNavigateToStore, onTo
               ? 'bg-[var(--success-light)] text-[var(--success)] border-[var(--success)]/20'
               : 'bg-[var(--danger-light)] text-[var(--danger)] border-[var(--danger)]/20'
           }`}
-          title={`API Ping: ${latencyMs}ms`}
+          title={isConnected ? `API Ping: ${latencyMs}ms` : 'Server connection unavailable'}
         >
-          <span className="w-2 h-2 rounded-full bg-[var(--success)] animate-pulse" />
-          <span>Live Kitchen: {latencyMs}ms</span>
+          <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-[var(--success)] animate-pulse' : 'bg-[var(--danger)]'}`} />
+          <span>{isConnected ? `Live Kitchen: ${latencyMs}ms` : 'Kitchen connection unavailable'}</span>
         </div>
 
         {/* CSRF Protection Status Badge */}

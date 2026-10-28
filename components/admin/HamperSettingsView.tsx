@@ -25,7 +25,7 @@ import { DEFAULT_HAMPER_SETTINGS } from '../../lib/seedData';
 
 interface HamperSettingsViewProps {
   settings: HamperSettings;
-  onSave: (settings: HamperSettings) => void;
+  onSave: (settings: HamperSettings) => Promise<void>;
 }
 
 const SECTION_ICONS: Record<string, React.ReactNode> = {
@@ -68,6 +68,7 @@ export const HamperSettingsView: React.FC<HamperSettingsViewProps> = ({ settings
   const [draft, setDraft] = useState<HamperSettings>(sanitizeSettings(settings));
   const [expanded, setExpanded] = useState<string[]>(['banner', 'boxes']);
   const [saved, setSaved] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
 
   const toggleSection = (key: string) => {
@@ -99,11 +100,19 @@ export const HamperSettingsView: React.FC<HamperSettingsViewProps> = ({ settings
     return errs.length === 0;
   };
 
-  const handleSave = () => {
-    if (!validate()) return;
-    onSave(draft);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  const handleSave = async () => {
+    if (isSaving || !validate()) return;
+    setIsSaving(true);
+    setSaved(false);
+    try {
+      await onSave(draft);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (error) {
+      setErrors([error instanceof Error ? error.message : 'Could not save hamper settings.']);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const updateBox = (id: string, patch: Partial<HamperBoxOption>) => {
@@ -176,6 +185,7 @@ export const HamperSettingsView: React.FC<HamperSettingsViewProps> = ({ settings
         </div>
         <button
           onClick={handleSave}
+          disabled={isSaving}
           className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all cursor-pointer ${
             saved
               ? 'bg-emerald-600 text-white'
@@ -183,7 +193,7 @@ export const HamperSettingsView: React.FC<HamperSettingsViewProps> = ({ settings
           }`}
         >
           {saved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
-          {saved ? 'Saved!' : 'Save Settings'}
+          {isSaving ? 'Saving...' : saved ? 'Saved!' : 'Save Settings'}
         </button>
       </div>
 

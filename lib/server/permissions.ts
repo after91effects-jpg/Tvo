@@ -275,11 +275,5 @@ export function isStaffRole(role: Role | undefined): boolean {
 }
 
 export function can(role: Role | undefined, permission: Permission): boolean {
-  if (isAdminRole(role)) {
-    if (permission === 'manage_roles' || permission === 'run_migration' || permission === 'restore_backup' || permission === 'manage_system_settings' || permission === 'create_backup') {
-      return role === 'super_admin'
-    }
-    return true
-  }
-  return hasPermission(role, permission)
+  return hasPermission(role, permission);
 }

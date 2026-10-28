@@ -1,3 +1,4 @@
+import { hasPermission } from '../../../lib/server/permissions';
 import { isPieceOrDiscreteUnit } from '../../../lib/sellingUnit';
 import { ok, err, db, generateOrderNumber, jsonParseSafe, getCurrentUser, logAudit } from '../../../lib/server/api';
 import { createOrder, OrderInputError, extractPieceCount } from '../../../lib/server/order-engine';
@@ -32,7 +33,7 @@ export async function GET(req: Request) {
     order.items = jsonParseSafe(order.items, []);
 
     // PII masking for public guest tracking
-    const isPrivileged = user && (user.role === 'admin' || user.role === 'super_admin' || user.role === 'kitchen' || user.role === 'delivery');
+    const isPrivileged = user && hasPermission(user.role, 'view_orders');
     let isOwner = false;
     if (user) {
       if (order.customer_id && user.id) {
@@ -65,7 +66,9 @@ export async function GET(req: Request) {
   const session = url.searchParams.get('session') || '';
   let where = '1=1';
   const params: any[] = [];
-  if (user) {
+  if (user && hasPermission(user.role, 'view_orders')) {
+    // Authorized operations staff need the shared order queue, not their own purchases.
+  } else if (user) {
     const cust = db.prepare('SELECT id FROM customers WHERE id=? OR user_id=? OR email=?').get(user.id, user.id, user.email) as any;
     if (cust) {
       where = '(customer_id=? OR customer_email=?)';
@@ -75,6 +78,7 @@ export async function GET(req: Request) {
       params.push(user.email);
     }
   } else {
+    if (!session) return ok({ orders: [] });
     where = 'session_id=?';
     params.push(session);
   }
@@ -93,7 +97,9 @@ export async function POST(req: Request) {
 
   const user = getCurrentUser(req);
   let customerId: number | null = null;
-  if (user) {
+  if (user && hasPermission(user.role, 'view_orders')) {
+    // Authorized operations staff need the shared order queue, not their own purchases.
+  } else if (user) {
     const cust = db.prepare('SELECT id FROM customers WHERE id=? OR user_id=? OR email=?').get(user.id, user.id, user.email) as any;
     customerId = cust?.id ?? null;
   }
@@ -113,7 +119,7 @@ export async function PUT(req: Request) {
   const body = await req.json().catch(() => ({}));
   const action = body.action;
   const user = getCurrentUser(req);
-  const isAuthorized = user && (user.role === 'admin' || user.role === 'super_admin' || user.role === 'kitchen' || user.role === 'delivery');
+  const isAuthorized = user && hasPermission(user.role, 'update_order_status');
 
   if (!isAuthorized) {
     return err('Unauthorized to modify order', 403);

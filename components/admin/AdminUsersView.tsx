@@ -22,7 +22,7 @@ import {
   User,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { ADMIN_ROLES } from '../../lib/server/permissions';
+import { ADMIN_ROLES, getPermissionsForRole } from '../../lib/server/permissions';
 
 export const AdminUsersView: React.FC = () => {
   const { user: currentUser, isSuperAdmin } = useAuth();
@@ -75,6 +75,7 @@ export const AdminUsersView: React.FC = () => {
       });
       const data = await res.json();
       if (res.ok && data.ok) {
+        if (data.existingIdentity) alert('Staff access created. This person should sign in with their existing Firebase password; their password was not changed.');
         setShowModal(false);
         setForm({ name: '', email: '', phone: '', role: 'catalog_manager', status: 'active', password: '' });
         fetchUsers();
@@ -112,13 +113,7 @@ export const AdminUsersView: React.FC = () => {
       (u.email || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const allPermissions = [
-    'view_dashboard', 'manage_products', 'manage_categories', 'manage_seo',
-    'manage_orders', 'manage_customers', 'manage_payments', 'manage_media',
-    'manage_campaigns', 'manage_festivals', 'manage_coupons', 'manage_hampers',
-    'manage_inventory', 'manage_delivery', 'manage_users', 'manage_permissions',
-    'manage_settings', 'view_audit_logs', 'export_data', 'import_data',
-  ];
+
 
   const assignableRoles = ADMIN_ROLES.filter((r) => r !== 'super_admin');
 
@@ -218,9 +213,13 @@ export const AdminUsersView: React.FC = () => {
                       <td className="px-4 py-3">
                         <select
                           value={u.role}
+                          disabled={!isSuperAdmin || u.role === 'super_admin'}
+                          aria-label={`Role for ${u.name || u.email}`}
+
                           onChange={(e) => handleRoleChange(u.id, e.target.value)}
                           className="text-xs px-2 py-1 bg-[var(--bg-subtle)] border border-[var(--border)] rounded-lg focus:outline-none"
                         >
+                          {u.role === 'super_admin' && <option value="super_admin">super admin</option>}
                           {assignableRoles.map((r) => (
                             <option key={r} value={r}>
                               {r.replace(/_/g, ' ')}
@@ -251,7 +250,7 @@ export const AdminUsersView: React.FC = () => {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1">
-                          <button type="button" className="p-1 hover:bg-[var(--bg-subtle)] rounded-lg cursor-pointer" title="View">
+                          <button type="button" className="p-1 hover:bg-[var(--bg-subtle)] rounded-lg cursor-pointer" title="View permissions" onClick={() => setShowPermissions(showPermissions === String(u.id) ? null : String(u.id))}>
                             <Eye className="w-3.5 h-3.5 text-[var(--text-muted)]" />
                           </button>
                         </div>
@@ -261,9 +260,9 @@ export const AdminUsersView: React.FC = () => {
                       <tr>
                         <td colSpan={5} className="px-4 py-3 bg-[var(--bg-subtle)]">
                           <div className="flex flex-wrap gap-1.5">
-                            {allPermissions.map((p) => (
+                            {getPermissionsForRole(u.role).map((p) => (
                               <span key={p} className="px-2 py-0.5 bg-[var(--bg-surface)] border border-[var(--border)] rounded text-[10px] text-[var(--text-muted)]">
-                                {p.replace(/_/g, ' ')}
+                                {p === '*' ? 'All permissions' : p.replace(/_/g, ' ')}
                               </span>
                             ))}
                           </div>
@@ -314,7 +313,7 @@ export const AdminUsersView: React.FC = () => {
                 <label className="block text-xs font-semibold text-[var(--text-main)] mb-1">Password</label>
                 <input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className="w-full px-3 py-2 bg-[var(--bg-subtle)] border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20" />
               </div>
-              <button type="submit" className="w-full py-2.5 bg-[var(--primary)] text-white text-sm font-semibold rounded-xl hover:opacity-90 transition">Send Invite</button>
+              <button type="submit" className="w-full py-2.5 bg-[var(--primary)] text-white text-sm font-semibold rounded-xl hover:opacity-90 transition">Create Staff Account</button>
             </form>
           </div>
         </div>

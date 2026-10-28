@@ -958,8 +958,9 @@ export default function Home() {
             <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 overflow-auto w-full">
               {adminTab === 'dashboard' && (
                 <DashboardView
-                  products={products}
+                  products={adminProducts}
                   orders={orders}
+                  onOrdersChanged={() => fetchData(false)}
                   onNavigateTab={(t) => setAdminTab(t)}
                   onOpenAddProductModal={() => {
                     setAdminTab('products');
@@ -1000,7 +1001,7 @@ export default function Home() {
               {adminTab === 'marketing' && <MarketingManagerView />}
 
               {adminTab === 'woocommerce' && (
-                <WooCommerceHubView products={products} onRefreshProducts={fetchData} />
+                <WooCommerceHubView products={adminProducts} onRefreshProducts={fetchData} />
               )}
 
               {adminTab === 'security' && <SecurityAuditLogsView />}
@@ -1008,13 +1009,15 @@ export default function Home() {
               {adminTab === 'hamper' && (
                 <HamperSettingsView
                   settings={hamperSettings}
-                  onSave={(s) => {
-                    setHamperSettings(s);
-                    fetch('/api/admin', {
+                  onSave={async (s) => {
+                    const response = await fetch('/api/admin', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ type: 'hamper_settings', action: 'save', settings: s }),
-                    }).catch(() => { });
+                    });
+                    const result = await response.json();
+                    if (!response.ok || !result.ok) throw new Error(result.error || 'Could not save hamper settings.');
+                    setHamperSettings(result.settings || s);
                   }}
                 />
               )}

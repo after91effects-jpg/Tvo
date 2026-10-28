@@ -1,19 +1,14 @@
-import { ok, err } from '../../../lib/server/api';
+import { ok, err, db } from '../../../lib/server/api';
 
 export const runtime = 'nodejs';
-let db: any;
-function getDb() {
-  if (!db) db = require('../../../lib/server/db').db;
-  return db;
-}
+
+// Public storefront configuration only. Credentials and internal settings must
+// never be returned by this unauthenticated endpoint.
 export async function GET() {
-  const data = getDb();
   try {
-    const rows = data.prepare('SELECT key, value FROM settings').all();
-    const settings: Record<string, string> = {};
-    for (const r of rows) settings[r.key] = r.value;
-    return ok({ settings });
-  } catch (e: any) {
-    return err(e.message, 500);
+    const rows = db.prepare("SELECT key, value FROM settings WHERE key IN ('store_settings', 'hamper_settings')").all() as { key: string; value: string }[];
+    return ok({ settings: Object.fromEntries(rows.map(row => [row.key, row.value])) });
+  } catch {
+    return err('Could not load store settings', 500);
   }
 }

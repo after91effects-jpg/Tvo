@@ -103,14 +103,8 @@ export function isStaffRole(role: string | undefined): boolean {
 }
 
 export function can(role: string | undefined, permission: string): boolean {
-  if (!isValidRole(role as Role)) return false;
-  if (isAdminRole(role)) {
-    if (permission === 'manage_roles' || permission === 'run_migration' || permission === 'restore_backup' || permission === 'manage_system_settings' || permission === 'create_backup') {
-      return role === 'super_admin';
-    }
-    return true;
-  }
-  return hasPermission(role as Role, permission as Permission);
+  if (!isValidRole(role)) return false;
+  return hasPermission(role, permission as Permission);
 }
 
 export function currentCookie(req: Request): string | null {
@@ -145,5 +139,7 @@ export function getCurrentUser(req: Request): any | null {
       customerId: payload.sub,
     };
   }
-  return db.prepare('SELECT * FROM users WHERE id=?').get(payload.sub) || null;
+  const user = db.prepare('SELECT * FROM users WHERE id=?').get(payload.sub) as any;
+  if (!user || user.status === 'inactive' || user.status === 'suspended') return null;
+  return user;
 }

@@ -1,3 +1,4 @@
+import { hasPermission } from '../../../../../lib/server/permissions';
 import { ok, err, requireAdmin } from '../../../../../lib/server/api';
 import { db } from '../../../../../lib/server/api';
 
@@ -5,7 +6,7 @@ export const runtime = 'nodejs';
 
 export async function GET(req: Request) {
   const user = requireAdmin(req);
-  if (!user) return err('Admin access required', 403);
+  if (!user || !hasPermission(user.role, 'view_products')) return err('Permission denied', 403);
   const url = new URL(req.url);
   const productId = url.searchParams.get('product_id');
   try {

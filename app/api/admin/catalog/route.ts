@@ -1,3 +1,4 @@
+import { hasPermission } from '../../../../lib/server/permissions';
 import { ok, err, requireAdmin } from '../../../../lib/server/api';
 import {
   getAllTaxonomy, saveCategory, deleteCategory, saveTag, deleteTag,
@@ -9,7 +10,7 @@ export const runtime = 'nodejs';
 
 export async function GET(req: Request) {
   const user = requireAdmin(req);
-  if (!user) return err('Admin access required', 403);
+  if (!user || !hasPermission(user.role, 'view_categories')) return err('Permission denied', 403);
   const url = new URL(req.url);
   const type = url.searchParams.get('type') || 'all';
   if (type === 'delivery') {
@@ -27,7 +28,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   const user = requireAdmin(req);
-  if (!user) return err('Admin access required', 403);
+  if (!user || !hasPermission(user.role, 'edit_categories')) return err('Permission denied', 403);
   const body = await req.json().catch(() => ({}));
   const type = body.type;
   const action = body.action;

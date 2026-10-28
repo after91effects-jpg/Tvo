@@ -1,6 +1,8 @@
 import { ok, err, db, requireAdmin, logAudit, jsonParseSafe, slugify } from '../../../lib/server/api';
 import { getCatalogSourceConfig } from '../../../lib/server/catalog-sources';
+import { canAccessAdminRequest } from '../../../lib/server/admin-access';
 import { hasPerm } from '../../../lib/server/authorization';
+import { createStaffAccount } from '../../../lib/server/staff-accounts';
 import * as ops from '../../../lib/server/admin-ops';
 import { getHamperSettings, saveHamperSettings } from '../../../lib/server/hampers';
 import { logError } from '../../../lib/server/logger';
@@ -15,6 +17,7 @@ export async function GET(req: Request) {
   if (!user) return err('Admin access required', 403);
   const url = new URL(req.url);
   const type = url.searchParams.get('type') || 'orders';
+  if (!canAccessAdminRequest(user.role, 'GET', type)) return err('Permission denied for this admin section', 403);
   const status = url.searchParams.get('status') || '';
   const search = (url.searchParams.get('search') || '').trim();
   try {
@@ -34,7 +37,7 @@ export async function GET(req: Request) {
     if (type === 'custom') return ok({ requests: db.prepare('SELECT * FROM custom_requests ORDER BY created_at DESC LIMIT 300').all() });
     if (type === 'delivery_slots') return ok({ slots: db.prepare('SELECT * FROM delivery_slots ORDER BY start_time').all() });
     if (type === 'addons') return ok({ addons: db.prepare('SELECT * FROM addons').all() });
-    if (type === 'settings') return ok({ settings: Object.fromEntries((db.prepare('SELECT key, value FROM settings').all() as { key: string; value: string }[]).map((r) => [r.key, r.value])) });
+    if (type === 'settings') { if (!isSuper(user)) return err('Super admin access required', 403); return ok({ settings: ops.getAllSettings(user) }); }
     if (type === 'audit') return ok({ audit: db.prepare('SELECT * FROM audit_logs ORDER BY id DESC LIMIT 200').all() });
     if (type === 'reviews') {
       let query = `
@@ -191,6 +194,7 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const type = body.type;
   const action = body.action;
+  if (!canAccessAdminRequest(user.role, 'POST', type, action)) return err('Permission denied for this admin action', 403);
   try {
     // ---- ORDERS ----
     if (type === 'orders' && action === 'status') {
@@ -281,6 +285,22 @@ export async function POST(req: Request) {
       return ok({ ok: true });
     }
     if (type === 'coupons' && action === 'delete') { db.prepare('DELETE FROM coupons WHERE id=?').run(body.id); return ok({ ok: true }); }
+
+    // ---- Image settings: merge only the requested optimization fields ----
+    if (type === 'image_optimization' && action === 'save') {
+      if (!isSuper(user)) return err('Super admin access required', 403);
+      const { quality, maxWidthPx, maxHeightPx } = body.settings || {};
+      if (![quality, maxWidthPx, maxHeightPx].every(Number.isFinite) || quality < 1 || quality > 100 || maxWidthPx < 1 || maxHeightPx < 1 || maxWidthPx > 10000 || maxHeightPx > 10000) return err('Invalid image optimization settings', 400);
+      const save = db.transaction(() => {
+        const row = db.prepare("SELECT value FROM settings WHERE key='store_settings'").get() as { value: string } | undefined;
+        const current = row ? JSON.parse(row.value) : {};
+        const updated = { ...current, imageOptimization: { ...current.imageOptimization, quality, maxWidthPx, maxHeightPx, generateWebp: true } };
+        db.prepare("INSERT INTO settings (key, value) VALUES ('store_settings', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(JSON.stringify(updated));
+      });
+      save();
+      logAudit(user, 'IMAGE_OPTIMIZATION_UPDATE', 'Settings');
+      return ok({ ok: true });
+    }
 
     // ---- SETTINGS ----
     if (type === 'settings') {
@@ -477,11 +497,13 @@ export async function POST(req: Request) {
     if (type === 'ingredients' && action === 'delete') return ok(ops.deleteIngredient(user, body.id));
 
     // ---- Admin users & roles (super_admin only) ----
-    if (type === 'admin_users' && action === 'create') { if (!isSuper(user)) return err('Super admin access required', 403); return ok(ops.createAdminUser(user, body)); }
+    if (type === 'admin_users' && action === 'create') { if (!isSuper(user)) return err('Super admin access required', 403); return ok(await createStaffAccount(user, body)); }
     if (type === 'admin_users' && action === 'update') { if (!isSuper(user)) return err('Super admin access required', 403); return ok(ops.updateAdminUser(user, body.id, body)); }
     if (type === 'admin_users' && action === 'delete') { if (!isSuper(user)) return err('Super admin access required', 403); return ok(ops.deleteAdminUser(user, body.id)); }
     if (type === 'roles' && action === 'save') { if (!isSuper(user)) return err('Super admin access required', 403); return ok(ops.saveRole(user, body)); }
     if (type === 'roles' && action === 'delete') { if (!isSuper(user)) return err('Super admin access required', 403); return ok(ops.deleteRole(user, body.id)); }
+
+     if (type === 'tickets' && action === 'save_broadcast') return err('Campaign sending is not configured. No messages were sent or scheduled.', 409);
 
      // ---- Support / notifications ----
      if (type === 'tickets' && action === 'update_status') return ok(ops.updateTicketStatus(user, body.id, body.status));

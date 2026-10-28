@@ -1,3 +1,4 @@
+import { hasPermission } from '../../../../lib/server/permissions';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
@@ -46,7 +47,7 @@ function safeManagedPath(url: string, wantedKind?: string): string | null {
 
 export async function POST(req: Request) {
   const user = requireAdmin(req);
-  if (!user) return err('Admin access required', 403);
+  if (!user || !hasPermission(user.role, 'upload_media')) return err('Permission denied', 403);
 
   try {
     const url = new URL(req.url);
@@ -136,7 +137,7 @@ export async function POST(req: Request) {
 
 export async function DELETE(req: Request) {
   const user = requireAdmin(req);
-  if (!user) return err('Admin access required', 403);
+  if (!user || !hasPermission(user.role, 'delete_media')) return err('Permission denied', 403);
 
   try {
     const body = await req.json().catch(() => ({}));

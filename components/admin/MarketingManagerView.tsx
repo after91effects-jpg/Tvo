@@ -313,8 +313,7 @@ export const MarketingManagerView: React.FC = () => {
     }
 
     try {
-      // Log broadcast audit event
-      await fetch('/api/admin', {
+      const response = await fetch('/api/admin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -325,15 +324,17 @@ export const MarketingManagerView: React.FC = () => {
           subject: commSubject,
           message: commMessage,
         }),
-      }).catch(() => {});
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.error || 'Campaign could not be saved.');
 
       setCommSentNotice(`Campaign "${commSubject}" staged and logged successfully for ${commTarget} audience via ${commChannel}!`);
       setCommSubject('');
       setCommMessage('');
       setTimeout(() => setCommSentNotice(null), 6000);
       showFeedback('success', 'Campaign logged and scheduled');
-    } catch {
-      showFeedback('error', 'Failed to dispatch communication');
+    } catch (error) {
+      showFeedback('error', error instanceof Error ? error.message : 'Failed to dispatch communication');
     }
   };
 

@@ -13,14 +13,13 @@ import {
   ExternalLink,
   Zap,
 } from 'lucide-react';
-import { MediaAsset, StoreSettings } from '../../lib/types';
+import { MediaAsset } from '../../lib/types';
 import { optimizeImageFile, OptimizationResult } from '../../lib/imageOptimizer';
 import { logAuditEvent } from '../../lib/audit';
 import { useAuth } from '../../context/AuthContext';
-import { DEFAULT_STORE_SETTINGS } from '../../lib/seedData';
 
 export const MediaUploadsView: React.FC = () => {
-  const { user } = useAuth();
+  const { user, isSuperAdmin } = useAuth();
   const [assets, setAssets] = useState<MediaAsset[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<string>('');
@@ -58,6 +57,12 @@ export const MediaUploadsView: React.FC = () => {
 
   useEffect(() => {
     fetchAssets();
+    fetch('/api/settings').then(async response => {
+      if (!response.ok) throw new Error('Could not load image settings');
+      const data = await response.json();
+      const saved = JSON.parse(data.settings?.store_settings || '{}').imageOptimization;
+      if (saved) { setQuality(saved.quality ?? 82); setMaxWidth(saved.maxWidthPx ?? 1200); setMaxHeight(saved.maxHeightPx ?? 1200); }
+    }).catch(() => setSettingsMessage('Could not load saved optimization settings.'));
   }, []);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -163,30 +168,20 @@ export const MediaUploadsView: React.FC = () => {
 
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!Number.isFinite(maxWidth) || !Number.isFinite(maxHeight) || !Number.isFinite(quality)) {
+    if (!Number.isFinite(maxWidth) || !Number.isFinite(maxHeight) || !Number.isFinite(quality) || quality < 1 || quality > 100 || maxWidth < 1 || maxHeight < 1 || maxWidth > 10000 || maxHeight > 10000) {
       setSettingsMessage('Please enter valid numeric parameters.');
       return;
     }
     try {
       setIsSavingSettings(true);
-      const updatedSettings = {
-        ...DEFAULT_STORE_SETTINGS,
-        imageOptimization: {
-          quality,
-          maxWidthPx: maxWidth,
-          maxHeightPx: maxHeight,
-          generateWebp: true,
-        },
-      };
       try {
         const res = await fetch('/api/admin', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            type: 'settings',
-            settings: {
-              store_settings: JSON.stringify(updatedSettings),
-            },
+            type: 'image_optimization',
+            action: 'save',
+            settings: { quality, maxWidthPx: maxWidth, maxHeightPx: maxHeight },
           }),
         });
         if (!res.ok) throw new Error(`Could not save settings (${res.status})`);
@@ -345,7 +340,7 @@ export const MediaUploadsView: React.FC = () => {
 
             <button
               type="submit"
-              disabled={isSavingSettings}
+              disabled={isSavingSettings || !isSuperAdmin}
               className="w-full py-2.5 rounded-xl bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
             >
               {isSavingSettings ? 'Saving...' : 'Save Parameters'}

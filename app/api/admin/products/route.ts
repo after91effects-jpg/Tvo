@@ -9,7 +9,7 @@ export const runtime = 'nodejs';
 
 export async function GET(req: Request) {
   const user = requireAdmin(req);
-  if (!user) return err('Admin access required', 403);
+  if (!user || !hasPermission(user.role, 'view_products')) return err('Permission denied', 403);
   const url = new URL(req.url);
   const params = Object.fromEntries(url.searchParams.entries());
   const id = params.id ? Number(params.id) : null;
@@ -27,13 +27,7 @@ export async function GET(req: Request) {
       if (!id) return err('Product id required', 400);
       return ok({ product: getProductWithVariants(id) });
     }
-    if (params.type === 'stock-adjust') {
-      const productId = Number(params.productId);
-      const delta = Number(params.delta);
-      const reason = params.reason || 'Manual adjustment';
-      if (!productId || isNaN(delta)) return err('productId and delta required', 400);
-      return ok({ adjustment: adjustProductStock(productId, delta, reason, user) });
-    }
+    if (params.type === 'stock-adjust') return err('Use POST to adjust inventory', 405);
     const id = params.id ? Number(params.id) : null;
     if (id) {
       if (params.fetch === 'one') return ok({ product: getProduct(id) });
@@ -76,6 +70,13 @@ export async function POST(req: Request) {
   if (!user) return err('Admin access required', 403);
   const body = await req.json().catch(() => ({}));
 
+  const requestedAction = body.action || (body.id ? 'update' : 'create');
+  const permission = ['create', 'duplicate'].includes(requestedAction) ? 'create_products'
+    : ['status', 'toggle_publish'].includes(requestedAction) ? 'publish_products'
+    : requestedAction === 'bulk' ? 'bulk_edit_products'
+    : requestedAction === 'adjust_stock' ? 'adjust_inventory'
+    : ['delete', 'delete_permanently'].includes(requestedAction) ? 'archive_products' : 'edit_products';
+  if (!hasPermission(user.role, permission)) return err('Permission denied', 403);
   try {
     if (asLegacyAction(body, user)) return ok({ ok: true });
 

@@ -216,6 +216,7 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
   );
   const [formCustomDietaryLabel, setFormCustomDietaryLabel] = useState('');
 
+  const [availableCategories, setAvailableCategories] = useState(INITIAL_CATEGORIES.map(c => ({ slug: c.slug, name: c.name })));
   const [categoryIdMap, setCategoryIdMap] = useState<Record<string, number>>({});
 
   useEffect(() => {
@@ -238,6 +239,8 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
             if (c?.name) map[c.name.toLowerCase()] = Number(c.id);
           }
           setCategoryIdMap(map);
+          setAvailableCategories(data.categories.map((c: { slug: string; name: string }) => ({ slug: c.slug, name: c.name })));
+
         }
       })
       .catch(() => {});
@@ -1634,7 +1637,7 @@ images_json: (formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
           className="px-3 py-2 text-xs rounded-xl border border-[var(--border)] bg-[var(--bg-subtle)] text-[var(--text-main)] focus:outline-none font-medium"
         >
           <option value="all">All Categories</option>
-          {INITIAL_CATEGORIES.map((c) => (
+          {availableCategories.map((c) => (
             <option key={c.slug} value={c.slug}>
               {c.name}
             </option>
@@ -2072,7 +2075,7 @@ images_json: (formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
                 onChange={(e) => setFormCategory(e.target.value)}
                 className="w-full px-3 py-2 text-xs rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-main)] focus:outline-none font-medium"
               >
-                {INITIAL_CATEGORIES.map((c) => (
+                {availableCategories.map((c) => (
                   <option key={c.slug} value={c.slug}>
                     {c.name}
                   </option>
@@ -2082,7 +2085,7 @@ images_json: (formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
 
             <div>
               <label className="block text-xs font-semibold text-[var(--text-main)] mb-1">
-                `Base Price per ${formSellingUnitType === 'custom' ? (formCustomSellingUnit || 'unit') : formSellingUnitValue} (₹)`
+                {`Base Price per ${formSellingUnitType === 'custom' ? (formCustomSellingUnit || 'unit') : formSellingUnitValue} (₹)`}
               </label>
               <input
                 type="number"
@@ -2096,7 +2099,7 @@ images_json: (formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
 
             <div>
               <label className="block text-xs font-semibold text-[var(--text-main)] mb-1">
-                `Regular MRP per ${formSellingUnitType === 'custom' ? (formCustomSellingUnit || 'unit') : formSellingUnitValue} (₹)`
+                {`Regular MRP per ${formSellingUnitType === 'custom' ? (formCustomSellingUnit || 'unit') : formSellingUnitValue} (₹)`}
               </label>
               <input
                 type="number"
@@ -2111,7 +2114,7 @@ images_json: (formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-[var(--text-main)] mb-1">
-                `Inventory Stock Count (${formSellingUnitType === 'custom' ? (formCustomSellingUnit || 'unit') : formSellingUnitValue}s)`
+                {`Inventory Stock Count (${formSellingUnitType === 'custom' ? (formCustomSellingUnit || 'unit') : formSellingUnitValue}s)`}
               </label>
               <input
                 type="number"
@@ -3544,7 +3547,7 @@ images_json: (formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
                 onChange={(e) => setBulkTargetCategory(e.target.value)}
                 className="w-full px-3 py-2 rounded-xl bg-[var(--bg-surface)] border border-[var(--border)] text-xs text-[var(--text-main)] focus:outline-none focus:border-[var(--primary)] capitalize"
               >
-                {INITIAL_CATEGORIES.map((cat) => (
+                {availableCategories.map((cat) => (
                   <option key={cat.slug} value={cat.slug}>
                     {cat.name}
                   </option>

@@ -94,7 +94,6 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       id: 'categories',
       label: 'Category Tree & SEO',
       icon: <FolderTree className="w-4 h-4" />,
-      badge: '5 Main',
       permission: 'view_categories',
       group: 'CATALOG',
     },
@@ -162,7 +161,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       id: 'reviews',
       label: 'Customer Reviews',
       icon: <Star className="w-4 h-4" />,
-      permission: 'view_products',
+      permission: 'view_reviews',
       group: 'OPERATIONS',
     },
     {

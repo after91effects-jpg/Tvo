@@ -21,24 +21,34 @@ function ensureCatSlug(slug: string, exceptId?: number) {
 export function saveCategory(body: any, user: any) {
   const name = String(body.name || '').trim();
   if (!name) throw new Error('Category name is required');
-  if (body.id && body.parent_id && Number(body.id) === Number(body.parent_id)) {
-    throw new Error('Category cannot be its own parent');
+  const categoryId = body.id ? Number(body.id) : null;
+  let parentId = body.parent_id ? Number(body.parent_id) : null;
+  const seen = new Set<number>();
+  while (parentId !== null) {
+    if (!Number.isSafeInteger(parentId) || parentId < 1) throw new Error('Invalid parent category');
+    if (parentId === categoryId || seen.has(parentId)) throw new Error('Category parent would create a circular hierarchy');
+    seen.add(parentId);
+    const parent = db.prepare('SELECT parent_id FROM categories WHERE id=?').get(parentId) as { parent_id: number | null } | undefined;
+    if (!parent) throw new Error('Parent category not found');
+    parentId = parent.parent_id ? Number(parent.parent_id) : null;
   }
   if (body.id) {
     const existing = db.prepare('SELECT id FROM categories WHERE id=?').get(body.id);
     if (!existing) throw new Error('Category not found');
     db.prepare(`UPDATE categories SET name=?, slug=?, parent_id=?, description=?, image=?, featured=?, sort_order=?, seo_title=?, seo_description=? WHERE id=?`)
-      .run(name, ensureCatSlug(body.slug ? String(body.slug) : name, body.id), body.parent_id || null, body.description || null, body.image || null, body.featured ? 1 : 0, parseInt(String(body.sort_order)) || 0, body.seo_title || null, body.seo_description || null, body.id);
+      .run(name, ensureCatSlug(slugify(body.slug ? String(body.slug) : name), body.id), body.parent_id || null, body.description || null, body.image || null, body.featured ? 1 : 0, parseInt(String(body.sort_order)) || 0, body.seo_title || null, body.seo_description || null, body.id);
     logAudit(user, 'CATEGORY_UPDATE', 'Category', String(body.id));
   } else {
     const info = db.prepare(`INSERT INTO categories (name, slug, parent_id, description, image, featured, sort_order, seo_title, seo_description) VALUES (?,?,?,?,?,?,?,?,?)`)
-      .run(name, ensureCatSlug(body.slug ? String(body.slug) : name), body.parent_id || null, body.description || null, body.image || null, body.featured ? 1 : 0, parseInt(String(body.sort_order)) || 0, body.seo_title || null, body.seo_description || null);
+      .run(name, ensureCatSlug(slugify(body.slug ? String(body.slug) : name)), body.parent_id || null, body.description || null, body.image || null, body.featured ? 1 : 0, parseInt(String(body.sort_order)) || 0, body.seo_title || null, body.seo_description || null);
     logAudit(user, 'CATEGORY_CREATE', 'Category', String(info.lastInsertRowid));
   }
   return { ok: true };
 }
 
 export function deleteCategory(id: number, user: any) {
+  const children = db.prepare('SELECT COUNT(*) AS c FROM categories WHERE parent_id=?').get(id) as { c: number };
+  if (children.c > 0) throw new Error('Move or delete subcategories before deleting this category.');
   const existing = db.prepare('SELECT COUNT(*) AS c FROM products WHERE category_id=?').get(id) as any;
   if (existing.c > 0) throw new Error(`Cannot delete category: ${existing.c} products are using it. Reassign them first.`);
   db.prepare('DELETE FROM categories WHERE id=?').run(id);

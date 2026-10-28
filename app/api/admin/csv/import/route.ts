@@ -1,3 +1,4 @@
+import { hasPermission } from '../../../../../lib/server/permissions';
 import { ok, err, requireAdmin } from '../../../../../lib/server/api';
 import { upsertProduct } from '../../../../../lib/server/admin-catalog';
 
@@ -5,7 +6,7 @@ export const runtime = 'nodejs';
 
 export async function POST(req: Request) {
   const user = requireAdmin(req);
-  if (!user) return err('Admin access required', 403);
+  if (!user || !hasPermission(user.role, 'import_woocommerce')) return err('Permission denied', 403);
 
   try {
     const body = await req.json();

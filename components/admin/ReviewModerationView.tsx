@@ -56,6 +56,7 @@ export const ReviewModerationView: React.FC = () => {
       }
       const res = await fetch(`/api/admin?${params.toString()}`);
       const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || 'Failed to load reviews');
       if (data.reviews && Array.isArray(data.reviews)) {
         setReviews(data.reviews);
       } else {
@@ -86,14 +87,14 @@ export const ReviewModerationView: React.FC = () => {
         }),
       });
       const data = await res.json();
-      if (data.ok) {
+      if (res.ok && data.ok) {
         setFeedbackMessage({
           type: 'success',
           text: `Review #${id} marked as ${newStatus}.`,
         });
         // Optimistically update status
         setReviews((prev) =>
-          prev.map((r) => (r.id === id ? { ...r, status: newStatus } : r))
+          prev.map((r) => (r.id === id ? { ...r, status: newStatus } : r)).filter(r => statusFilter === 'all' || r.status === statusFilter)
         );
       } else {
         setFeedbackMessage({ type: 'error', text: data.error || 'Failed to update review status' });
@@ -121,7 +122,7 @@ export const ReviewModerationView: React.FC = () => {
         }),
       });
       const data = await res.json();
-      if (data.ok) {
+      if (res.ok && data.ok) {
         setFeedbackMessage({ type: 'success', text: `Review #${id} deleted.` });
         setReviews((prev) => prev.filter((r) => r.id !== id));
       } else {

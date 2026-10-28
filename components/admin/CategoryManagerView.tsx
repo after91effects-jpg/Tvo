@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { LiveCategoriesView } from './LiveCategoriesView';
 import {
   FolderTree,
   ArrowRight,
@@ -29,7 +30,7 @@ import {
 } from '../../lib/productOrganizer';
 import { generateSitemapUrls } from '../../lib/sitemapGenerator';
 
-export const CategoryManagerView: React.FC = () => {
+const CategoryReferenceView: React.FC = () => {
   const [activeSubTab, setActiveSubTab] = useState<'hierarchy' | 'redirects' | 'products' | 'images' | 'sitemap'>('hierarchy');
   const [expandedMainCat, setExpandedMainCat] = useState<string | null>('cat-main-cakes');
   const [searchQuery, setSearchQuery] = useState('');
@@ -528,4 +529,10 @@ export const CategoryManagerView: React.FC = () => {
       )}
     </div>
   );
+};
+
+
+export const CategoryManagerView: React.FC = () => {
+  const [reference, setReference] = useState(false);
+  return <div className="space-y-4"><button type="button" className="text-sm text-[var(--primary)] underline" onClick={() => setReference(!reference)}>{reference ? 'Back to live categories' : 'View reference architecture'}</button>{reference ? <><p role="note" className="text-sm text-[var(--text-muted)]">Reference architecture and sample mappings. These reports do not represent the live database.</p><CategoryReferenceView /></> : <LiveCategoriesView />}</div>;
 };

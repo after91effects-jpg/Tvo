@@ -56,6 +56,7 @@ describe('auth.ts', () => {
     it('should return true for admin roles on non-restricted permissions', () => {
       expect(can('admin', 'view_dashboard')).toBe(true);
       expect(can('festival_manager', 'manage_festivals')).toBe(true);
+      expect(can('festival_manager', 'refund_payments')).toBe(false);
     });
 
     it('should return false for admin roles on restricted permissions', () => {

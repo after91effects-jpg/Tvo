@@ -229,7 +229,7 @@ describe('permissions.ts', () => {
 
     it('should check specific permissions for non-admin roles', () => {
       expect(can('festival_manager', 'manage_festivals')).toBe(true);
-      expect(can('festival_manager', 'manage_campaigns')).toBe(true);
+      expect(can('festival_manager', 'manage_campaigns')).toBe(false);
       expect(can('marketing_manager', 'manage_campaigns')).toBe(true);
       expect(can('customer', 'view_dashboard')).toBe(false);
       expect(can('customer', 'manage_festivals')).toBe(false);
