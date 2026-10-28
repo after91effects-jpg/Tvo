@@ -15,8 +15,18 @@ describe('Staff cookie validity', () => {
     expect(getCurrentUser(new Request('http://localhost', {headers:{cookie:`tvo_auth=${token}`}}))).toBeNull();
   });
   it('uses the current database role for an active account', () => {
-    mock.get.mockReturnValue({id: 1, role: 'catalog_manager', status: 'active'});
-    const token = signToken({sub: 1, role: 'super_admin'});
+    mock.get.mockReturnValue({id: 1, email: 'owner@example.test', role: 'catalog_manager', status: 'active'});
+    const token = signToken({sub: 1, email: 'owner@example.test', role: 'super_admin'});
     expect(getCurrentUser(new Request('http://localhost', {headers:{cookie:`tvo_auth=${token}`}}))).toMatchObject({role:'catalog_manager'});
+  });
+  it('rejects the former identity cookie after an admin email transfer', () => {
+    mock.get.mockReturnValue({id: 1, email: 'new@example.test', role: 'super_admin', status: 'active'});
+    const token = signToken({sub: 1, email: 'old@example.test', role: 'super_admin'});
+    expect(getCurrentUser(new Request('http://localhost', {headers:{cookie:`tvo_auth=${token}`}}))).toBeNull();
+  });
+  it('rejects admin tokens without an email identity', () => {
+    mock.get.mockReturnValue({id: 1, email: 'owner@example.test', role: 'super_admin', status: 'active'});
+    const token = signToken({sub: 1, role: 'super_admin'});
+    expect(getCurrentUser(new Request('http://localhost', {headers:{cookie:`tvo_auth=${token}`}}))).toBeNull();
   });
 });

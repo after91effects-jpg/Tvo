@@ -27,6 +27,10 @@ The existing synchronous repositories use a dedicated mysql2 worker and one conn
 
 Outer write transactions lock the verified storage metadata row before stock checks/order numbering. Single autocommit writes take the same lock, so multiple app processes retain SQLite's serialized writer behavior. Nested transactions use savepoints. A timeout is never automatically retried because a write may already have committed. The synchronous contract blocks a Node event loop during each query; consider an async repository refactor if traffic requires higher concurrency.
 
+Idle connections closed by the hosting server are reopened before later operations. A read-only ping checks connections after an idle period. Interrupted transactions fail without replaying statements; their dead connection is discarded after rollback handling so a later request can connect safely. The migration marker is checked on every new connection.
+
+Admin sign-in uses Firebase exclusively. A stale local admin password cannot bypass Firebase recovery. Admin session cookies must match the account's current email, so transferring the admin identity invalidates the former identity's cookies.
+
 MySQL backups and restores belong in Hostinger hPanel. Admin health identifies the active driver, and the old SQLite snapshot button is hidden for MySQL. Local snapshots never represent a backup of MySQL. SQLite integrity checks now accept only the exact result `ok`; unchecked snapshots are labelled unverified.
 
 ## Validation

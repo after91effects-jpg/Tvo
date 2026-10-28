@@ -78,6 +78,20 @@ describe.skipIf(!process.env.MYSQL_TEST_SOCKET)('MySQL imported-data integration
     expect(search.get('%cake%')).toEqual(search.get('%CAKE%'));
     expect(Number((search.get('%cake%') as any).n)).toBeGreaterThan(0);
   });
+  it('reopens a connection closed by the database idle timeout', async () => {
+    db.exec('SET SESSION wait_timeout = 1');
+    await new Promise(resolve => setTimeout(resolve, 1600));
+    expect(db.prepare('SELECT COUNT(*) AS n FROM products').get()).toEqual({ n: 149 });
+  });
+  it('fails an interrupted transaction without replaying writes and recovers for a later request', () => {
+    expect(() => db.transaction(() => {
+      db.prepare('INSERT INTO settings (key,value) VALUES (?,?)').run('interrupted_transaction_probe', 'must-roll-back');
+      const { id } = db.prepare('SELECT CONNECTION_ID() AS id').get() as { id: number };
+      db.exec(`KILL CONNECTION ${id}`);
+    })()).toThrow();
+    expect(db.prepare('SELECT value FROM settings WHERE key=?').get('interrupted_transaction_probe')).toBeUndefined();
+    expect(db.prepare('SELECT COUNT(*) AS n FROM products').get()).toEqual({ n: 149 });
+  });
   it('runs the real catalog, order and scheduling repositories on MySQL', async () => {
     process.env.DATABASE_DRIVER = 'mysql';
     const storage = await import('../db');
@@ -101,7 +115,8 @@ describe.skipIf(!process.env.MYSQL_TEST_SOCKET)('MySQL imported-data integration
       const { signToken } = await import('../auth');
       const { GET } = await import('../../../app/api/admin/route');
       process.env.JWT_SECRET = 'private-mysql-integration-test-only';
-      const token = signToken({ sub: 1, role: 'super_admin' });
+      const identity = storage.db.prepare('SELECT email FROM users WHERE id=1').get() as { email: string };
+      const token = signToken({ sub: 1, email: identity.email, role: 'super_admin' });
       const sections = ['orders', 'categories', 'coupons', 'customers', 'custom', 'delivery_slots', 'addons',
         'settings', 'audit', 'reviews', 'static_blocks', 'testimonials', 'faqs', 'pages', 'blog', 'banners',
         'homepage', 'media', 'hamper_settings', 'orders_page', 'customers_page', 'delivery', 'drivers',

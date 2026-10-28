@@ -141,5 +141,9 @@ export function getCurrentUser(req: Request): any | null {
   }
   const user = db.prepare('SELECT * FROM users WHERE id=?').get(payload.sub) as any;
   if (!user || user.status === 'inactive' || user.status === 'suspended') return null;
+  if (isAdminRole(user.role) && (
+    typeof payload.email !== 'string' ||
+    payload.email.trim().toLowerCase() !== String(user.email || '').trim().toLowerCase()
+  )) return null; // Identity transfers invalidate the former admin's cookies.
   return user;
 }

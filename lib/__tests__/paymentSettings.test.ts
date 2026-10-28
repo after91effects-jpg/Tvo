@@ -37,7 +37,8 @@ describe('Admin Payment Settings & Razorpay Dynamic Configuration (Phase 4)', ()
     process.env.RAZORPAY_KEY_SECRET = 'EnvFallbackSecretKey123';
     process.env.RAZORPAY_WEBHOOK_SECRET = 'EnvFallbackWebhookSecret456';
 
-    adminToken = signToken({ sub: ADMIN_SUB, name: 'TVO Flavours Admin', role: 'super_admin' });
+    const identity = db.prepare('SELECT email FROM users WHERE id=?').get(ADMIN_SUB) as { email: string };
+    adminToken = signToken({ sub: ADMIN_SUB, email: identity.email, name: 'TVO Flavours Admin', role: 'super_admin' });
     adminHeaders = {
       'Content-Type': 'application/json',
       Cookie: `tvo_auth=${adminToken}`,

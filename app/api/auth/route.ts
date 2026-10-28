@@ -39,6 +39,9 @@ export async function POST(req: Request) {
     
     const user = db.prepare('SELECT * FROM users WHERE email=?').get(email) as any;
     if (!user) return err('Invalid credentials', 401);
+    // Admin authentication belongs to Firebase; stale local password hashes
+    // must not bypass password recovery or an admin identity transfer.
+    if (isAdminRole(user.role)) return err('Invalid credentials', 401);
     if (!verifyPassword(password, user.password_hash)) return err('Invalid credentials', 401);
     if (user.status === 'inactive' || user.status === 'suspended') return err('Account is inactive', 403);
     

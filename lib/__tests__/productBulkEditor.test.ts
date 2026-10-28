@@ -398,7 +398,8 @@ describe('Product Bulk Editor (Phase 2)', () => {
 
   describe('7. Full UI -> API Route Contract Verification (app/api/admin/products/route.ts)', () => {
     const makeApiRequest = async (payload: any, role: string = 'admin') => {
-      const token = signToken({ sub: 1, name: 'Admin Tester', role });
+      const identity = db.prepare('SELECT email FROM users WHERE id=1').get() as { email: string };
+      const token = signToken({ sub: 1, email: identity.email, name: 'Admin Tester', role });
       const req = new Request('http://localhost:3000/api/admin/products', {
         method: 'POST',
         headers: {
