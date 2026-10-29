@@ -1,3 +1,5 @@
+import { categoryDescendants } from '../categoryTree';
+import { validateProductOptions } from '../adminProductForm';
 import { getProductPurchaseProfile } from '../productPurchase';
 import { getProductOptions } from '../productOptions';
 import { normalizeSellingUnit, validateSellingUnitInput, serializeSellingUnit } from '../sellingUnit';
@@ -68,6 +70,7 @@ export function serializeAdminProduct(row: any) {
     upsells: jsonParseSafe(row.upsells, []),
     crossSells: jsonParseSafe(row.cross_sells, []),
     customization: jsonParseSafe(row.customization_json, []),
+    purchaseKind: getProductPurchaseProfile(row).kind,
     sellingUnit: getProductPurchaseProfile(row).sellingUnit,
     categoryName: row.category_name || '',
     categorySlug: row.category_slug || '',
@@ -124,9 +127,8 @@ function buildWhere(f: any, includeDeleted: boolean) {
     p.push(like, like, like, like, like);
   }
   if (f.category) {
-    w.push('(p.category_id = ? OR p.category_id IN (SELECT id FROM categories WHERE parent_id = ?))');
-    const cid = parseInt(f.category);
-    p.push(cid, cid);
+    const ids=categoryDescendants(db.prepare('SELECT id,parent_id FROM categories').all() as any[],Number(f.category));
+    w.push(`p.category_id IN (${ids.map(()=>'?').join(',')})`);p.push(...ids);
   }
   if (f.brand) { w.push('p.brand_id = ?'); p.push(parseInt(f.brand)); }
   if (f.product_type) { w.push('p.product_type = ?'); p.push(f.product_type); }
@@ -393,6 +395,18 @@ function buildProductPayload(body: any, existing: any, user: any) {
     }
   }
 
+  if (payload.category_id !== undefined && payload.category_id !== null && !db.prepare('SELECT id FROM categories WHERE id=?').get(payload.category_id)) throw new Error('Selected category does not exist');
+  const regular=payload.regular_price !== undefined?payload.regular_price:existing?.regular_price;
+  const sale=payload.sale_price !== undefined?payload.sale_price:existing?.sale_price;
+  if ((payload.regular_price !== undefined || payload.sale_price !== undefined) && regular != null && sale != null && sale>regular) throw new Error('Selling price cannot exceed MRP');
+  if (payload.variations_json !== undefined) {
+    const parsed=JSON.parse(payload.variations_json);
+    const options=validateProductOptions(parsed);
+    const purchaseKind=parsed?.purchaseKind;
+    if (purchaseKind !== undefined && !['weight','piece','pack','set','hamper','quantity'].includes(purchaseKind)) throw new Error('Invalid product purchase type');
+    payload.variations_json=JSON.stringify(Array.isArray(parsed)?options:{...parsed,options});
+  }
+
   // Validate related_products server-side: reject self-references, duplicates, and stale IDs
   if (body.related_products !== undefined) {
     const currentId = existing?.id ?? (body.id ? Number(body.id) : 0);
@@ -468,13 +482,13 @@ function buildProductPayload(body: any, existing: any, user: any) {
 }
 
 export function upsertProduct(body: any, user: any) {
-  const existing = body.id ? db.prepare('SELECT * FROM products WHERE id=?').get(body.id) as any : null;
-  if (body.id && !existing) throw new Error('Product not found');
-
-  const payload = buildProductPayload(body, existing, user);
-  let id = existing?.id;
-
+  let id: any;
+  let existing: any;
   const tx = db.transaction(() => {
+    existing = body.id ? db.prepare('SELECT * FROM products WHERE id=?').get(body.id) as any : null;
+    if (body.id && !existing) throw new Error('Product not found');
+    const payload = buildProductPayload(body, existing, user);
+    id = existing?.id;
     if (existing) {
       const sets = Object.keys(payload).map((k) => `${k}=?`).join(', ');
       db.prepare(`UPDATE products SET ${sets} WHERE id=?`).run(...Object.values(payload), existing.id);

@@ -138,6 +138,7 @@ export interface RelatedProduct {
 }
 
 export interface Product {
+  purchaseKind?: 'weight' | 'piece' | 'pack' | 'set' | 'hamper' | 'quantity';
   id: string;
   sku: string;
   name: string;

@@ -203,6 +203,7 @@ export function serializeProduct(row: any) {
   return {
     id: String(row.id),
     sku: row.sku,
+    purchaseKind: purchase.kind,
     name: row.name,
     slug: row.slug,
     shortDescription: cleanShort,

@@ -1,10 +1,11 @@
 import { normalizeSellingUnit } from './sellingUnit';
 
 export type PurchaseKind = 'weight' | 'piece' | 'pack' | 'set' | 'hamper' | 'quantity';
+export const PURCHASE_UNITS: Record<Exclude<PurchaseKind,'quantity'>,string[]> = {weight:['kg','g','mg'],piece:['piece','slice','serving'],pack:['pack','box','jar','bottle','cup','plate','tray'],set:['set','pair','dozen','bundle'],hamper:['box']};
 export type PurchaseProduct = {
   name?: string; slug?: string; category?: string; category_slug?: string;
   shortDescription?: string; short_description?: string; description?: string;
-  sellingUnit?: unknown; selling_unit?: unknown; isCustomHamper?: boolean;
+  purchaseKind?: PurchaseKind; variations_json?: unknown; weightOptions?: unknown; sellingUnit?: unknown; selling_unit?: unknown; isCustomHamper?: boolean;
 };
 /** Shared catalog policy. Specific item evidence takes precedence over imported kg/category defaults. */
 export function getProductPurchaseProfile(product: PurchaseProduct = {}) {
@@ -31,6 +32,15 @@ export function getProductPurchaseProfile(product: PurchaseProduct = {}) {
   else if (/\bbox\b|\bcollection\b|\bgift (set|tray)\b|\bchocolate feast\b/.test(name) || /products inside (?:the |this )?hamper|rakhi hamper|gift hamper/.test(intro)) { kind = 'hamper'; unit = 'box'; label = '1 hamper'; }
   else if (['kg','g','mg'].includes(unit)) { kind = 'weight'; }
   else { kind = ['pack','box','jar','bottle'].includes(unit) ? 'pack' : ['set','pair','dozen','bundle'].includes(unit) ? 'set' : 'quantity'; }
+  let metadata: any = product.weightOptions ?? product.variations_json;
+  try { if (typeof metadata === 'string') metadata = JSON.parse(metadata); } catch { metadata = null; }
+  const explicit = product.purchaseKind ?? metadata?.purchaseKind;
+  if (['weight','piece','pack','set','hamper','quantity'].includes(explicit)) {
+    kind = explicit;
+    const units: Record<string,string[]> = {...PURCHASE_UNITS,quantity:[stored.value]};
+    unit = units[kind].includes(stored.value) ? stored.value : units[kind][0];
+    label = kind === 'hamper' ? '1 hamper' : `1 ${unit}`;
+  }
   return {
     kind, sellingUnit: { type: stored.type === 'custom' && unit === stored.value ? 'custom' as const : 'predefined' as const, value: unit },
     optionLabel: label || `1 ${unit}`,

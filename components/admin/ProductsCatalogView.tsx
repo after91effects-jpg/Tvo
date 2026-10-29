@@ -1,4 +1,10 @@
 'use client';
+import { categoryPath } from '../../lib/categoryTree';
+import { ProductTrashView } from './ProductTrashView';
+import { ProductOptionsEditor } from './ProductOptionsEditor';
+import { PURCHASE_TYPES, validateProductOptions, validateProductPrices } from '../../lib/adminProductForm';
+import { getProductPurchaseProfile, PURCHASE_UNITS, type PurchaseKind } from '../../lib/productPurchase';
+import { getProductOptions } from '../../lib/productOptions';
 import { PREDEFINED_SELLING_UNITS, normalizeSellingUnit, getSellingUnitLabel, isWeightSellingUnit, StructuredSellingUnit } from '../../lib/sellingUnit';
 import { normalizeSku, validateSkuFormat, suggestSku } from '../../lib/sku';
 
@@ -107,8 +113,11 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const productErrorRef = useRef<HTMLDivElement>(null);
+  useEffect(()=>{if(errorMessage && isAddModalOpen)productErrorRef.current?.scrollIntoView({block:'nearest',behavior:'smooth'});},[errorMessage,isAddModalOpen]);
 
   // Product Bulk Selection & Batch Operations State
+  const [showTrash,setShowTrash]=useState(false);
   const canBulkEdit = hasPermission(user?.role, 'bulk_edit_products');
   const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
   const headerCheckboxRef = useRef<HTMLInputElement>(null);
@@ -152,21 +161,26 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
   const [formName, setFormName] = useState('');
   const [formSku, setFormSku] = useState('');
   const [skuCheckState, setSkuCheckState] = useState<{ checking: boolean; valid: boolean; error?: string }>({ checking: false, valid: true });
+  const [formPurchaseKind, setFormPurchaseKind] = useState<PurchaseKind>('weight');
+  const [formOptions, setFormOptions] = useState<WeightOption[]>([]);
+  const [formSlug, setFormSlug] = useState('');
+  const [formSeoTitle, setFormSeoTitle] = useState('');
+  const [formSeoDescription, setFormSeoDescription] = useState('');
+  const foodFields = !['set','quantity'].includes(formPurchaseKind);
+  const cakeFields = formPurchaseKind === 'weight' || formPurchaseKind === 'piece';
   const [formCategory, setFormCategory] = useState('chocolate');
   const [formShortDesc, setFormShortDesc] = useState('');
   const [formDesc, setFormDesc] = useState('');
   const [formEggless, setFormEggless] = useState(true);
-  const [formPrice, setFormPrice] = useState('699');
-  const [formMrp, setFormMrp] = useState('849');
+  const [formPrice, setFormPrice] = useState('');
+  const [formMrp, setFormMrp] = useState('');
   const [formTrackInventory, setFormTrackInventory] = useState(true);
   const [formStock, setFormStock] = useState('30');
   const [formLowStockThreshold, setFormLowStockThreshold] = useState('5');
   const [formFlavours, setFormFlavours] = useState('Dark Chocolate, Truffle');
   const [formTags, setFormTags] = useState('Bestseller, Birthday, Chocolate');
   const [formBadges, setFormBadges] = useState('Bestseller, Eggless');
-  const [formImageUrl, setFormImageUrl] = useState(
-    'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=800&q=80'
-  );
+  const [formImageUrl, setFormImageUrl] = useState('');
   const [formImages, setFormImages] = useState<ProductImage[]>([]);
   const [formVideos, setFormVideos] = useState<ProductVideo[]>([]);
   const [isImageUploading, setIsImageUploading] = useState(false);
@@ -216,7 +230,7 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
   );
   const [formCustomDietaryLabel, setFormCustomDietaryLabel] = useState('');
 
-  const [availableCategories, setAvailableCategories] = useState(INITIAL_CATEGORIES.map(c => ({ slug: c.slug, name: c.name })));
+  const [availableCategories, setAvailableCategories] = useState<Array<{slug:string;name:string}>>([]);
   const [categoryIdMap, setCategoryIdMap] = useState<Record<string, number>>({});
 
   useEffect(() => {
@@ -230,7 +244,7 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
             if (c?.name) map[c.name.toLowerCase()] = Number(c.id);
           }
           setCategoryIdMap(map);
-          setAvailableCategories(data.categories.map((c: { slug: string; name: string }) => ({ slug: c.slug, name: c.name })));
+          setAvailableCategories(data.categories.map((c: { slug: string; name: string }) => ({ slug: c.slug, name: categoryPath(data.categories,c as any) })));
 
         }
       })
@@ -527,8 +541,8 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
     });
   };
 
-  // Bulk Commit to Firestore
-  const handleBulkImportToFirestore = async () => {
+  // Bulk Commit to Catalog
+  const handleBulkImportToCatalog = async () => {
     if (!parsedRows || parsedRows.length === 0) return;
 
     try {
@@ -542,7 +556,7 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
       const errorsList: { row: number; reason: string }[] = [];
 
       const rowsToProcess = parsedRows.filter((r) => !r.hasErrors);
-      const batchSize = 100; // safe Firestore batch ceiling
+      const batchSize = 100; // safe Catalog batch ceiling
 
       for (let i = 0; i < rowsToProcess.length; i += batchSize) {
         const chunk = rowsToProcess.slice(i, i + batchSize);
@@ -627,8 +641,11 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
                 tags: productPayload.tags,
                 category_id: importedCategoryId,
                 images_json: productPayload.images,
+            videos_json: productPayload.videos,
+            seo_title: productPayload.seoTitle, seo_description: productPayload.seoDescription,
                 variations_json: {
-                  attribute: 'Select Weight',
+                  purchaseKind: formPurchaseKind,
+              attribute: PURCHASE_TYPES.find(type => type.value===formPurchaseKind)?.label || 'Options',
                   options: weightOptions.map((w) => ({
                     label: w.label,
                     value: w.label,
@@ -666,7 +683,7 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
         action: 'PRODUCT_BULK_IMPORT',
         targetType: 'ProductCatalog',
         targetId: `import-${Date.now()}`,
-        details: `Bulk imported ${rowsToProcess.length} cake recipes via CSV: ${createdCount} created, ${updatedCount} updated, ${skippedCount} skipped.`,
+        details: `Bulk imported ${rowsToProcess.length} cake products via CSV: ${createdCount} created, ${updatedCount} updated, ${skippedCount} skipped.`,
       });
 
       setImportSummary({
@@ -679,7 +696,7 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
 
       onRefresh();
     } catch (importErr: any) {
-      alert(`Bulk import error: ${importErr?.message || 'Failed to write to Firestore'}`);
+      alert(`Bulk import error: ${importErr?.message || 'Failed to write to Catalog'}`);
     } finally {
       setIsImporting(false);
     }
@@ -689,29 +706,23 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
     setEditingProduct(null);
     setFormName('');
     setFormSku('');
-    setFormCategory('chocolate');
+    setFormCategory('');
+    setFormPurchaseKind('weight'); setFormOptions([]); setFormSlug(''); setFormSeoTitle(''); setFormSeoDescription('');
     setFormShortDesc('');
     setFormDesc('');
     setFormEggless(true);
-    setFormPrice('699');
-    setFormMrp('849');
+    setFormPrice('');
+    setFormMrp('');
     setFormTrackInventory(true);
-    setFormStock('25');
+    setFormStock('0');
     setFormLowStockThreshold('5');
-    setFormFlavours('Belgian Dark Chocolate, Hazelnut Truffle');
-    setFormTags('Bestseller, Truffle, Birthday');
-    setFormBadges('Bestseller, Eggless');
-    setFormImageUrl(
-      'https://images.unsplash.com/photo-1606890737304-57a1ca8a5b62?auto=format&fit=crop&w=800&q=80'
-    );
-    setFormImages([
-      {
-        url: 'https://images.unsplash.com/photo-1606890737304-57a1ca8a5b62?auto=format&fit=crop&w=800&q=80',
-        isPrimary: true,
-      },
-    ]);
+    setFormFlavours('');
+    setFormTags('');
+    setFormBadges('');
+    setFormImageUrl('');
+    setFormImages([]);
     setFormVideos([]);
-    setFormPublished(true);
+    setFormPublished(false);
     setFormSellingUnitType('predefined');
     setFormSellingUnitValue('kg');
     setFormCustomSellingUnit('');
@@ -825,15 +836,17 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
   const handleOpenEditModal = (prod: Product) => {
     setEditingProduct(prod);
     setFormName(prod.name);
+    setFormPurchaseKind(getProductPurchaseProfile(prod).kind); setFormOptions(getProductOptions(prod));
+    setFormSlug(prod.slug || ''); setFormSeoTitle(prod.seoTitle || ''); setFormSeoDescription(prod.seoDescription || '');
     setFormSku(prod.sku);
     setFormCategory(prod.category);
     setFormShortDesc(prod.shortDescription || '');
     setFormDesc(prod.description || '');
     setFormEggless(prod.eggless);
-    setFormPrice(prod.weightOptions?.[0]?.price?.toString() || '699');
-    setFormMrp(prod.weightOptions?.[0]?.mrp?.toString() || '849');
+    setFormPrice(String(prod.price ?? prod.salePrice ?? prod.weightOptions?.[0]?.price ?? ''));
+    setFormMrp(String(prod.regularPrice ?? prod.weightOptions?.[0]?.mrp ?? ''));
     setFormTrackInventory(prod.trackInventory ?? (prod.manageStock !== undefined ? Boolean(prod.manageStock) : ((prod as any).manage_stock !== undefined ? Boolean((prod as any).manage_stock) : true)));
-    setFormStock(prod.stock?.toString() || '25');
+    setFormStock(prod.stock?.toString() || '0');
     setFormLowStockThreshold(prod.lowStockThreshold?.toString() || (prod as any).low_stock_threshold?.toString() || '5');
     setFormFlavours(prod.flavours?.join(', ') || '');
     setFormTags(prod.tags?.join(', ') || '');
@@ -934,11 +947,8 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
       setIsSaving(true);
       setErrorMessage('');
 
-      const parsedPrice = parseFloat(formPrice);
-      const parsedMrp = parseFloat(formMrp);
-      const parsedStock = parseInt(formStock, 10);
-      const priceNum = Number.isFinite(parsedPrice) ? Math.max(0, parsedPrice) : 699;
-      const mrpNum = Number.isFinite(parsedMrp) ? Math.max(0, parsedMrp) : Math.round(priceNum * 1.2);
+      const {price:priceNum,mrp:mrpNum} = validateProductPrices(formPrice,formMrp);
+      if (!categoryIdMap[formCategory]) throw new Error('Select a valid category before saving.');
       const invValidation = validateInventoryInput(formStock, formLowStockThreshold, formTrackInventory);
       if (!invValidation.valid) {
         setErrorMessage(invValidation.error || "Invalid inventory configuration");
@@ -960,44 +970,13 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
         ? { type: 'custom', value: formCustomSellingUnit.trim() }
         : { type: 'predefined', value: formSellingUnitValue };
 
-      const weightOptions: WeightOption[] = !isWeight
-        ? [
-            { label: '1 piece', weightKg: 0.1, price: priceNum, mrp: mrpNum, isDefault: true },
-            { label: '2 pieces (Pack of 2)', weightKg: 0.2, price: Math.round(priceNum * 1.9), mrp: Math.round(mrpNum * 1.9) },
-            { label: '4 pieces (Party Box)', weightKg: 0.4, price: Math.round(priceNum * 3.8), mrp: Math.round(mrpNum * 3.8) },
-            { label: '6 pieces (Family Box)', weightKg: 0.6, price: Math.round(priceNum * 5.5), mrp: Math.round(mrpNum * 5.5) },
-            { label: '12 pieces (Celebration Box)', weightKg: 1.2, price: Math.round(priceNum * 10), mrp: Math.round(mrpNum * 10) },
-          ]
-        : [
-            { label: '0.5 kg (Serves 4-6)', weightKg: 0.5, price: priceNum, mrp: mrpNum },
-            {
-              label: '1.0 kg (Serves 8-10)',
-              weightKg: 1.0,
-              price: Math.round(priceNum * 1.85),
-              mrp: Math.round(mrpNum * 1.85),
-            },
-            {
-              label: '1.5 kg (Serves 12-14)',
-              weightKg: 1.5,
-              price: Math.round(priceNum * 2.7),
-              mrp: Math.round(mrpNum * 2.7),
-            },
-            {
-              label: '2.0 kg (Serves 16-20)',
-              weightKg: 2.0,
-              price: Math.round(priceNum * 3.5),
-              mrp: Math.round(mrpNum * 3.5),
-            },
-          ];
+      const weightOptions = validateProductOptions(formOptions.length ? formOptions.map((row,index) => index===0 ? {...row,price:priceNum,mrp:mrpNum} : row) : getProductOptions({name:formName,purchaseKind:formPurchaseKind,sellingUnit:currentSellingUnitObj,price:priceNum,regularPrice:mrpNum}));
 
       const prodId =
         editingProduct?.id ||
         `prod-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
-      const slug = formName
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/(^-|-$)+/g, '');
+      const slug = formSlug.trim() || (editingProduct?.slug || formName.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)+/g,''));
 
       const productPayload: Product = {
         id: prodId,
@@ -1008,8 +987,9 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
         description: formDesc.trim() || formShortDesc.trim(),
         category: formCategory,
         tags: formTags.split(',').map((s) => s.trim()).filter(Boolean),
-        flavours: formFlavours.split(',').map((s) => s.trim()).filter(Boolean),
+        flavours: cakeFields ? formFlavourOptions.filter(f=>f.name.trim()).map(f=>f.name.trim()) : [],
         eggless: formEggless,
+        purchaseKind: formPurchaseKind,
         sellingUnit: currentSellingUnitObj,
         weightOptions,
         images: formImages.filter((i) => i.url && i.url.trim()).map((i) => ({
@@ -1035,8 +1015,8 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
         lowStockThreshold: thresholdNum,
         badges: formBadges.split(',').map((s) => s.trim()).filter(Boolean),
         published: formPublished,
-        seoTitle: `${formName.trim()} | TVO Flavours Bakery`,
-        seoDescription: formShortDesc.trim(),
+        seoTitle: formSeoTitle.trim(),
+        seoDescription: formSeoDescription.trim(),
         createdAt: editingProduct?.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         createdBy: user?.name || 'Chef Administrator',
@@ -1070,8 +1050,11 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
             eggless: formEggless ? 1 : 0,
             selling_unit: currentSellingUnitObj,
             images_json: productPayload.images,
+            videos_json: productPayload.videos,
+            seo_title: productPayload.seoTitle, seo_description: productPayload.seoDescription,
             variations_json: {
-              attribute: 'Select Weight',
+              purchaseKind: formPurchaseKind,
+              attribute: PURCHASE_TYPES.find(type => type.value===formPurchaseKind)?.label || 'Options',
               options: weightOptions.map((w) => ({
                 label: w.label,
                 value: w.label,
@@ -1081,7 +1064,7 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
               })),
             },
             flavours: productPayload.flavours,
-            flavour_options_json: formFlavourOptions.filter(f => f.name.trim()).map(f => ({
+            flavour_options_json: (cakeFields ? formFlavourOptions : []).filter(f => f.name.trim()).map(f => ({
               id: f.id,
               name: f.name,
               additionalPrice: f.additionalPrice,
@@ -1092,16 +1075,16 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
             })),
             badges: productPayload.badges,
             tags: productPayload.tags,
-            customization_fee: Number(formCustomizationFee) || 0,
-            allow_custom_message: formAllowCustomMessage ? 1 : 0,
-            allow_custom_design: formAllowCustomDesign ? 1 : 0,
+            customization_fee: cakeFields ? Number(formCustomizationFee) || 0 : 0,
+            allow_custom_message: cakeFields && formAllowCustomMessage ? 1 : 0,
+            allow_custom_design: cakeFields && formAllowCustomDesign ? 1 : 0,
             same_day_eligible: formSameDayEligible ? 1 : 0,
             show_gallery: formShowGallery ? 1 : 0,
             show_video: formShowVideo ? 1 : 0,
-            show_flavour: formShowFlavour ? 1 : 0,
-            show_customize: formShowCustomize ? 1 : 0,
-            show_design_upload: formShowDesignUpload ? 1 : 0,
-            show_addons: formShowAddons ? 1 : 0,
+            show_flavour: cakeFields && formShowFlavour ? 1 : 0,
+            show_customize: cakeFields && formShowCustomize ? 1 : 0,
+            show_design_upload: cakeFields && formShowDesignUpload ? 1 : 0,
+            show_addons: cakeFields && formShowAddons ? 1 : 0,
             show_dietary: formShowDietary ? 1 : 0,
             show_delivery: formShowDelivery ? 1 : 0,
             show_special_instructions: formShowSpecialInstructions ? 1 : 0,
@@ -1141,7 +1124,7 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
         action: editingProduct ? 'PRODUCT_UPDATE' : 'PRODUCT_CREATE',
         targetType: 'Product',
         targetId: prodId,
-        details: `${editingProduct ? 'Updated' : 'Created'} recipe "${formName}" (SKU: ${formSku})`,
+        details: `${editingProduct ? 'Updated' : 'Created'} product "${formName}" (SKU: ${formSku})`,
       });
 
       setIsAddModalOpen(false);
@@ -1283,8 +1266,8 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
 
   const handleDeleteProduct = async () => {
     if (!productToDelete) return;
-    if (!isAdmin) {
-      alert('Only users with the "admin" role are authorized to delete recipes.');
+    if (!hasPermission(user?.role,'archive_products')) {
+      alert('You do not have permission to move products to trash.');
       return;
     }
 
@@ -1309,7 +1292,7 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
         action: 'PRODUCT_DELETE',
         targetType: 'Product',
         targetId: productToDelete.id,
-        details: `Deleted product recipe "${productToDelete.name}" (SKU: ${productToDelete.sku})`,
+        details: `Deleted product product "${productToDelete.name}" (SKU: ${productToDelete.sku})`,
       });
 
       setProductToDelete(null);
@@ -1491,16 +1474,18 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
     }
   };
 
+  if(showTrash)return <div className="space-y-4"><button className="text-[var(--primary)] underline" onClick={()=>setShowTrash(false)}>Back to Product Catalog</button><ProductTrashView onRestore={onRefresh}/></div>;
+
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
       {/* Top Header & Search / Filter Controls */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[var(--bg-surface)] p-6 rounded-2xl border border-[var(--border)] shadow-xs">
         <div>
           <h2 className="text-xl sm:text-2xl font-bold font-display text-[var(--text-main)]">
-            Products & Recipe Catalog ({products.length})
+            Product Catalog ({products.length})
           </h2>
           <p className="text-xs text-[var(--text-muted)] mt-1">
-            Manage artisan recipes, weight options, pricing, dietary tags, and live inventory.
+            Manage products, exact purchase options, media, categories and live stock.
           </p>
         </div>
 
@@ -1536,7 +1521,7 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
 
           {/* Bulk Import CSV Button */}
           <button
-            id="bulk-import-csv-btn"
+            id="bulk-import-csv-btn" disabled={!hasPermission(user?.role,'import_woocommerce')}
             onClick={() => setIsImportModalOpen(true)}
             type="button"
             className="px-3.5 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--bg-subtle)] hover:bg-[var(--border)] text-[var(--text-main)] text-xs font-medium flex items-center gap-2 shadow-xs active:scale-95 transition-all cursor-pointer"
@@ -1545,15 +1530,17 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
             <span>Bulk Import CSV</span>
           </button>
 
-          {/* Add New Recipe Button */}
+          <button type="button" onClick={()=>setShowTrash(true)} className="px-3 py-2 rounded-xl border border-[var(--border)] text-sm">Product Trash</button>
+          {/* Add New Product Button */}
           <button
-            id="add-new-recipe-btn"
+            id="add-new-product-btn"
+            disabled={!hasPermission(user?.role, 'create_products')}
             onClick={handleOpenAddModal}
             type="button"
             className="px-4 py-2.5 rounded-xl bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white text-xs font-semibold flex items-center gap-2 shadow-sm active:scale-95 transition-all cursor-pointer"
           >
             <Plus className="w-4 h-4" />
-            <span>+ Add New Recipe</span>
+            <span>+ Add New Product</span>
           </button>
         </div>
       </div>
@@ -1567,7 +1554,7 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by recipe name or SKU..."
+            placeholder="Search by product name or SKU..."
             className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-[var(--border)] bg-[var(--bg-subtle)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
           />
         </div>
@@ -1704,7 +1691,7 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
                     />
                   </th>
                 )}
-                <th className="py-3.5 px-4 font-semibold">Image & Recipe Title</th>
+                <th className="py-3.5 px-4 font-semibold">Image & Product Title</th>
                 <th className="py-3.5 px-4 font-semibold">SKU & Category</th>
                 <th className="py-3.5 px-4 font-semibold">Base Price (₹)</th>
                 <th className="py-3.5 px-4 font-semibold">Dietary</th>
@@ -1717,7 +1704,7 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
               {filteredProducts.length === 0 ? (
                 <tr>
                   <td colSpan={canBulkEdit ? 8 : 7} className="py-8 text-center text-xs text-[var(--text-muted)]">
-                    No recipes found matching your search and filter criteria.
+                    No products found matching your search and filter criteria.
                   </td>
                 </tr>
               ) : (
@@ -1850,10 +1837,11 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
                     {/* Actions */}
                     <td className="py-3.5 px-4 text-right">
                       <div className="flex items-center justify-end gap-1.5">
+                        {prod.published && <a href={`/product/${prod.slug}`} target="_blank" rel="noreferrer" className="text-xs text-[var(--primary)]" aria-label={`View ${prod.name}`}>View</a>}
                         <button
                           onClick={() => handleOpenEditModal(prod)}
                           className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-subtle)] transition-colors"
-                          title="Edit Recipe"
+                          title="Edit Product" disabled={!hasPermission(user?.role,'edit_products')}
                         >
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
@@ -1861,7 +1849,7 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
                         <button
                           onClick={() => setProductToDelete(prod)}
                           className="p-1.5 rounded-lg text-[var(--text-subtle)] hover:text-[var(--danger)] hover:bg-[var(--danger-light)] transition-colors"
-                          title="Delete Recipe (Admin only)"
+                          title="Move Product to Trash" disabled={!hasPermission(user?.role,'archive_products')}
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -1879,26 +1867,32 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
       <Modal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
-        title={editingProduct ? `Edit Recipe: ${editingProduct.name}` : 'Add New Cake Recipe'}
-        subtitle="Configure recipe details, pricing, image URL, and dietary specifications"
+        title={editingProduct ? `Edit Product: ${editingProduct.name}` : 'Add New Product'}
+        subtitle="Set product type, exact prices, inventory, media and storefront options"
         maxWidth="2xl"
       >
         <form onSubmit={handleSaveProduct} className="space-y-4">
           {errorMessage && (
-            <div className="p-3 rounded-xl bg-[var(--danger-light)] text-[var(--danger)] text-xs flex items-center gap-2">
+            <div ref={productErrorRef} role="alert" className="p-3 rounded-xl bg-[var(--danger-light)] text-[var(--danger)] text-xs flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 shrink-0" />
               <span>{errorMessage}</span>
             </div>
           )}
 
+          <label className="block text-sm font-semibold">Product purchase type
+            <select aria-label="Product purchase type" value={formPurchaseKind} onChange={e=>{const kind=e.target.value as PurchaseKind;if(editingProduct && formOptions.length && !window.confirm('Changing purchase type clears the current size/pack options. Review them before saving. Continue?'))return;setFormPurchaseKind(kind);setFormSellingUnitType('predefined');setFormSellingUnitValue(PURCHASE_TYPES.find(type=>type.value===kind)!.unit);setFormOptions([]);if(['set','quantity'].includes(kind))setFormEggless(false);}} className="w-full mt-1 rounded-xl border p-2 bg-[var(--bg-surface)]">
+              {PURCHASE_TYPES.map(type=><option key={type.value} value={type.value}>{type.label}</option>)}
+            </select>
+          </label>
+          {formPurchaseKind==='hamper' && <p className="text-sm text-[var(--text-muted)]">Sold as a complete hamper. Customers can use Customize Hamper; configure its boxes, wrapping and available items in Hamper Builder Settings.</p>}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-[var(--text-main)] mb-1">
-                Cake Recipe Title *
+                Product Name *
               </label>
               <input
                 type="text"
-                value={formName}
+                aria-label="Product name" value={formName}
                 onChange={(e) => setFormName(e.target.value)}
                 placeholder="e.g. Royal Belgian Dark Truffle Cake"
                 required
@@ -1924,7 +1918,7 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
               <div className="relative">
                 <input
                   type="text"
-                  value={formSku}
+                  aria-label="Product SKU" value={formSku}
                   onChange={(e) => setFormSku(e.target.value.toUpperCase())}
                   placeholder="e.g. TVO-CHOC-CTC"
                   required
@@ -1979,15 +1973,15 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
                 className="w-full px-3 py-2 text-xs rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-main)] focus:outline-none font-medium"
               >
                 <optgroup label="Predefined Culinary Units">
-                  {PREDEFINED_SELLING_UNITS.map((unit) => (
+                  {PREDEFINED_SELLING_UNITS.filter(unit=>formPurchaseKind==='quantity' || PURCHASE_UNITS[formPurchaseKind].includes(unit)).map((unit) => (
                     <option key={unit} value={unit}>
                       {unit}
                     </option>
                   ))}
                 </optgroup>
-                <optgroup label="Custom">
+                {formPurchaseKind==='quantity' && <optgroup label="Custom">
                   <option value="custom">custom (specify below)...</option>
-                </optgroup>
+                </optgroup>}
               </select>
             </div>
 
@@ -2013,10 +2007,12 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
                 Category
               </label>
               <select
+                required aria-label="Product category"
                 value={formCategory}
                 onChange={(e) => setFormCategory(e.target.value)}
                 className="w-full px-3 py-2 text-xs rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-main)] focus:outline-none font-medium"
               >
+                <option value="">Select category…</option>
                 {availableCategories.map((c) => (
                   <option key={c.slug} value={c.slug}>
                     {c.name}
@@ -2027,12 +2023,12 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
 
             <div>
               <label className="block text-xs font-semibold text-[var(--text-main)] mb-1">
-                {`Base Price per ${formSellingUnitType === 'custom' ? (formCustomSellingUnit || 'unit') : formSellingUnitValue} (₹)`}
+                Default option selling price (₹)
               </label>
               <input
                 type="number"
-                value={formPrice}
-                onChange={(e) => setFormPrice(e.target.value)}
+                aria-label="Selling price" value={formPrice}
+                onChange={(e) => {setFormPrice(e.target.value);setFormOptions(rows=>rows.map((row,index)=>index===0?{...row,price:Number(e.target.value)}:row));}}
                 placeholder="699"
                 required
                 className="w-full px-3 py-2 text-xs rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
@@ -2041,12 +2037,12 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
 
             <div>
               <label className="block text-xs font-semibold text-[var(--text-main)] mb-1">
-                {`Regular MRP per ${formSellingUnitType === 'custom' ? (formCustomSellingUnit || 'unit') : formSellingUnitValue} (₹)`}
+                Default option MRP (₹)
               </label>
               <input
                 type="number"
-                value={formMrp}
-                onChange={(e) => setFormMrp(e.target.value)}
+                aria-label="Regular MRP" value={formMrp}
+                onChange={(e) => {setFormMrp(e.target.value);setFormOptions(rows=>rows.map((row,index)=>index===0?{...row,mrp:Number(e.target.value)}:row));}}
                 placeholder="849"
                 className="w-full px-3 py-2 text-xs rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
               />
@@ -2056,18 +2052,18 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-[var(--text-main)] mb-1">
-                {`Inventory Stock Count (${formSellingUnitType === 'custom' ? (formCustomSellingUnit || 'unit') : formSellingUnitValue}s)`}
+                {formPurchaseKind === 'piece' ? 'Available individual pieces' : 'Available complete items / packs / sets'}
               </label>
               <input
                 type="number"
-                value={formStock}
+                aria-label="Stock quantity" value={formStock}
                 onChange={(e) => setFormStock(e.target.value)}
                 placeholder="25"
                 className="w-full px-3 py-2 text-xs rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
               />
             </div>
 
-            <div>
+            {foodFields && (<div>
               <label className="block text-xs font-semibold text-[var(--text-main)] mb-1">
                 Dietary Preference
               </label>
@@ -2080,7 +2076,7 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
                     onChange={() => setFormEggless(true)}
                     className="accent-[var(--primary)]"
                   />
-                  <span>100% Eggless (Vegetarian)</span>
+                  <span>Eggless</span>
                 </label>
                 <label className="flex items-center gap-1.5 text-xs text-[var(--text-main)] cursor-pointer">
                   <input
@@ -2093,7 +2089,7 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
                   <span>Contains Egg</span>
                 </label>
               </div>
-            </div>
+            </div>)}
           </div>
 
           <div>
@@ -2102,7 +2098,7 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
             </label>
             <input
               type="text"
-              value={formShortDesc}
+              aria-label="Short description" value={formShortDesc}
               onChange={(e) => setFormShortDesc(e.target.value)}
               placeholder="Signature 54% dark chocolate ganache enveloped in cacao sponge."
               required
@@ -2112,10 +2108,10 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
 
           <div>
             <label className="block text-xs font-semibold text-[var(--text-main)] mb-1">
-              Full Recipe & Artisan Description
+              Product Description
             </label>
             <textarea
-              value={formDesc}
+              aria-label="Product description" value={formDesc}
               onChange={(e) => setFormDesc(e.target.value)}
               rows={3}
               placeholder="Detailed description of ingredients, layers, and pastry chef tasting notes..."
@@ -2124,19 +2120,6 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-[var(--text-main)] mb-1">
-                Flavours (comma-separated)
-              </label>
-              <input
-                type="text"
-                value={formFlavours}
-                onChange={(e) => setFormFlavours(e.target.value)}
-                placeholder="Dark Chocolate, Hazelnut Truffle"
-                className="w-full px-3 py-2 text-xs rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
-              />
-            </div>
-
             <div>
               <label className="block text-xs font-semibold text-[var(--text-main)] mb-1">
                 Badges (e.g. Bestseller, New)
@@ -2346,6 +2329,13 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
             </div>
           </div>
 
+          <ProductOptionsEditor basePrice={Number(formPrice)||0} baseMrp={Number(formMrp)||0} kind={formPurchaseKind} options={formOptions} onChange={rows=>{setFormOptions(rows);if(rows[0]){setFormPrice(String(rows[0].price));setFormMrp(String(rows[0].mrp));}}}/>
+          <fieldset className="grid gap-3 rounded-xl border p-4"><legend>URL & SEO</legend>
+            <label className="text-sm">Product URL slug<input aria-label="Product URL slug" value={formSlug} onChange={e=>setFormSlug(e.target.value)} className="w-full border rounded-lg p-2 bg-[var(--bg-surface)]" placeholder="Generated for new products; retained when editing"/></label>
+            <label className="text-sm">SEO title<input aria-label="Product SEO title" value={formSeoTitle} onChange={e=>setFormSeoTitle(e.target.value)} maxLength={200} className="w-full border rounded-lg p-2 bg-[var(--bg-surface)]"/></label>
+            <label className="text-sm">SEO description<textarea aria-label="Product SEO description" value={formSeoDescription} onChange={e=>setFormSeoDescription(e.target.value)} maxLength={500} className="w-full border rounded-lg p-2 bg-[var(--bg-surface)]"/></label>
+          </fieldset>
+          {cakeFields && <>
           {/* Flavour Options */}
           <div className="space-y-3">
             <label className="block text-xs font-semibold text-[var(--text-main)] mb-1 flex items-center gap-1.5">
@@ -2489,7 +2479,9 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
             </div>
           </div>
 
+          </>}
           {/* Product Page Feature Toggles */}
+          <details><summary className="font-semibold cursor-pointer py-2">Advanced storefront controls</summary>
           <div className="pt-4 border-t border-[var(--border)]">
             <h4 className="text-xs font-bold text-[var(--text-main)] uppercase tracking-wider mb-3 flex items-center gap-1.5">
               <Settings className="w-3.5 h-3.5 text-[var(--primary)]" />
@@ -2553,7 +2545,7 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
                     <span>{group.title}</span>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5">
-                    {group.items.map((item) => (
+                    {group.items.filter(item=>cakeFields || !['showFlavour','showCustomize','showAddons','showDesignUpload','allowCustomMessage'].includes(item.key)).map((item) => (
                       <label key={item.key} className="flex items-center justify-between p-2.5 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] cursor-pointer transition-all hover:border-[var(--primary)]/40 shadow-xs">
                         <div className="flex items-center gap-2 min-w-0 pr-2">
                           <item.icon className="w-3.5 h-3.5 text-[var(--primary)] shrink-0" />
@@ -2580,6 +2572,7 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
             </div>
           </div>
 
+          </details>
           {/* Related Products Selector (12B-8) */}
           <div className="pt-4 border-t border-[var(--border)]">
             <h4 className="text-xs font-bold text-[var(--text-main)] uppercase tracking-wider mb-1 flex items-center gap-1.5">
@@ -2587,7 +2580,7 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
               Related Products
             </h4>
             <p className="text-[10px] text-[var(--text-muted)] mb-3">
-              Select related products for this recipe. Other customers will see these suggestions on the product page.
+              Select related products for this product. Other customers will see these suggestions on the product page.
             </p>
             <div className="relative mb-3">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-muted)]" />
@@ -2785,8 +2778,8 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
             </div>
           </div>
 
-          {/* Product Recipe & Bill of Materials (BOM) Editor */}
-          {editingProduct && !isNaN(Number(editingProduct.id)) && (
+          {/* Product Product & Bill of Materials (BOM) Editor */}
+          {['weight','piece','pack'].includes(formPurchaseKind) && editingProduct && !isNaN(Number(editingProduct.id)) && (
             <ProductRecipeEditor
               productId={Number(editingProduct.id)}
               productName={formName || editingProduct.name}
@@ -2799,6 +2792,7 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
             <input
               type="checkbox"
               id="product-published-checkbox"
+              disabled={!hasPermission(user?.role, 'publish_products')}
               checked={formPublished}
               onChange={(e) => setFormPublished(e.target.checked)}
               className="w-4 h-4 rounded accent-[var(--primary)] cursor-pointer"
@@ -2822,7 +2816,7 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
               className="px-5 py-2 rounded-xl bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm active:scale-95 transition-all disabled:opacity-50 cursor-pointer"
             >
               <Save className="w-3.5 h-3.5" />
-              <span>{isSaving ? 'Saving...' : editingProduct ? 'Update Recipe' : 'Create Recipe'}</span>
+              <span>{isSaving ? 'Saving...' : editingProduct ? 'Update Product' : 'Create Product'}</span>
             </button>
           </div>
         </form>
@@ -2832,7 +2826,7 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
       <Modal
         isOpen={!!productToDelete}
         onClose={() => setProductToDelete(null)}
-        title="Confirm Recipe Deletion"
+        title="Confirm Product Deletion"
         maxWidth="sm"
       >
         <div className="space-y-4">
@@ -2845,13 +2839,13 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
               onClick={() => setProductToDelete(null)}
               className="px-4 py-2 rounded-xl border border-[var(--border)] text-xs font-medium text-[var(--text-main)] hover:bg-[var(--bg-subtle)]"
             >
-              Keep Recipe
+              Keep Product
             </button>
             <button
               onClick={handleDeleteProduct}
               className="px-4 py-2 rounded-xl bg-[var(--danger)] hover:bg-red-700 text-white text-xs font-semibold shadow-xs"
             >
-              Delete Recipe
+              Delete Product
             </button>
           </div>
         </div>
@@ -2869,7 +2863,7 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
           }
         }}
         title="Bulk Import Cake Inventory (CSV)"
-        subtitle="Upload and parse a CSV spreadsheet to import or synchronize cake recipes in Firestore"
+        subtitle="Upload and parse a CSV spreadsheet to import or synchronize cake products in Catalog"
         maxWidth="4xl"
       >
         <div className="space-y-5">
@@ -2940,7 +2934,7 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div className="p-3.5 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border)] text-center">
-                  <div className="text-xs text-[var(--text-muted)]">New Recipes Created</div>
+                  <div className="text-xs text-[var(--text-muted)]">New Products Created</div>
                   <div className="text-xl font-bold font-mono text-emerald-600 mt-1">
                     {importSummary.created}
                   </div>
@@ -3017,7 +3011,7 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
                   <div>
                     <div className="text-xs font-bold text-[var(--text-main)]">{importFile.name}</div>
                     <div className="text-[11px] text-[var(--text-muted)]">
-                      {(importFile.size / 1024).toFixed(1)} KB • {parsedRows.length} cake recipes detected
+                      {(importFile.size / 1024).toFixed(1)} KB • {parsedRows.length} cake products detected
                     </div>
                   </div>
                 </div>
@@ -3041,16 +3035,16 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
                     Duplicate Resolution Strategy
                   </label>
                   <p className="text-[11px] text-[var(--text-muted)] mb-2">
-                    Action to take when a cake SKU or name already exists in Firestore.
+                    Action to take when a cake SKU or name already exists in Catalog.
                   </p>
                   <select
                     value={duplicateStrategy}
                     onChange={(e) => setDuplicateStrategy(e.target.value as DuplicateStrategy)}
                     className="w-full px-3 py-2 text-xs rounded-xl border border-[var(--border)] bg-[var(--bg-subtle)] text-[var(--text-main)] font-medium focus:outline-none"
                   >
-                    <option value="update">Update Existing Recipes (Overwrite prices & stock)</option>
+                    <option value="update">Update Existing Products (Overwrite prices & stock)</option>
                     <option value="skip">Skip Duplicates (Import new items only)</option>
-                    <option value="create_new">Create as New (Generate distinct new recipe IDs)</option>
+                    <option value="create_new">Create as New (Generate distinct new product IDs)</option>
                   </select>
                 </div>
 
@@ -3058,7 +3052,7 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
                   <div className="text-xs font-bold text-[var(--text-main)] mb-1.5">Parsed Breakdown</div>
                   <div className="flex flex-wrap gap-2 text-xs">
                     <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-600 font-bold border border-emerald-500/20">
-                      {parsedRows.filter((r) => !r.isDuplicate && !r.hasErrors).length} New Recipes
+                      {parsedRows.filter((r) => !r.isDuplicate && !r.hasErrors).length} New Products
                     </span>
                     <span className="px-2.5 py-1 rounded-lg bg-blue-500/10 text-blue-600 font-bold border border-blue-500/20">
                       {parsedRows.filter((r) => r.isDuplicate && !r.hasErrors).length} Existing Matches
@@ -3128,7 +3122,7 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
                   <thead className="bg-[var(--bg-subtle)] text-[var(--text-subtle)] uppercase text-[10px] tracking-wider sticky top-0 border-b border-[var(--border)]">
                     <tr>
                       <th className="py-2.5 px-3">Status</th>
-                      <th className="py-2.5 px-3">Recipe Name & SKU</th>
+                      <th className="py-2.5 px-3">Product Name & SKU</th>
                       <th className="py-2.5 px-3">Category</th>
                       <th className="py-2.5 px-3">Price / MRP</th>
                       <th className="py-2.5 px-3">Dietary</th>
@@ -3168,7 +3162,7 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
                               </span>
                             ) : (
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 text-[10px] font-bold">
-                                New Recipe
+                                New Product
                               </span>
                             )}
                           </td>
@@ -3203,7 +3197,7 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
                   <div className="flex items-center justify-between text-xs font-semibold text-[var(--text-main)]">
                     <span className="flex items-center gap-2">
                       <RefreshCw className="w-3.5 h-3.5 text-[var(--primary)] animate-spin" />
-                      Writing inventory to Firestore...
+                      Writing inventory to Catalog...
                     </span>
                     <span>{importProgress}%</span>
                   </div>
@@ -3219,7 +3213,7 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
               {/* Bottom Action Controls */}
               <div className="pt-3 border-t border-[var(--border)] flex items-center justify-between gap-3">
                 <div className="text-[11px] text-[var(--text-muted)]">
-                  Ready to commit {parsedRows.filter((r) => !r.hasErrors).length} recipes to Firestore database.
+                  Ready to commit {parsedRows.filter((r) => !r.hasErrors).length} products to Catalog database.
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -3240,14 +3234,14 @@ export const ProductsCatalogView: React.FC<ProductsCatalogViewProps> = ({
                     id="confirm-csv-bulk-import-btn"
                     type="button"
                     disabled={isImporting || parsedRows.filter((r) => !r.hasErrors).length === 0}
-                    onClick={handleBulkImportToFirestore}
+                    onClick={handleBulkImportToCatalog}
                     className="px-5 py-2 rounded-xl bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white text-xs font-semibold shadow-sm active:scale-95 transition-all flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
                   >
                     <Upload className="w-3.5 h-3.5" />
                     <span>
                       {isImporting
                         ? `Importing (${importProgress}%)...`
-                        : `Import ${parsedRows.filter((r) => !r.hasErrors).length} Recipes to Firestore`}
+                        : `Import ${parsedRows.filter((r) => !r.hasErrors).length} Products to Catalog`}
                     </span>
                   </button>
                 </div>

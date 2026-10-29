@@ -149,6 +149,7 @@ function normalizeProductRecord(p: any): Product {
 
   return {
     id: String(p.id || p.slug),
+    purchaseKind: p.purchaseKind,
     slug: p.slug,
     name: p.name,
     sku: p.sku || '',

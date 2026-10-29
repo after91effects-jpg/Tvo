@@ -5,6 +5,6 @@ export default defineConfig({
     environment: 'node',
     globals: true,
     fileParallelism: false,
-    exclude: ['**/node_modules/**', '**/.kilo/**', '**/dist/**', '**/build/**'],
+    exclude: ['**/.qa-product-build/**', '**/node_modules/**', '**/.kilo/**', '**/dist/**', '**/build/**'],
   },
 });

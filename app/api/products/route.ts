@@ -1,3 +1,4 @@
+import { categoryDescendants, categoryAncestorSlugs } from '../../../lib/categoryTree';
 import { ok, err, db, getCurrentUser, isAdminRole } from '../../../lib/server/api';
 import { serializeProduct, PRODUCT_BASE_SELECT } from '../../../lib/server/product-serializer';
 import { resolveActiveOccasion, getOccasionBySlug } from '../../../lib/server/occasions';
@@ -21,19 +22,21 @@ export async function GET(req: Request) {
   const occasionParam = url.searchParams.get('occasion') || '';
 
   try {
+    const categoryRows = data.prepare('SELECT id,parent_id,slug FROM categories').all() as any[];
+    const serialize = (row: any) => { const product=serializeProduct(row); return product?{...product,categories:categoryAncestorSlugs(categoryRows,Number(row.category_id))}:null; };
     const currentUser = getCurrentUser(req);
     const adminListingAll = url.searchParams.get('include_drafts') === '1' &&
       currentUser && isAdminRole(currentUser.role);
     const visibility = adminListingAll ? 'p.deleted_at IS NULL' : 'p.deleted_at IS NULL AND p.published = 1';
     if (slug) {
       const row = data.prepare(`${BASE_SELECT} WHERE ${visibility} AND p.slug=? LIMIT 1`).get(slug);
-      const res = ok(serializeProduct(row));
+      const res = ok(serialize(row));
       res.headers.set('Cache-Control', adminListingAll ? 'private, no-store' : 'public, s-maxage=60, stale-while-revalidate=300');
       return res;
     }
     if (id) {
       const row = data.prepare(`${BASE_SELECT} WHERE ${visibility} AND p.id=? LIMIT 1`).get(id);
-      const res = ok(serializeProduct(row));
+      const res = ok(serialize(row));
       res.headers.set('Cache-Control', adminListingAll ? 'private, no-store' : 'public, s-maxage=60, stale-while-revalidate=300');
       return res;
     }
@@ -44,7 +47,7 @@ export async function GET(req: Request) {
         const marks = list.map(() => '?').join(',');
         const rows = data.prepare(`${BASE_SELECT} WHERE p.deleted_at IS NULL AND p.published=1 AND p.id IN (${marks})`).all(...list);
         const byId = new Map(rows.map((r: any) => [String(r.id), r]));
-        return ok({ products: list.map((i) => serializeProduct(byId.get(i))).filter(Boolean) });
+        return ok({ products: list.map((i) => serialize(byId.get(i))).filter(Boolean) });
       }
     }
 
@@ -114,8 +117,9 @@ export async function GET(req: Request) {
       params.push(like, like, like, like);
     }
     if (category) {
-      where += ` AND (c.slug=? OR c.id IN (SELECT id FROM categories WHERE parent_id = (SELECT id FROM categories WHERE slug=?)))`;
-      params.push(category, category);
+      const categories=categoryRows;
+      const root=categories.find(row=>row.slug===category);
+      if(root){const ids=categoryDescendants(categories,Number(root.id));where+=` AND p.category_id IN (${ids.map(()=>'?').join(',')})`;params.push(...ids);}else{where+=' AND 1=0';}
     }
 
     let orderBy = 'p.name ASC';
@@ -132,7 +136,7 @@ export async function GET(req: Request) {
       .prepare(`${BASE_SELECT}${joinClause} WHERE ${where} ORDER BY ${orderBy} LIMIT ? OFFSET ?`)
       .all(...params, limit, offset);
     const count = (data.prepare(`SELECT COUNT(*) AS c FROM products p LEFT JOIN categories c ON p.category_id=c.id${joinClause} WHERE ${where}`).get(...params) as any)?.c ?? 0;
-    const res = ok({ products: rows.map(serializeProduct), total: count });
+    const res = ok({ products: rows.map(serialize), total: count });
     res.headers.set('Cache-Control', adminListingAll ? 'private, no-store' : 'public, s-maxage=60, stale-while-revalidate=300');
     return res;
   } catch (e: any) {

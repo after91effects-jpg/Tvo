@@ -94,6 +94,7 @@ export default function ProductPage() {
           const badges = Array.isArray(p.badges) ? p.badges : [];
           const normalized: Product = {
             id: p.id || p.slug,
+            purchaseKind: p.purchaseKind,
             slug: p.slug,
             name: p.name,
             sku: p.sku || '',

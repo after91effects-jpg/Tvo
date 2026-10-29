@@ -1,3 +1,4 @@
+import { isSafeMediaUrl } from '../imageUrl';
 import { db } from './db';
 import { logAudit, slugify } from './api';
 
@@ -19,8 +20,14 @@ function ensureCatSlug(slug: string, exceptId?: number) {
 }
 
 export function saveCategory(body: any, user: any) {
+  return db.transaction(() => {
   const name = String(body.name || '').trim();
   if (!name) throw new Error('Category name is required');
+  if (body.image && !isSafeMediaUrl(String(body.image))) throw new Error('Use a valid https:// or /uploads/ category image URL');
+  if (body.sort_order != null && (!Number.isSafeInteger(Number(body.sort_order)) || Number(body.sort_order)<0)) throw new Error('Sort order must be a non-negative whole number');
+  const requestedSlug=slugify(body.slug ? String(body.slug) : name);
+  if (!requestedSlug) throw new Error('A valid category slug is required');
+  if (body.slug && db.prepare('SELECT id FROM categories WHERE slug=? AND (? IS NULL OR id!=?)').get(requestedSlug,body.id??null,body.id??null)) throw new Error('This category slug is already in use');
   const categoryId = body.id ? Number(body.id) : null;
   let parentId = body.parent_id ? Number(body.parent_id) : null;
   const seen = new Set<number>();
@@ -44,9 +51,12 @@ export function saveCategory(body: any, user: any) {
     logAudit(user, 'CATEGORY_CREATE', 'Category', String(info.lastInsertRowid));
   }
   return { ok: true };
+  })();
 }
 
 export function deleteCategory(id: number, user: any) {
+  return db.transaction(() => {
+  if (!Number.isSafeInteger(id) || id < 1 || !db.prepare('SELECT id FROM categories WHERE id=?').get(id)) throw new Error('Category not found');
   const children = db.prepare('SELECT COUNT(*) AS c FROM categories WHERE parent_id=?').get(id) as { c: number };
   if (children.c > 0) throw new Error('Move or delete subcategories before deleting this category.');
   const existing = db.prepare('SELECT COUNT(*) AS c FROM products WHERE category_id=?').get(id) as any;
@@ -54,6 +64,7 @@ export function deleteCategory(id: number, user: any) {
   db.prepare('DELETE FROM categories WHERE id=?').run(id);
   logAudit(user, 'CATEGORY_DELETE', 'Category', String(id));
   return { ok: true };
+  })();
 }
 
 // ============================================================================

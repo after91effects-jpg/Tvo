@@ -29,12 +29,12 @@ describe('Storefront product access and pagination', () => {
     const res = await GET(new Request(`http://localhost/api/products?${query}`));
     expect(res.status).toBe(200);
     expect(await res.json()).toBeNull();
-    expect(mocks.statements[0].sql).toContain('p.deleted_at IS NULL AND p.published = 1');
+    expect(mocks.statements.find(s => s.sql.includes('FROM products'))!.sql).toContain('p.deleted_at IS NULL AND p.published = 1');
   });
   it('allows admin draft preview without public caching', async () => {
     mocks.user.mockReturnValue({ role: 'admin' });
     const res = await GET(new Request('http://localhost/api/products?slug=draft&include_drafts=1'));
-    expect(mocks.statements[0].sql).not.toContain('p.published = 1');
+    expect(mocks.statements.find(s => s.sql.includes('FROM products'))!.sql).not.toContain('p.published = 1');
     expect(res.headers.get('Cache-Control')).toBe('private, no-store');
   });
   it.each([['limit=bad&offset=bad', 100, 0], ['limit=-9&offset=-4', 1, 0], ['limit=1000&offset=1.8', 200, 1]])('normalizes invalid pagination %s', async (query, limit, offset) => {
@@ -44,6 +44,14 @@ describe('Storefront product access and pagination', () => {
   });
   it('keeps products with inventory tracking disabled in stock results', async () => {
     await GET(new Request('http://localhost/api/products?in_stock=1'));
-    expect(mocks.statements[0].sql).toContain('p.manage_stock = 0 OR p.enable_stock = 0 OR');
+    expect(mocks.statements.find(s => s.sql.includes('FROM products'))!.sql).toContain('p.manage_stock = 0 OR p.enable_stock = 0 OR');
   });
+  it('includes grandchildren when filtering a top-level category', async()=>{
+    mocks.prepare.mockImplementation((sql:string)=>({get:()=>undefined,all:(...params:unknown[])=>{mocks.statements.push({sql,params});return sql==='SELECT id,parent_id,slug FROM categories'?[{id:1,parent_id:null,slug:'cakes'},{id:2,parent_id:1,slug:'type'},{id:3,parent_id:2,slug:'chocolate'}]:[];}}));
+    const response=await GET(new Request('http://localhost/api/products?category=cakes'));
+    expect(response.status).toBe(200);
+    const query=mocks.statements.find(s=>s.sql.includes('LIMIT ?'))!;
+    expect(query.params.slice(0,3)).toEqual([1,2,3]);
+  });
+
 });

@@ -21,6 +21,12 @@ describe('Live category writes', () => {
     expect(() => saveCategory({id:1,name:'Cakes',parent_id:2},user)).toThrow('circular');
     expect(db.prepare('SELECT parent_id FROM categories WHERE id=1').get()).toEqual({parent_id:null});
   });
+  it('rejects duplicate explicit slugs and unsafe image URLs',()=>{
+    expect(()=>saveCategory({name:'Duplicate',slug:'cakes'},user)).toThrow('already in use');
+    expect(()=>saveCategory({name:'Unsafe',image:'javascript:alert(1)'},user)).toThrow('image URL');
+    expect(()=>saveCategory({name:'Bad sort',sort_order:-1},user)).toThrow('Sort order');
+    expect(()=>deleteCategory(999,user)).toThrow('not found');
+  });
   it('rejects a missing parent', () => { expect(() => saveCategory({name:'Bad',parent_id:999},user)).toThrow('Parent category not found'); });
   it('protects categories that still have children or products', () => {
     expect(() => deleteCategory(1,user)).toThrow('subcategories');
