@@ -1,3 +1,5 @@
+import { getProductPurchaseProfile } from '../productPurchase';
+import { getProductOptions } from '../productOptions';
 import { getSellingUnitLabel, isPieceOrDiscreteUnit } from '../sellingUnit';
 import { db } from './db';
 import { validateCustomHamperOrder, type ValidatedCustomHamper } from './hampers';
@@ -61,7 +63,8 @@ function smallWeightMatch(opt: any, clean: string) {
 // requested label matches none of them.
 function resolveVariation(prod: any, weightLabel?: string): { unit: number; option: any } {
   if (!prod) return { unit: Number(prod?.sale_price ?? prod?.regular_price) || 0, option: null };
-  const opts = variationOptionsProd(prod.variations_json);
+  if (variationOptionsProd(prod.variations_json).length === 0) return { unit: Number(prod.sale_price ?? prod.regular_price) || 0, option: null };
+  const opts = getProductOptions({ ...prod, sellingUnit: prod.selling_unit, weightOptions: variationOptionsProd(prod.variations_json), price: prod.sale_price ?? prod.regular_price, regularPrice: prod.regular_price, weightKg: prod.weight_kg });
   const clean = weightLabel != null ? String(weightLabel).trim().replace(/\s+/g, ' ') : '';
   if (opts.length === 0) {
     return { unit: Number(prod.sale_price ?? prod.regular_price) || 0, option: null };
@@ -267,7 +270,7 @@ function buildLineItems(items: any[]): Array<BuiltLineItem> {
     if (unit < 0) {
       throw new OrderInputError(`Invalid or unavailable size/option selected for ${prod.name}`);
     }
-    const isPiece = isPieceOrDiscreteUnit(prod.selling_unit);
+    const isPiece = getProductPurchaseProfile(prod).kind === 'piece';
     const pieceMultiplier = isPiece ? extractPieceCount(it.weight || option?.label || option?.value) : 1;
     const unitsNeeded = qty * pieceMultiplier;
     if (manageStock) {
@@ -564,7 +567,7 @@ export function createOrder({ items, body, customerId, generateOrderNumber }: Cr
         addonTotal: addedAddonTotal,
         totalPrice: (unit + flavourPrice + addedAddonTotal) * it.qty,
         imageUrl: it.imageUrl || null,
-        sellingUnit: it.sellingUnit ? getSellingUnitLabel(it.sellingUnit) : (prod?.selling_unit ? getSellingUnitLabel(prod.selling_unit) : 'kg'),
+        sellingUnit: prod ? getProductPurchaseProfile(prod).sellingUnit.value : 'kg',
       };
     }));
 
@@ -588,7 +591,7 @@ export function createOrder({ items, body, customerId, generateOrderNumber }: Cr
         customerAddress, pincode, city,
         itemsJson, JSON.stringify(body.addons || []),
         subtotal, discount, couponCode, deliveryFee, slotSurcharge, tax, total,
-        body.deliveryDate || null, body.deliverySlot || (isPickup ? 'Store Pickup' : null), slotCheck.slot?.id ?? (body.deliverySlotId || null),
+        body.deliveryDate || null, body.deliverySlot || (isPickup ? 'Store Pickup' : null), isPickup ? null : (slotCheck.slot?.id ?? (body.deliverySlotId || null)),
         deliveryZoneId, 'pending',
         'Order Placed', body.priority || 'Normal', body.paymentMethod || 'UPI', 'Pending',
         deliveryInstructions || null,
@@ -624,7 +627,7 @@ export function createOrder({ items, body, customerId, generateOrderNumber }: Cr
         // Untracked inventory products do not deduct or block orders
         continue;
       }
-      const isPiece = isPieceOrDiscreteUnit(line.prod.selling_unit);
+      const isPiece = getProductPurchaseProfile(line.prod).kind === 'piece';
       const pieceMultiplier = isPiece ? extractPieceCount(line.it.weight || line.option?.label || line.option?.value) : 1;
       const deductQty = line.it.qty * pieceMultiplier;
       const r = db.prepare(
@@ -642,7 +645,7 @@ export function createOrder({ items, body, customerId, generateOrderNumber }: Cr
 
     // 10. Book slot capacity
     const slot = slotCheck.slot || db.prepare('SELECT * FROM delivery_slots WHERE (name=? OR id=?)').get(body.deliverySlot, body.deliverySlotId || 0) as any;
-    if (slot && body.deliveryDate) {
+    if (!isPickup && slot && Number(slot.id) > 0 && body.deliveryDate) {
       const dayCap = db.prepare('SELECT * FROM slot_capacity WHERE slot_id=? AND date=?').get(slot.id, body.deliveryDate) as any;
       if (dayCap) db.prepare('UPDATE slot_capacity SET books=books+1 WHERE id=?').run(dayCap.id);
       else db.prepare('INSERT INTO slot_capacity (slot_id, date, capacity, books, closed) VALUES (?,?,?,1,0)').run(slot.id, body.deliveryDate, slot.capacity);

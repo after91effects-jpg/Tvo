@@ -145,7 +145,7 @@ function normalizeProductRecord(p: any): Product {
   
   const basePrice = Number(p.price ?? p.salePrice ?? p.regularPrice ?? 0);
   const isPiece = isPieceOrDiscreteUnit(p.sellingUnit);
-  const normalizedOptions = getProductOptions({ weightOptions, sellingUnit: p.sellingUnit, price: basePrice, regularPrice: p.regularPrice, weightKg: p.weightKg });
+  const normalizedOptions = getProductOptions({ ...p, weightOptions, sellingUnit: p.sellingUnit, price: basePrice, regularPrice: p.regularPrice, weightKg: p.weightKg });
 
   return {
     id: String(p.id || p.slug),

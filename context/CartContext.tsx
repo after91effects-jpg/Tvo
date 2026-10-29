@@ -1,5 +1,7 @@
 'use client';
 
+import { getCartUnitPrice } from '../lib/cartPricing';
+import { stockUnitsPerOption } from '../lib/productPurchase';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Product, WeightOption, CartItem, CartItemAddon, PromoCode, FlavourOption } from '../lib/types';
 import { DEFAULT_STORE_SETTINGS } from '../lib/seedData';
@@ -130,11 +132,12 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       const currentInCart = items
         .filter((item) => String(item.productId) === String(product.id))
-        .reduce((sum, item) => sum + item.quantity, 0);
+        .reduce((sum, item) => sum + item.quantity * stockUnitsPerOption(item.product, item.selectedWeight.label), 0);
 
       const availableStock = typeof product.stock === "number" ? product.stock : 999;
-      if (currentInCart + quantity > availableStock) {
-        const remainingAddable = Math.max(0, availableStock - currentInCart);
+      const multiplier = stockUnitsPerOption(product, selectedWeight.label);
+      if (currentInCart + quantity * multiplier > availableStock) {
+        const remainingAddable = Math.max(0, Math.floor((availableStock - currentInCart) / multiplier));
         if (remainingAddable <= 0) {
           if (typeof window !== "undefined") {
             alert(`You already have all ${availableStock} available units of ${product.name} in your cart.`);
@@ -149,8 +152,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
-    const addonsTotal = addons.reduce((sum, a) => sum + a.price, 0);
-    const unitPrice = selectedWeight.price + flavourPrice + addonsTotal;
+    const unitPrice = getCartUnitPrice(product, selectedWeight.price, flavourPrice, addons);
 
     setItems((prev) => {
       const existingIndex = prev.findIndex(
@@ -214,9 +216,11 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (tracking && typeof prod.stock === "number") {
         const otherCartQty = items
           .filter((it) => String(it.productId) === String(prod.id) && it.id !== itemId)
-          .reduce((sum, it) => sum + it.quantity, 0);
-        if (quantity + otherCartQty > prod.stock) {
-          const maxAllowed = Math.max(1, prod.stock - otherCartQty);
+          .reduce((sum, it) => sum + it.quantity * stockUnitsPerOption(it.product, it.selectedWeight.label), 0);
+        const multiplier = stockUnitsPerOption(prod, targetItem.selectedWeight.label);
+        if (quantity * multiplier + otherCartQty > prod.stock) {
+          const maxAllowed = Math.max(0, Math.floor((prod.stock - otherCartQty) / multiplier));
+          if (maxAllowed === 0) { removeFromCart(itemId); return; }
           if (typeof window !== "undefined") {
             alert(`Only ${prod.stock} in stock for ${prod.name}. Adjusted to maximum available.`);
           }

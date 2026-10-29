@@ -102,7 +102,7 @@ export default function ProductPage() {
             salePrice: p.salePrice,
             shortDescription: p.shortDescription || p.short_description || p.description || '',
             description: p.description || '',
-            category: categorySlug || 'cakes',
+            category: categorySlug || '',
             subCategory: p.subcategory || p.subcategory_slug || (subcategories[0] ?? ''),
             categories,
             subcategories,
@@ -110,7 +110,7 @@ export default function ProductPage() {
             flavours: flavours.length ? flavours : flavourOptionsArr.map((fo: any) => fo.name),
             eggless: !!p.eggless,
             sellingUnit: normalizeSellingUnit(p.sellingUnit),
-            weightOptions: getProductOptions({ weightOptions: weightOptionsArr, sellingUnit: p.sellingUnit, price: basePrice, regularPrice: baseMrp, weightKg: p.weightKg }),
+            weightOptions: getProductOptions({ ...p, weightOptions: weightOptionsArr, sellingUnit: p.sellingUnit, price: basePrice, regularPrice: baseMrp, weightKg: p.weightKg }),
             images: images.map((im: any) => {
               const rawUrl = typeof im === 'string' ? im : (im.url || '');
               const url = normalizeImageUrl(rawUrl);

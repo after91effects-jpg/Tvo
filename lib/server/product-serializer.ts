@@ -1,3 +1,5 @@
+import { getProductPurchaseProfile } from '../productPurchase';
+import { getProductOptions } from '../productOptions';
 import { normalizeSellingUnit, isWeightSellingUnit } from '../sellingUnit';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -170,6 +172,8 @@ function isCakeProduct(row: any): boolean {
 export function serializeProduct(row: any) {
   if (!row) return null;
 
+  const purchase = getProductPurchaseProfile(row);
+  const purchaseOptions = getProductOptions({ ...row, weightOptions: jsonParseSafe(row.variations_json, []), sellingUnit: row.selling_unit, price: row.sale_price ?? row.regular_price, regularPrice: row.regular_price, weightKg: row.weight_kg });
   const rawShort = row.short_description || '';
   const rawDesc = row.description || '';
   const cleanShort = stripHtmlAndMetadata(rawShort || rawDesc);
@@ -192,7 +196,7 @@ export function serializeProduct(row: any) {
     }
   }
 
-  if (flavourOptions.length === 0 && isCakeProduct(row)) {
+  if (flavourOptions.length === 0 && purchase.allowCakeCustomization && isCakeProduct(row)) {
     flavourOptions = DEFAULT_CAKE_FLAVOUR_OPTIONS.map((f) => ({ ...f }));
   }
 
@@ -216,7 +220,7 @@ export function serializeProduct(row: any) {
     trackInventory: row.manage_stock !== 0 && row.enable_stock !== 0,
     manageStock: row.manage_stock !== 0 && row.enable_stock !== 0,
     lowStockThreshold: row.low_stock_threshold ?? 5,
-    weightOptions: jsonParseSafe(row.variations_json, []),
+    weightOptions: purchaseOptions,
     images: (() => {
       const arr = jsonParseSafe(row.images_json, []).map((u: any) => {
         const url = normalizeImageUrl(typeof u === 'string' ? u : (u?.url || ''));
@@ -247,7 +251,7 @@ export function serializeProduct(row: any) {
     badges: jsonParseSafe(row.badges, []),
     tags: jsonParseSafe(row.tags, []),
     eggless: !!row.eggless,
-    sellingUnit: normalizeSellingUnit(row.selling_unit),
+    sellingUnit: purchase.sellingUnit,
     featured: !!row.featured,
     bestseller: !!row.bestseller,
     newArrival: !!row.new_arrival,
@@ -272,12 +276,12 @@ export function serializeProduct(row: any) {
     // Feature toggles
     showGallery: row.show_gallery !== 0,
     showVideo: row.show_video === 1,
-    showFlavour: row.show_flavour !== 0,
-    showCustomize: row.show_customize !== 0,
-    showCustomization: row.show_customize !== 0,
-    showDesignUpload: row.show_design_upload !== 0,
-    showCustomerDesignUpload: row.show_design_upload !== 0,
-    showAddons: row.show_addons !== 0,
+    showFlavour: purchase.allowCakeCustomization && row.show_flavour !== 0,
+    showCustomize: purchase.allowCakeCustomization && row.show_customize !== 0,
+    showCustomization: purchase.allowCakeCustomization && row.show_customize !== 0,
+    showDesignUpload: purchase.allowCakeCustomization && row.show_design_upload !== 0,
+    showCustomerDesignUpload: purchase.allowCakeCustomization && row.show_design_upload !== 0,
+    showAddons: purchase.allowCakeCustomization && row.show_addons !== 0,
     // Extended feature controls
     showDietary: row.show_dietary !== 0,
     showDelivery: row.show_delivery !== 0,

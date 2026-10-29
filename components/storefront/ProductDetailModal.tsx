@@ -1,4 +1,6 @@
 'use client';
+import { getProductPurchaseProfile, stockUnitsPerOption } from '../../lib/productPurchase';
+import { CustomHamperBuilder } from './CustomHamperBuilder';
 import { getSellingUnitLabel, isPieceOrDiscreteUnit } from '../../lib/sellingUnit';
 import { getProductOptions } from '../../lib/productOptions';
 import { DEFAULT_STORE_SETTINGS } from '../../lib/seedData';
@@ -41,7 +43,7 @@ import {
 import { isProductOutOfStock, isProductLowStock } from '../../lib/inventory';
 import { validateImageFile } from '../../lib/uploadValidation';
 import { optimizeImageFile } from '../../lib/imageOptimizer';
-import { Product, WeightOption, AddOn, FlavourOption } from '../../lib/types';
+import { Product, WeightOption, AddOn, FlavourOption, HamperSettings } from '../../lib/types';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 import { StarRating } from '../common/StarRating';
@@ -107,7 +109,7 @@ function pieceCountFromLabel(label?: string): number | null {
 }
 
 export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
-  product,
+  product: inputProduct,
   isOpen,
   onClose,
   onOpenCheckout,
@@ -115,6 +117,19 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   onBack,
   allProducts = [],
 }) => {
+  const purchase = React.useMemo(() => getProductPurchaseProfile(inputProduct || {}), [inputProduct]);
+  const product = React.useMemo(() => inputProduct ? { ...inputProduct, sellingUnit: purchase.sellingUnit, weightOptions: getProductOptions(inputProduct), showCustomization: purchase.allowCakeCustomization && inputProduct.showCustomization !== false, showCustomize: purchase.allowCakeCustomization && inputProduct.showCustomize !== false, showAddons: purchase.allowCakeCustomization && inputProduct.showAddons !== false, showFlavour: purchase.allowCakeCustomization && inputProduct.showFlavour !== false, showDesignUpload: purchase.allowCakeCustomization && inputProduct.showDesignUpload !== false, showCustomerDesignUpload: purchase.allowCakeCustomization && inputProduct.showCustomerDesignUpload !== false } : null, [inputProduct, purchase]);
+  const [hamperOpen, setHamperOpen] = useState(false);
+  const [hamperSettings, setHamperSettings] = useState<HamperSettings | undefined>();
+  React.useEffect(() => {
+    if (!purchase.isHamper || !isOpen) return;
+    let active = true;
+    fetch('/api/settings').then(r => { if (!r.ok) throw new Error('Settings unavailable'); return r.json(); }).then(data => {
+      const raw = data.settings?.hamper_settings;
+      if (active && raw) setHamperSettings(typeof raw === 'string' ? JSON.parse(raw) : raw);
+    }).catch(() => {});
+    return () => { active = false; };
+  }, [purchase.isHamper, isOpen]);
   const { addToCart, setIsCartOpen } = useCart();
   const { isInWishlist, toggleWishlist } = useWishlist();
   const isOutOfStock = isProductOutOfStock(product);
@@ -298,7 +313,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   // Maximum order quantity: bounded by available inventory if tracking is enabled
   const tracking = product?.trackInventory ?? (product?.manageStock !== undefined ? Boolean(product.manageStock) : ((product as any)?.manage_stock !== undefined ? Boolean((product as any)?.manage_stock) : true));
   const qtyMax = tracking
-    ? Math.max(1, Math.min(10, typeof product?.stock === "number" ? product.stock : 10))
+    ? Math.max(1, Math.min(10, typeof product?.stock === "number" ? Math.floor(product.stock / stockUnitsPerOption(product, selectedWeight.label)) : 10))
     : 10;
 
   // Feature toggles for customization, design upload, and celebration add-ons
@@ -418,6 +433,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   const hasMediaLeft = product.showGallery !== false || (product.showVideo !== false && videos.length > 0);
 
   return (
+    <>
     <Modal isOpen={isOpen || isEmbedded} onClose={onClose} maxWidth="5xl" embedded={isEmbedded}>
       <div className={`grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8 ${isEmbedded ? '' : 'max-h-[85vh] overflow-y-auto pr-1'}`}>
         {/* Left: Image Gallery & Trust Badges */}
@@ -650,7 +666,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
             <div className="flex items-center gap-2 text-[10px] text-[var(--text-muted)] mb-2">
               <span className="hover:text-[var(--primary)] cursor-pointer">Home</span>
               <ChevronRight className="w-3 h-3" />
-              <span className="hover:text-[var(--primary)] cursor-pointer">{product.category}</span>
+              <span className="hover:text-[var(--primary)] cursor-pointer">{purchase.isHamper ? 'Hampers & Gifts' : product.category || 'Products'}</span>
               <ChevronRight className="w-3 h-3" />
               <span className="text-[var(--text-main)] font-medium">{product.name}</span>
             </div>
@@ -764,7 +780,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
             {/* Navigation Tabs */}
             <div className="flex items-center gap-1 border-b border-[var(--border)] mt-4 mb-4 overflow-x-auto">
               {[
-                { id: 'details', label: 'Customize' },
+                { id: 'details', label: purchase.isHamper ? 'Customize Hamper' : purchase.allowCakeCustomization ? 'Customize' : 'Options' },
                 ...(product.showDelivery !== false ? [{ id: 'delivery', label: 'Delivery' }] : []),
                 { id: 'description', label: 'Description' },
                 ...(product.showReviews !== false ? [{ id: 'reviews', label: product.reviewCount && product.reviewCount > 0 ? `Reviews (${product.reviewCount})` : 'Reviews' }] : []),
@@ -788,12 +804,19 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
             {/* Tab Content */}
             {activeTab === 'details' && (
               <div className="space-y-5">
+                {purchase.isHamper && (
+                  <section className="rounded-xl border border-[var(--primary)] bg-[var(--primary-light)] p-4 space-y-3" aria-label="Hamper customization">
+                    <h3 className="font-bold text-[var(--text-main)]">Customize Your Hamper</h3>
+                    <p className="text-sm text-[var(--text-muted)]">Choose your box, treats, wrapping and gift message. The total updates with your selections. You can also buy this curated hamper as shown.</p>
+                    <button type="button" onClick={() => setHamperOpen(true)} className="rounded-xl bg-[var(--primary)] px-5 py-3 font-bold text-white">Customize Hamper</button>
+                  </section>
+                )}
                 {/* Weight Options */}
-                {product.showSizeSelector !== false && weightOptionsList.length > 0 && (
+                {!purchase.isHamper && product.showSizeSelector !== false && weightOptionsList.length > 0 && (
                   <div>
                     <label className="block text-xs font-bold text-[var(--text-main)] uppercase tracking-wider mb-2 flex items-center gap-1.5">
                       <Package className="w-3.5 h-3.5 text-[var(--primary)]" />
-                      {isPieceOrDiscreteUnit(product.sellingUnit) ? 'Select Quantity' : 'Select Weight'}
+                      {purchase.selectorLabel}
                     </label>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                       {weightOptionsList.map((opt) => {
@@ -815,15 +838,15 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                               </div>
                             )}
                             <div className="text-xs font-bold text-[var(--text-main)]">
-                              {isPieceOrDiscreteUnit(product.sellingUnit) ? opt.label : `${opt.weightKg} kg`}
+                              {opt.label}
                             </div>
                             <div className="text-[10px] text-[var(--text-muted)] mt-0.5">
                               {isPieceOrDiscreteUnit(product.sellingUnit)
                                 ? (() => {
                                     const pc = pieceCountFromLabel(opt.label);
-                                    return pc != null ? `${pc} ${pc === 1 ? 'piece' : 'pieces'}` : 'Sold per piece';
+                                    return pc != null ? `${pc} ${pc === 1 ? 'piece' : 'pieces'}` : `Sold per ${getSellingUnitLabel(product.sellingUnit)}`;
                                   })()
-                                : `Serves ${Math.ceil(opt.weightKg * 8)}-${Math.ceil(opt.weightKg * 12)}`}
+                                : (opt.weightKg > 0 && purchase.isCake ? `Serves ${Math.ceil(opt.weightKg * 8)}-${Math.ceil(opt.weightKg * 12)}` : 'As listed')}
                             </div>
                             <div className="flex items-baseline gap-1 mt-1">
                               <span className="text-sm font-bold text-[var(--primary)]">₹{opt.price}</span>
@@ -1197,7 +1220,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                 {/* Quantity Stepper */}
                 <div className="flex items-center gap-4 p-3 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border)]">
                   <span className="text-xs font-bold text-[var(--text-main)] uppercase tracking-wider">
-                    Quantity{isPieceOrDiscreteUnit(product.sellingUnit) ? ' (Pieces)' : ''}:
+                    Quantity{purchase.kind === 'piece' ? ' (Selected piece packs)' : purchase.kind === 'hamper' ? ' (Hampers)' : purchase.kind === 'pack' ? ' (Packs)' : purchase.kind === 'set' ? ` (${getSellingUnitLabel(product.sellingUnit)}s)` : ''}:
                   </span>
                   <div className="flex items-center border border-[var(--border)] rounded-xl overflow-hidden bg-[var(--bg-surface)]">
                     <button
@@ -1459,7 +1482,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
             {/* Price Summary */}
             <div className="p-3 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border)] space-y-1.5">
               <div className="flex justify-between text-xs text-[var(--text-muted)]">
-                <span>Base Price ({isPieceOrDiscreteUnit(product.sellingUnit) ? selectedWeight.label : `${selectedWeight.weightKg} kg`})</span>
+                <span>Base Price ({selectedWeight.label})</span>
                 <span>₹{selectedWeight.price}</span>
               </div>
               {selectedFlavourPrice > 0 && (
@@ -1487,7 +1510,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                 </div>
               )}
               <div className="flex justify-between text-xs font-bold text-[var(--text-main)] pt-1.5 border-t border-[var(--border)]">
-                <span>Total ({quantity} {quantity === 1 ? (isPieceOrDiscreteUnit(product.sellingUnit) ? 'piece' : 'item') : (isPieceOrDiscreteUnit(product.sellingUnit) ? 'pieces' : 'items')})</span>
+                <span>Total ({quantity} {quantity === 1 ? (purchase.isHamper ? 'hamper' : 'item') : (purchase.isHamper ? 'hampers' : 'items')})</span>
                 <span>₹{itemUnitPrice * quantity}</span>
               </div>
             </div>
@@ -1562,5 +1585,11 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
         )}
       </div>
     </Modal>
+    {purchase.isHamper && hamperOpen && <CustomHamperBuilder
+      products={allProducts.map(p => ({ ...p, sellingUnit: getProductPurchaseProfile(p).sellingUnit, weightOptions: getProductOptions(p) }))}
+      isOpen={hamperOpen} onClose={() => setHamperOpen(false)} onOpenCheckout={onOpenCheckout}
+      settings={hamperSettings} sourceProductName={product.name}
+    />}
+    </>
   );
 };

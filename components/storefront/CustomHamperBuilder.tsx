@@ -29,6 +29,7 @@ import {
   Trash2,
   Camera,
 } from 'lucide-react';
+import { getProductPurchaseProfile } from '../../lib/productPurchase';
 import { Product, HamperSettings, HamperBoxOption, HamperCategoryOption } from '../../lib/types';
 import { DEFAULT_HAMPER_SETTINGS } from '../../lib/seedData';
 import { useCart } from '../../context/CartContext';
@@ -40,6 +41,7 @@ interface CustomHamperBuilderProps {
   onClose: () => void;
   onOpenCheckout: () => void;
   settings?: HamperSettings;
+  sourceProductName?: string;
 }
 
 interface HamperItem {
@@ -78,6 +80,7 @@ export const CustomHamperBuilder: React.FC<CustomHamperBuilderProps> = ({
   onClose,
   onOpenCheckout,
   settings = DEFAULT_HAMPER_SETTINGS,
+  sourceProductName,
 }) => {
   const { addToCart, setIsCartOpen } = useCart();
 
@@ -116,6 +119,7 @@ export const CustomHamperBuilder: React.FC<CustomHamperBuilderProps> = ({
 
   const matchingCat = (p: Product, cat: HamperCategoryOption): boolean => {
     const lowerName = p.name.toLowerCase();
+    if (cat.id === 'gifts' && /candle|rakhi|idol|greeting|teddy/.test(lowerName)) return true;
     return cat.keywords.some((kw) => {
       const ln = kw.toLowerCase();
       return (
@@ -132,7 +136,7 @@ export const CustomHamperBuilder: React.FC<CustomHamperBuilderProps> = ({
     if (!activeCat) return [];
     const priceFilter = PRICE_RANGES.find((r) => r.id === priceRange) || PRICE_RANGES[0];
     return products.filter((p) => {
-      if (!p.published || p.stock <= 0) return false;
+      if (!p.published || (p.trackInventory !== false && p.stock <= 0) || getProductPurchaseProfile(p).isHamper) return false;
       if (!matchingCat(p, activeCat)) return false;
       const price = p.weightOptions[0]?.price || 0;
       if (price < priceFilter.min || price > priceFilter.max) return false;
@@ -233,7 +237,8 @@ export const CustomHamperBuilder: React.FC<CustomHamperBuilderProps> = ({
       tags: ['custom-hamper', selectedBox.id],
       flavours: [],
       eggless: true,
-      weightOptions: [{ label: selectedBox.name, weightKg: 1, price: totalPrice, mrp: totalPrice + 200 }],
+      sellingUnit: { type: 'predefined', value: 'box' },
+      weightOptions: [{ label: selectedBox.name, weightKg: 0, price: totalPrice, mrp: totalPrice }],
       images: (uploadedPhotos.length ? uploadedPhotos.map((u) => ({ url: u })) : hamperItems[0]?.product.images) || [],
       rating: 5,
       reviewCount: 0,
@@ -309,6 +314,7 @@ export const CustomHamperBuilder: React.FC<CustomHamperBuilderProps> = ({
 
   return (
     <div
+      role="dialog" aria-modal="true" aria-label={sourceProductName ? `Customize ${sourceProductName}` : 'Build Your Own Hamper'}
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
@@ -322,7 +328,7 @@ export const CustomHamperBuilder: React.FC<CustomHamperBuilderProps> = ({
               <Gift className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-[var(--text-main)] font-display">Build Your Own Hamper</h2>
+              <h2 className="text-lg font-bold text-[var(--text-main)] font-display">{sourceProductName ? `Customize ${sourceProductName}` : 'Build Your Own Hamper'}</h2>
               <p className="text-[10px] text-[var(--text-muted)]">Create a personalized gift in 4 easy steps</p>
             </div>
           </div>
@@ -519,7 +525,7 @@ export const CustomHamperBuilder: React.FC<CustomHamperBuilderProps> = ({
                           {product.name}
                         </h4>
                         <div className="text-[10px] text-[var(--primary)] font-bold mt-1">
-                          ₹{itemPrice(product)}
+                          ₹{itemPrice(product)} / {product.weightOptions[0]?.label}
                         </div>
                         <div className="mt-2 flex items-center justify-between">
                           {inHamper ? (

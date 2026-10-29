@@ -1,3 +1,4 @@
+import { getProductPurchaseProfile } from '../productPurchase';
 import { db, logAudit, jsonParseSafe } from './api';
 import { hasPermission } from './permissions';
 import { isPieceOrDiscreteUnit } from '../sellingUnit';
@@ -20,9 +21,9 @@ export function changeOrderStatus(user: any, id: number, status: string, note?: 
     db.prepare('INSERT INTO notifications (type,title,message) VALUES (?,?,?)').run('order',`Order ${order.order_number} status`,`Order status changed to ${status}`);
     if (status === 'Cancelled') {
       const restock=(productId:any,quantity:number,unit:any,weight:any) => {
-        const product=db.prepare('SELECT selling_unit,manage_stock,enable_stock FROM products WHERE id=?').get(productId) as any;
+        const product=db.prepare('SELECT name,selling_unit,manage_stock,enable_stock FROM products WHERE id=?').get(productId) as any;
         if (!product || product.manage_stock===0 || product.enable_stock===0 || !Number.isFinite(quantity) || quantity<=0) return;
-        const qty=quantity*(isPieceOrDiscreteUnit(unit || product.selling_unit)?extractPieceCount(weight):1);
+        const qty=quantity*(getProductPurchaseProfile({ ...product, sellingUnit: unit || product.selling_unit }).kind === 'piece'?extractPieceCount(weight):1);
         db.prepare("UPDATE products SET stock=stock+?,stock_status=CASE WHEN stock+?<=0 THEN 'out_of_stock' WHEN stock+?<=low_stock_threshold THEN 'low_stock' ELSE 'in_stock' END WHERE id=?").run(qty,qty,qty,productId);
         db.prepare('INSERT INTO inventory_transactions (product_id,type,quantity,note) VALUES (?,?,?,?)').run(productId,'restock',qty,`Cancelled order ${order.order_number}`);
       };

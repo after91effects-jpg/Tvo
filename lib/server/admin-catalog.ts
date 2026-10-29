@@ -1,3 +1,5 @@
+import { getProductPurchaseProfile } from '../productPurchase';
+import { getProductOptions } from '../productOptions';
 import { normalizeSellingUnit, validateSellingUnitInput, serializeSellingUnit } from '../sellingUnit';
 import { validateSkuFormat } from '../sku';
 import { db } from './db';
@@ -56,7 +58,7 @@ export function serializeAdminProduct(row: any) {
       return arr;
     })(),
     videos: parseVideos(row.videos_json),
-    variations: jsonParseSafe(row.variations_json, []),
+    variations: getProductOptions({ ...row, sellingUnit: row.selling_unit, weightOptions: jsonParseSafe(row.variations_json, []), price: row.sale_price ?? row.regular_price, regularPrice: row.regular_price, weightKg: row.weight_kg }),
     flavours: jsonParseSafe(row.flavours, []),
     flavourOptions: jsonParseSafe(row.flavour_options_json, []),
     badges: jsonParseSafe(row.badges, []),
@@ -66,7 +68,7 @@ export function serializeAdminProduct(row: any) {
     upsells: jsonParseSafe(row.upsells, []),
     crossSells: jsonParseSafe(row.cross_sells, []),
     customization: jsonParseSafe(row.customization_json, []),
-    sellingUnit: normalizeSellingUnit(row.selling_unit),
+    sellingUnit: getProductPurchaseProfile(row).sellingUnit,
     categoryName: row.category_name || '',
     categorySlug: row.category_slug || '',
     brandName: row.brand_name || '',
