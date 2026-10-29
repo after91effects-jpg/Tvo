@@ -3,7 +3,7 @@ import { validateProductOptions, validateProductPrices } from '../adminProductFo
 import { getProductPurchaseProfile } from '../productPurchase';
 import { categoryDescendants, categoryPath, categoryAncestorSlugs } from '../categoryTree';
 import { db } from '../server/db';
-import { upsertProduct } from '../server/admin-catalog';
+import { upsertProduct, bulkAction } from '../server/admin-catalog';
 
 const tree=[{id:1,name:'Cakes',slug:'cakes',parent_id:null},{id:2,name:'Flavour',slug:'flavour',parent_id:1},{id:3,name:'Chocolate',slug:'chocolate',parent_id:2}];
 describe('Final product editor validation',()=>{
@@ -36,6 +36,7 @@ describe('Final product editor validation',()=>{
       expect(()=>upsertProduct({id:result.id,category_id:999999},{id:1,role:'super_admin'})).toThrow('category');
       expect(()=>upsertProduct({id:result.id,sale_price:900},{id:1,role:'super_admin'})).toThrow('MRP');
       expect(getProductPurchaseProfile(after).kind).toBe('pack');
+      expect(()=>bulkAction({ids:[result.id],action:'selling_unit',selling_unit:'kg'},{id:1,role:'super_admin'})).toThrow('purchase type');
       throw rollback;
     })();}catch(error){if(error!==rollback)throw error;}
   });

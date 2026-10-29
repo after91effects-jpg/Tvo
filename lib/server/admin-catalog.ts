@@ -1,6 +1,6 @@
 import { categoryDescendants } from '../categoryTree';
 import { validateProductOptions } from '../adminProductForm';
-import { getProductPurchaseProfile } from '../productPurchase';
+import { getProductPurchaseProfile, PURCHASE_UNITS } from '../productPurchase';
 import { getProductOptions } from '../productOptions';
 import { normalizeSellingUnit, validateSellingUnitInput, serializeSellingUnit } from '../sellingUnit';
 import { validateSkuFormat } from '../sku';
@@ -728,6 +728,9 @@ export function bulkAction(body: any, user: any) {
       else if (action === 'selling_unit' || action === 'unit') {
         const valRes = validateSellingUnitInput(body.selling_unit);
         if (!valRes.valid) throw new Error(valRes.error || 'Invalid selling unit');
+        const metadata = jsonParseSafe(existing.variations_json, null);
+        const kind = metadata?.purchaseKind as keyof typeof PURCHASE_UNITS | 'quantity' | undefined;
+        if (kind && kind !== 'quantity' && !PURCHASE_UNITS[kind]?.includes(valRes.unit!.value)) throw new Error('This unit conflicts with the saved purchase type. Use Edit Product to change its type and price options together.');
         const unitStr = serializeSellingUnit(body.selling_unit);
         db.prepare(`UPDATE products SET selling_unit=?, updated_at=? WHERE id=?`).run(unitStr, new Date().toISOString(), id);
         auditProduct(user, id, 'bulk_unit_edit', 'selling_unit', existing.selling_unit, unitStr);
