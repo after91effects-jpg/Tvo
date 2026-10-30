@@ -52,7 +52,7 @@ describe('Payment API Endpoints Integration', () => {
     });
     const res = await paymentPost(req);
     // Since network call to razorpay.com will fail with mock key, it returns safe 502 or handles gracefully
-    expect([200, 502]).toContain(res.status);
+    expect(res.status).toBe(403);
   });
 
   it('POST /api/payments verify rejects invalid signature with 403', async () => {
@@ -73,7 +73,7 @@ describe('Payment API Endpoints Integration', () => {
     expect(json.error).toMatch(/signature/i);
   });
 
-  it('POST /api/payments record failure updates payment status to Failed safely', async () => {
+  it('POST /api/payments record failure denies callers without order ownership', async () => {
     const req = new Request('http://localhost/api/payments', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -85,9 +85,9 @@ describe('Payment API Endpoints Integration', () => {
       }),
     });
     const res = await paymentPost(req);
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(403);
     const json = await res.json();
-    expect(json.recorded).toBe(true);
+    expect(json.error).toMatch(/access/i);
 
     // Re-set order 2 status to Pending so baseline is pristine
     db.prepare("UPDATE orders SET payment_status='Pending' WHERE order_number='TVO-2026-000002'").run();

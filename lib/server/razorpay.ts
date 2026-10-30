@@ -24,6 +24,7 @@ export interface ActivePaymentConfig {
 
 export interface SafePaymentConfig {
   configured: boolean;
+  configurationError?: string | null;
   isActive: boolean;
   mode: 'TEST' | 'LIVE' | 'SANDBOX';
   environment: 'test' | 'live';
@@ -143,9 +144,14 @@ export function isRazorpayConfigured(): boolean {
   return Boolean(config.keyId && config.keySecret);
 }
 
+export function gatewayConfigurationError(config: ActivePaymentConfig): string | null {
+  if(config.keyId && config.mode!=='SANDBOX' && !config.keyId.startsWith(config.mode==='LIVE'?'rzp_live_':'rzp_test_'))return 'Saved gateway mode and Razorpay key do not match. Save matching credentials before enabling online payments.';
+  return null;
+}
+
 export function isRazorpayActive(): boolean {
   const config = getActiveGatewayConfig();
-  return Boolean(config.keyId && config.keySecret && config.isActive);
+  return Boolean(config.keyId && config.keySecret && config.isActive && !gatewayConfigurationError(config));
 }
 
 export function getRazorpayMode(): 'TEST' | 'LIVE' | 'SANDBOX' {
@@ -162,6 +168,7 @@ export function getSafeConfigStatus(): SafePaymentConfig {
 
   return {
     configured: isRazorpayConfigured(),
+    configurationError: gatewayConfigurationError(config),
     isActive: isRazorpayActive(),
     mode: config.mode,
     environment: config.mode === 'LIVE' ? 'live' : 'test',
@@ -199,6 +206,7 @@ export async function createRazorpayOrder(params: {
   const config = getActiveGatewayConfig();
   const currency = params.currency || 'INR';
 
+  if (gatewayConfigurationError(config)) return {id:'',amount:params.amountPaise,currency,error:gatewayConfigurationError(config)!};
   if (config.source === 'database' && !config.isActive) {
     return {
       id: '',
@@ -237,6 +245,7 @@ export async function createRazorpayOrder(params: {
     const authHeader = 'Basic ' + Buffer.from(`${keyId}:${secret}`).toString('base64');
     const res = await fetch('https://api.razorpay.com/v1/orders', {
       method: 'POST',
+      signal: AbortSignal.timeout(15000),
       headers: {
         'Content-Type': 'application/json',
         Authorization: authHeader,
@@ -362,17 +371,20 @@ export async function createRazorpayRefund(params: {
   paymentId: string;
   amountPaise: number;
   notes?: Record<string, string>;
+  idempotencyKey?: string;
 }): Promise<{
   id: string;
   amount: number;
   status: string;
   sandbox?: boolean;
   error?: string;
+  uncertain?: boolean;
 }> {
   const keyId = getRazorpayKeyId();
   const secret = getRazorpayKeySecret();
 
   if (!keyId || !secret) {
+    if(process.env.NODE_ENV==='production'||getRazorpayMode()==='LIVE')return {id:'',amount:params.amountPaise,status:'failed',error:'Refund gateway is not configured for live transactions'};
     // Sandbox / Test Mode simulation
     return {
       id: `rfd_test_${Date.now()}`,
@@ -386,13 +398,16 @@ export async function createRazorpayRefund(params: {
     const authHeader = 'Basic ' + Buffer.from(`${keyId}:${secret}`).toString('base64');
     const res = await fetch(`https://api.razorpay.com/v1/payments/${params.paymentId}/refund`, {
       method: 'POST',
+      signal: AbortSignal.timeout(15000),
       headers: {
         'Content-Type': 'application/json',
         Authorization: authHeader,
+        ...(params.idempotencyKey?{'X-Refund-Idempotency':params.idempotencyKey}:{}),
       },
       body: JSON.stringify({
         amount: params.amountPaise,
         notes: params.notes || {},
+        ...(params.idempotencyKey?{receipt:params.idempotencyKey}:{}),
       }),
     });
 
@@ -400,18 +415,18 @@ export async function createRazorpayRefund(params: {
     if (!res.ok || !data.id) {
       const errMsg = data.error?.description || data.message || `Refund failed (HTTP ${res.status})`;
       logError('razorpay_refund_failed', errMsg);
-      return { id: '', amount: params.amountPaise, status: 'failed', error: errMsg };
+      return { id: '', amount: params.amountPaise, status: 'failed', error: errMsg, uncertain:res.status>=500||res.status===409 };
     }
 
     return {
       id: data.id,
       amount: data.amount,
-      status: data.status || 'processed',
+      status: data.status || 'pending',
       sandbox: false,
     };
   } catch (e: any) {
     logError('razorpay_refund_exception', e?.message || e);
-    return { id: '', amount: params.amountPaise, status: 'failed', error: e?.message || 'Network error reaching Razorpay' };
+    return { id: '', amount: params.amountPaise, status: 'failed', error: e?.message || 'Network error reaching Razorpay',uncertain:true };
   }
 }
 
@@ -452,6 +467,7 @@ export async function testRazorpayConnection(creds?: {
     const authHeader = 'Basic ' + Buffer.from(`${keyId}:${secret}`).toString('base64');
     const res = await fetch('https://api.razorpay.com/v1/orders?count=1', {
       method: 'GET',
+      signal: AbortSignal.timeout(15000),
       headers: { Authorization: authHeader },
     });
     const latencyMs = Date.now() - start;
@@ -699,8 +715,8 @@ export function runPaymentReconciliation(): Array<{
   const results: any[] = [];
 
   for (const o of orders) {
-    const payment = db.prepare('SELECT * FROM payments WHERE order_id=? ORDER BY id DESC LIMIT 1').get(o.id) as any;
-    const refunds = db.prepare('SELECT SUM(amount) as total_refunded FROM order_refunds WHERE order_id=?').get(o.id) as any;
+    const payment = db.prepare("SELECT * FROM payments WHERE order_id=? ORDER BY CASE WHEN status='Paid' THEN 0 ELSE 1 END,id DESC LIMIT 1").get(o.id) as any;
+    const refunds = db.prepare("SELECT SUM(amount) as total_refunded FROM order_refunds WHERE order_id=? AND status='completed'").get(o.id) as any;
     const totalRefunded = Number(refunds?.total_refunded || 0);
 
     let recStatus: 'MATCHED' | 'MISMATCH' | 'PENDING_REVIEW' | 'REFUNDED' | 'PARTIALLY_REFUNDED' = 'MATCHED';
@@ -760,4 +776,16 @@ export function runPaymentReconciliation(): Array<{
   }
 
   return results;
+}
+
+/** Read-only gateway confirmation; never authorizes/captures money. */
+export async function fetchRazorpayPayment(paymentId:string):Promise<any> {
+  const config=getActiveGatewayConfig();
+  if(!config.keyId||!config.keySecret){
+    if(process.env.NODE_ENV==='production'||config.mode==='LIVE')throw new Error('Payment gateway is not configured');
+    return null;
+  }
+  if(!/^pay_[a-zA-Z0-9_]+$/.test(paymentId))throw new Error('Invalid gateway payment ID');
+  const response=await fetch(`https://api.razorpay.com/v1/payments/${encodeURIComponent(paymentId)}`,{headers:{Authorization:'Basic '+Buffer.from(`${config.keyId}:${config.keySecret}`).toString('base64')},signal:AbortSignal.timeout(15000)});
+  const data=await response.json();if(!response.ok)throw new Error(data.error?.description||'Cannot confirm payment with Razorpay');return data;
 }

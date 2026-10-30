@@ -1,3 +1,5 @@
+import { syncDriverAvailability } from './driver-state';
+import { validateReportDates } from './reporting';
 import { changeOrderStatus } from './order-status';
 import { normalizePagination } from '../pagination';
 import { isPieceOrDiscreteUnit } from '../sellingUnit';
@@ -251,6 +253,7 @@ export function saveSlot(user: User, data: any) {
   const capacity = Number(data.capacity ?? 10);
   const fee = Number(data.fee ?? 0);
   if (![cutoff,capacity,fee].every(value => Number.isFinite(value) && value >= 0)) return {ok:false,error:'Slot capacity, fee and cutoff must be non-negative numbers'};
+  if (!Number.isSafeInteger(capacity) || !Number.isSafeInteger(cutoff)) return {ok:false,error:'Slot capacity and cutoff must be whole numbers'};
   if (data.id) {
     run('UPDATE delivery_slots SET name=?, start_time=?, end_time=?, capacity=?, fee=?, cutoff_minutes=?, available=?, days=? WHERE id=?',
       data.name, data.start_time, data.end_time, capacity, fee, cutoff, data.available ? 1 : 0, days, data.id);
@@ -272,13 +275,15 @@ export function deleteSlot(user: User, id: number) {
 }
 
 export function saveZone(user: User, data: any) {
+  if(!String(data.name||'').trim())throw new Error('Zone name is required');
+  for(const key of ['fee','free_delivery_threshold','min_order_value'])if(data[key]!=null&&data[key]!==''&&(!Number.isFinite(Number(data[key]))||Number(data[key])<0))throw new Error('Zone charges and minimum amounts must be non-negative');
   const minOrder = Number(data.min_order_value) || 0;
   if (data.id) {
     run('UPDATE delivery_zones SET name=?, city=?, fee=?, free_delivery_threshold=?, min_order_value=?, est_delivery_time=?, active=? WHERE id=?',
-      data.name, data.city || null, Number(data.fee) || 0, data.free_delivery_threshold ? Number(data.free_delivery_threshold) : null, minOrder, data.est_delivery_time || null, data.active ? 1 : 0, data.id);
+      data.name, data.city || null, Number(data.fee) || 0, data.free_delivery_threshold !== '' && data.free_delivery_threshold != null ? Number(data.free_delivery_threshold) : null, minOrder, data.est_delivery_time || null, data.active ? 1 : 0, data.id);
   } else {
     run('INSERT INTO delivery_zones (name, city, fee, free_delivery_threshold, min_order_value, est_delivery_time, active) VALUES (?,?,?,?,?,?,?)',
-      data.name, data.city || null, Number(data.fee) || 0, data.free_delivery_threshold ? Number(data.free_delivery_threshold) : null, minOrder, data.est_delivery_time || null, data.active ? 1 : 0);
+      data.name, data.city || null, Number(data.fee) || 0, data.free_delivery_threshold !== '' && data.free_delivery_threshold != null ? Number(data.free_delivery_threshold) : null, minOrder, data.est_delivery_time || null, data.active ? 1 : 0);
   }
   audit(user, 'DELIVERY_ZONE_SAVE', 'DeliveryZone', data.id ? String(data.id) : undefined);
   return { ok: true };
@@ -292,6 +297,8 @@ export function deleteZone(user: User, id: number) {
 }
 
 export function savePincode(user: User, data: any) {
+  if(!/^[1-9]\d{5}$/.test(String(data.pincode||'')))throw new Error('Enter a valid 6-digit pincode');
+  if(!one('SELECT id FROM delivery_zones WHERE id=?',Number(data.zone_id)))throw new Error('Select an existing delivery zone');
   run("INSERT INTO pincodes (zone_id, pincode, available) VALUES (?,?,?) ON CONFLICT(pincode) DO UPDATE SET zone_id=excluded.zone_id, available=excluded.available",
     data.zone_id || null, data.pincode, data.available ? 1 : 0);
   audit(user, 'PINCODE_SAVE', 'Pincode', data.pincode);
@@ -302,6 +309,8 @@ export function bulkSavePincodes(user: User, zoneId: number, pincodes: string[])
   const zone = one<Row>('SELECT id, name FROM delivery_zones WHERE id=?', zoneId);
   if (!zone) return { ok: false, error: 'Delivery zone not found' };
 
+  if(!Array.isArray(pincodes)||!pincodes.length||pincodes.some(code=>! /^(?:[1-9]\d{5})$/.test(String(code).trim())))throw new Error('Every pincode must be a valid 6-digit Indian pincode');
+  pincodes=[...new Set(pincodes.map(code=>String(code).trim()))];
   let added = 0;
   tx(() => {
     for (const raw of pincodes) {
@@ -325,6 +334,7 @@ export function deletePincode(user: User, id: number) {
 }
 
 export function saveBlackout(user: User, data: any) {
+  validateReportDates(String(data.date||''),'');if(!data.date)throw new Error('Blackout date is required');
   run("INSERT INTO blackout_dates (date, reason, type) VALUES (?,?,?) ON CONFLICT(date) DO UPDATE SET reason=excluded.reason, type=excluded.type",
     data.date, data.reason || null, data.type || 'blackout');
   audit(user, 'BLACKOUT_SAVE', 'Blackout', data.date);
@@ -338,6 +348,7 @@ export function deleteBlackout(user: User, id: number) {
 }
 
 export function saveBuffer(user: User, data: any) {
+  if(!Number.isFinite(Number(data.value))||Number(data.value)<0)throw new Error('Buffer must be a non-negative number');
   run("INSERT INTO buffer_settings (key, label, value, unit) VALUES (?,?,?,?) ON CONFLICT(key) DO UPDATE SET label=excluded.label, value=excluded.value, unit=excluded.unit",
     data.key, data.label || data.key, Number(data.value) || 0, data.unit || 'minutes');
   audit(user, 'BUFFER_SAVE', 'Buffer', data.key);
@@ -345,6 +356,8 @@ export function saveBuffer(user: User, data: any) {
 }
 
 export function saveProductionCapacity(user: User, data: any) {
+  if(data.date!=='default')validateReportDates(String(data.date||''),'');
+  for(const key of ['daily_order_capacity','daily_cake_capacity','daily_custom_capacity'])if(data[key]!=null&&(!Number.isSafeInteger(Number(data[key]))||Number(data[key])<0))throw new Error('Production capacities must be non-negative whole numbers');
   run("INSERT INTO production_capacity (date, daily_order_capacity, daily_cake_capacity, daily_custom_capacity) VALUES (?,?,?,?) ON CONFLICT(date) DO UPDATE SET daily_order_capacity=excluded.daily_order_capacity, daily_cake_capacity=excluded.daily_cake_capacity, daily_custom_capacity=excluded.daily_custom_capacity",
     data.date, data.daily_order_capacity ?? 100, data.daily_cake_capacity ?? 20, data.daily_custom_capacity ?? 10);
   audit(user, 'PRODUCTION_CAPACITY_SAVE', 'ProductionCapacity', data.date);
@@ -352,6 +365,9 @@ export function saveProductionCapacity(user: User, data: any) {
 }
 
 export function setSlotCapacity(user: User, data: any) {
+  validateReportDates(String(data.date||''),'');
+  if(!data.date||!one('SELECT id FROM delivery_slots WHERE id=?',Number(data.slot_id)))throw new Error('A valid date and slot are required');
+  if(!Number.isSafeInteger(Number(data.capacity))||Number(data.capacity)<0)throw new Error('Capacity must be a non-negative whole number');
   run("INSERT INTO slot_capacity (slot_id, date, capacity, books, closed) VALUES (?,?,?,0,?) ON CONFLICT(slot_id,date) DO UPDATE SET capacity=excluded.capacity, closed=excluded.closed",
     data.slot_id, data.date, Number(data.capacity) || 0, data.closed ? 1 : 0);
   audit(user, 'SLOT_CAPACITY_SAVE', 'SlotCapacity', `${data.slot_id}:${data.date}`);
@@ -361,7 +377,8 @@ export function setSlotCapacity(user: User, data: any) {
 export function bulkSetSlotCapacity(user: User, data: any) {
   const dates: string[] = Array.isArray(data.dates) ? data.dates : (data.date ? [data.date] : []);
   const slotIds: number[] = Array.isArray(data.slot_ids) ? data.slot_ids : (data.slot_id ? [Number(data.slot_id)] : []);
-  const capacity = Number(data.capacity) || 10;
+  const capacity = Number(data.capacity ?? 10);
+  if(!Number.isSafeInteger(capacity)||capacity<0)throw new Error('Capacity must be a non-negative whole number');
   const closed = data.closed ? 1 : 0;
 
   if (!dates.length || !slotIds.length) {
@@ -370,7 +387,9 @@ export function bulkSetSlotCapacity(user: User, data: any) {
 
   tx(() => {
     for (const d of dates) {
+      validateReportDates(d,'');if(!d)throw new Error('Date is required');
       for (const sId of slotIds) {
+        if(!one('SELECT id FROM delivery_slots WHERE id=?',sId))throw new Error('Delivery slot not found');
         run("INSERT INTO slot_capacity (slot_id, date, capacity, books, closed) VALUES (?,?,?,0,?) ON CONFLICT(slot_id,date) DO UPDATE SET capacity=excluded.capacity, closed=excluded.closed",
           sId, d, capacity, closed);
       }
@@ -396,7 +415,8 @@ export function saveDriver(user: User, data: any) {
   const name = (data.name || '').trim();
   const phone = (data.phone || '').trim();
   if (!name) return { ok: false, error: 'Driver name is required' };
-  if (!phone) return { ok: false, error: 'Driver phone number is required' };
+  if (!/^(?:\+91[- ]?)?[6-9]\d{9}$/.test(phone.replace(/[\s()-]/g,''))) return {ok:false,error:'Enter a valid Indian driver mobile number'};
+  if(!['available','on_delivery','off_duty'].includes(data.status||'available'))return {ok:false,error:'Invalid driver status'};
   const now = new Date().toISOString();
   if (data.id) {
     run('UPDATE drivers SET name=?, phone=?, vehicle_type=?, vehicle_number=?, status=?, active=?, notes=?, updated_at=? WHERE id=?',
@@ -421,73 +441,44 @@ export function deleteDriver(user: User, id: number) {
 }
 
 export function assignDriverToOrder(user: User, orderId: number, driverId: number | null) {
-  const order = one<Row>('SELECT id, order_number, status, delivery_status, driver_id FROM orders WHERE id=?', orderId);
-  if (!order) return { ok: false, error: 'Order not found' };
-
-  const now = new Date().toISOString();
-  if (driverId) {
-    const driver = one<Row>('SELECT id, name, phone FROM drivers WHERE id=? AND active=1', driverId);
-    if (!driver) return { ok: false, error: 'Driver not found or inactive' };
-
-    run("UPDATE orders SET driver_id=?, delivery_status='assigned', updated_at=? WHERE id=?",
-      driverId, now, orderId);
-
-    // Update driver status to on_delivery if currently available
-    run("UPDATE drivers SET status='on_delivery', updated_at=? WHERE id=? AND status='available'", now, driverId);
-
-    audit(user, 'ORDER_DRIVER_ASSIGN', 'Order', String(orderId), `Assigned to driver ${driver.name} (#${driverId})`);
-    return { ok: true, driver: { id: driver.id, name: driver.name, phone: driver.phone } };
-  } else {
-    // Unassign driver
-    const prevDriverId = order.driver_id;
-    run("UPDATE orders SET driver_id=NULL, delivery_status='pending', updated_at=? WHERE id=?", now, orderId);
-
-    if (prevDriverId) {
-      const activeCount = count("SELECT COUNT(*) c FROM orders WHERE driver_id=? AND delivery_status IN ('assigned', 'out_for_delivery')", prevDriverId);
-      if (activeCount === 0) {
-        run("UPDATE drivers SET status='available', updated_at=? WHERE id=?", now, prevDriverId);
-      }
-    }
-    audit(user, 'ORDER_DRIVER_UNASSIGN', 'Order', String(orderId));
-    return { ok: true };
-  }
+  return db.transaction(()=>{
+    const order=one<Row>('SELECT * FROM orders WHERE id=?',orderId);
+    if(!order)return {ok:false,error:'Order not found'};
+    if(['Delivered','Cancelled'].includes(order.status)||order.delivery_status==='delivered')return {ok:false,error:'Final orders cannot be reassigned'};
+    if(order.delivery_slot==='Store Pickup')return {ok:false,error:'Store pickup does not require a delivery driver'};
+    if(driverId){const driver=one<Row>('SELECT * FROM drivers WHERE id=?',driverId);if(!driver||!driver.active||!['available','on_delivery'].includes(driver.status))return {ok:false,error:'Driver is inactive or off duty'};}
+    run("UPDATE orders SET driver_id=?,delivery_status=?,updated_at=datetime('now') WHERE id=?",driverId,driverId?'assigned':'pending',orderId);
+    syncDriverAvailability(order.driver_id);syncDriverAvailability(driverId);
+    audit(user,driverId?'ORDER_DRIVER_ASSIGN':'ORDER_DRIVER_UNASSIGN','Order',String(orderId));
+    return {ok:true};
+  })();
 }
 
 export function updateDeliveryStatus(user: User, orderId: number, deliveryStatus: string, note?: string, failureReason?: string) {
-  const validStatuses = ['pending', 'assigned', 'out_for_delivery', 'delivered', 'failed', 'returned'];
-  if (!validStatuses.includes(deliveryStatus)) {
-    return { ok: false, error: `Invalid delivery status. Must be one of: ${validStatuses.join(', ')}` };
-  }
-
-  const order = one<Row>('SELECT id, order_number, driver_id, status FROM orders WHERE id=?', orderId);
-  if (!order) return { ok: false, error: 'Order not found' };
-
-  const now = new Date().toISOString();
-  let dispatchedAtUpdate = '';
-  let deliveredAtUpdate = '';
-
-  let mappedOrderStatus = order.status;
-  if (deliveryStatus === 'out_for_delivery') {
-    dispatchedAtUpdate = `, dispatched_at = '${now}'`;
-    mappedOrderStatus = 'Dispatched';
-  } else if (deliveryStatus === 'delivered') {
-    deliveredAtUpdate = `, delivered_at = '${now}'`;
-    mappedOrderStatus = 'Delivered';
-  }
-
-  run(`UPDATE orders SET delivery_status=?, delivery_failure_reason=?, status=?, updated_at=? ${dispatchedAtUpdate} ${deliveredAtUpdate} WHERE id=?`,
-    deliveryStatus, failureReason || null, mappedOrderStatus, now, orderId);
-
-  // If delivered or failed/returned, check if driver has other deliveries
-  if (['delivered', 'failed', 'returned'].includes(deliveryStatus) && order.driver_id) {
-    const remaining = count("SELECT COUNT(*) c FROM orders WHERE driver_id=? AND id!=? AND delivery_status IN ('assigned', 'out_for_delivery')", order.driver_id, orderId);
-    if (remaining === 0) {
-      run("UPDATE drivers SET status='available', updated_at=? WHERE id=?", now, order.driver_id);
+  if(!['pending','assigned','out_for_delivery','delivered','failed','returned'].includes(deliveryStatus))return {ok:false,error:'Invalid delivery status'};
+  return db.transaction(()=>{
+    const order=one<Row>('SELECT * FROM orders WHERE id=?',orderId);
+    if(!order)return {ok:false,error:'Order not found'};
+    if(order.delivery_status===deliveryStatus)return {ok:true,noOp:true};
+    if(['Cancelled','Delivered'].includes(order.status)||order.delivery_status==='delivered')return {ok:false,error:'This order is final'};
+    const pickup=order.delivery_slot==='Store Pickup';
+    if(['assigned','out_for_delivery','delivered'].includes(deliveryStatus)&&!pickup&&!order.driver_id)return {ok:false,error:'Assign a driver before dispatch or delivery'};
+    if(deliveryStatus==='out_for_delivery'){const driver=one<Row>('SELECT active,status FROM drivers WHERE id=?',order.driver_id);if(!driver?.active||driver.status==='off_duty')return {ok:false,error:'Assigned driver is inactive or off duty'};}
+    if(pickup&&deliveryStatus==='out_for_delivery')return {ok:false,error:'Pickup orders are collected at the store'};
+    if(['failed','returned'].includes(deliveryStatus)&&!String(failureReason||note||'').trim())return {ok:false,error:'A failure or return reason is required'};
+    if(deliveryStatus==='delivered'){
+      const result=changeOrderStatus(user,orderId,'Delivered');if(!result.ok)return result;
+    }else{
+      const next=deliveryStatus==='out_for_delivery'?'Out for Delivery':order.status;
+      run("UPDATE orders SET delivery_status=?,status=?,delivery_failure_reason=?,updated_at=datetime('now') WHERE id=?",deliveryStatus,next,failureReason||null,orderId);
+      if(deliveryStatus==='out_for_delivery')run("UPDATE orders SET dispatched_at=datetime('now') WHERE id=?",orderId);
+      run('INSERT INTO order_status_history (order_id,status,note,user_id) VALUES (?,?,?,?)',orderId,next,`Delivery: ${deliveryStatus}`,user.id??null);
     }
-  }
-
-  audit(user, 'DELIVERY_STATUS_UPDATE', 'Order', String(orderId), `Delivery status → ${deliveryStatus}${failureReason ? ` (Reason: ${failureReason})` : ''}`);
-  return { ok: true, delivery_status: deliveryStatus };
+    if(note||failureReason)run('INSERT INTO order_notes (order_id,author_id,author_name,body,is_internal) VALUES (?,?,?,?,1)',orderId,user.id??null,user.name||'Admin',String(note||failureReason).slice(0,1000));
+    syncDriverAvailability(order.driver_id);
+    audit(user,'DELIVERY_STATUS_UPDATE','Order',String(orderId),deliveryStatus);
+    return {ok:true,delivery_status:deliveryStatus};
+  })();
 }
 
 export function listDeliveries(user: User, filter?: { date?: string; status?: string; driverId?: number }) {

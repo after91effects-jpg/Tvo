@@ -361,7 +361,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     if (typeof window === 'undefined') return 'sess-default';
     let sid = localStorage.getItem('tvo_session_id');
     if (!sid) {
-      sid = 'sess-' + Math.random().toString(36).substring(2, 11);
+      sid = 'sess-' + crypto.randomUUID();
       localStorage.setItem('tvo_session_id', sid);
     }
     return sid;
@@ -562,7 +562,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           const payRes = await fetch('/api/payments', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'create', orderNumber: serverOrderNumber }),
+            body: JSON.stringify({ action: 'create', orderNumber: serverOrderNumber, sessionId: getSessionId() }),
           });
           pay = await payRes.json();
           if (!payRes.ok) {
@@ -663,6 +663,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({
                         action: 'failure',
+                        sessionId: getSessionId(),
                         orderNumber: serverOrderNumber,
                         reason: 'Customer closed Razorpay checkout modal',
                         code: 'MODAL_DISMISSED',
@@ -683,6 +684,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
                     action: 'failure',
+                        sessionId: getSessionId(),
                     orderNumber: serverOrderNumber,
                     reason: desc,
                     code: resp.error?.code || 'PAYMENT_FAILED',

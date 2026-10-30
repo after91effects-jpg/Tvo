@@ -1,3 +1,4 @@
+import { syncDriverAvailability } from './driver-state';
 import { getProductPurchaseProfile } from '../productPurchase';
 import { db, logAudit, jsonParseSafe } from './api';
 import { hasPermission } from './permissions';
@@ -34,6 +35,9 @@ export function changeOrderStatus(user: any, id: number, status: string, note?: 
       }
       if(order.delivery_date && order.delivery_slot_id) db.prepare('UPDATE slot_capacity SET books=CASE WHEN books>0 THEN books-1 ELSE 0 END WHERE slot_id=? AND date=?').run(order.delivery_slot_id,order.delivery_date);
     }
+    if(status==='Delivered')db.prepare("UPDATE orders SET delivery_status='delivered',delivered_at=datetime('now') WHERE id=?").run(id);
+    if(status==='Cancelled')db.prepare("UPDATE orders SET delivery_status='cancelled' WHERE id=?").run(id);
+    if(['Delivered','Cancelled'].includes(status))syncDriverAvailability(order.driver_id);
     // Cancelling is not proof that a payment gateway refund has happened.
     logAudit(user,'ORDER_STATUS_UPDATE','Order',String(id),`→ ${status}`);
     return {ok:true,status};

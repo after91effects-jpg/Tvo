@@ -39,6 +39,7 @@ export async function GET(req: Request) {
     }
 
     if (!isPrivileged && !isOwner) {
+      delete order.session_id;
       if (order.customer_phone) {
         const p = String(order.customer_phone);
         order.customer_phone = p.length > 4 ? p.slice(0, 2) + '******' + p.slice(-4) : '******';

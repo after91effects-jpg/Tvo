@@ -1,9 +1,11 @@
+import { requestPaymentRefund } from '../../../../lib/server/payment-refunds';
+import { businessDateSql } from '../../../../lib/server/business-date';
+import { validateReportDates } from '../../../../lib/server/reporting';
 import { ok, err, db, requireAdmin, logAudit } from '../../../../lib/server/api';
 import { hasPermission } from '../../../../lib/server/permissions';
 import {
   getSafeConfigStatus,
   testRazorpayConnection,
-  createRazorpayRefund,
   runPaymentReconciliation,
 } from '../../../../lib/server/razorpay';
 
@@ -22,9 +24,10 @@ export async function GET(req: Request) {
   const refundFilter = (url.searchParams.get('refund_status') || '').trim();
   const startDate = (url.searchParams.get('start_date') || '').trim();
   const endDate = (url.searchParams.get('end_date') || '').trim();
-  const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10));
-  const limit = Math.min(100, Math.max(10, parseInt(url.searchParams.get('limit') || '50', 10)));
+  const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10)||1);
+  const limit = Math.min(100, Math.max(10, parseInt(url.searchParams.get('limit') || '50', 10)||50));
   const offset = (page - 1) * limit;
+  try { validateReportDates(startDate,endDate); } catch(error){return err(error instanceof Error?error.message:'Invalid dates',400);}
 
   // ---------------------------------------------------------------------------
   // 1. CALCULATE 10 KPI METRICS
@@ -48,10 +51,10 @@ export async function GET(req: Request) {
 
   const netPaymentAmount = Math.max(0, successfulAmount - refundedAmount);
 
-  const todaySuccessfulRow = db.prepare("SELECT COUNT(*) as c FROM payments WHERE status='Paid' AND date(created_at) = date('now')").get() as any;
+  const todaySuccessfulRow = db.prepare(`SELECT COUNT(*) as c FROM payments WHERE status='Paid' AND ${businessDateSql('created_at')}=${businessDateSql('now')}`).get() as any;
   const todaySuccessfulCount = todaySuccessfulRow?.c || 0;
 
-  const todayFailedRow = db.prepare("SELECT COUNT(*) as c FROM payments WHERE status='Failed' AND date(created_at) = date('now')").get() as any;
+  const todayFailedRow = db.prepare(`SELECT COUNT(*) as c FROM payments WHERE status='Failed' AND ${businessDateSql('created_at')}=${businessDateSql('now')}`).get() as any;
   const todayFailedCount = todayFailedRow?.c || 0;
 
   const kpiMetrics = {
@@ -70,34 +73,9 @@ export async function GET(req: Request) {
   // ---------------------------------------------------------------------------
   // 2. PAYMENT STATUS DISTRIBUTION
   // ---------------------------------------------------------------------------
-  const distributionRows = db.prepare(`
-    SELECT status, COUNT(*) as count 
-    FROM payments 
-    GROUP BY status
-  `).all() as any[];
-
-  const distribution = {
-    Created: 0,
-    Authorized: 0,
-    Captured: 0,
-    Failed: 0,
-    Refunded: 0,
-    PartiallyRefunded: 0,
-    Pending: 0,
-  };
-
-  for (const r of distributionRows) {
-    if (r.status === 'Paid') distribution.Captured = r.count;
-    else if (r.status === 'Pending') distribution.Pending = r.count;
-    else if (r.status === 'Failed') distribution.Failed = r.count;
-    else if (r.status === 'Authorized') distribution.Authorized = r.count;
-  }
-
-  const fullRefundCount = db.prepare("SELECT COUNT(*) as c FROM payments WHERE refund_status='full'").get() as any;
-  distribution.Refunded = fullRefundCount?.c || 0;
-
-  const partialRefundCount = db.prepare("SELECT COUNT(*) as c FROM payments WHERE refund_status='partial'").get() as any;
-  distribution.PartiallyRefunded = partialRefundCount?.c || 0;
+  const distribution:Record<string,number>={Created:0,Authorized:0,Captured:0,Failed:0,Refunded:0,PartiallyRefunded:0,Pending:0};
+  const bucket="CASE WHEN refund_status='full' THEN 'Refunded' WHEN refund_status='partial' THEN 'PartiallyRefunded' WHEN status='Paid' THEN 'Captured' ELSE status END";
+  for(const row of db.prepare(`SELECT ${bucket} AS bucket,COUNT(*) AS count FROM payments GROUP BY ${bucket}`).all() as any[])if(row.bucket in distribution)distribution[row.bucket]=row.count;
 
   // ---------------------------------------------------------------------------
   // 3. TRANSACTIONS LIST WITH ADVANCED FILTERS
@@ -124,8 +102,8 @@ export async function GET(req: Request) {
   }
 
   if (methodFilter && methodFilter !== 'all') {
-    whereClauses.push('p.method = ?');
-    params.push(methodFilter);
+    whereClauses.push("UPPER(REPLACE(p.method,' ','')) = ?");
+    params.push(methodFilter.replace(/\s+/g,'').toUpperCase());
   }
 
   if (refundFilter && refundFilter !== 'all') {
@@ -134,12 +112,12 @@ export async function GET(req: Request) {
   }
 
   if (startDate) {
-    whereClauses.push("date(p.created_at) >= date(?)");
+    whereClauses.push(`${businessDateSql('p.created_at')} >= date(?)`);
     params.push(startDate);
   }
 
   if (endDate) {
-    whereClauses.push("date(p.created_at) <= date(?)");
+    whereClauses.push(`${businessDateSql('p.created_at')} <= date(?)`);
     params.push(endDate);
   }
 
@@ -158,6 +136,7 @@ export async function GET(req: Request) {
            p.razorpay_order_id, p.razorpay_payment_id, p.transaction_id, 
            p.gateway, p.captured, p.refund_status, p.refunded_amount, 
            p.verification_status, p.webhook_status, p.created_at, p.updated_at,
+           (SELECT COALESCE(SUM(amount),0) FROM order_refunds pending WHERE pending.order_id=p.order_id AND pending.status IN ('processing','pending')) AS refund_pending_amount,
            o.order_number, o.customer_name, o.customer_email, o.customer_phone,
            o.status as order_status, o.total as order_total, o.discount, o.delivery_fee
     FROM payments p
@@ -176,7 +155,7 @@ export async function GET(req: Request) {
            p.razorpay_payment_id, p.amount as original_payment_amount
     FROM order_refunds r
     LEFT JOIN orders o ON r.order_id = o.id
-    LEFT JOIN payments p ON p.order_id = o.id AND p.status='Paid'
+    LEFT JOIN payments p ON p.id=(SELECT id FROM payments WHERE order_id=o.id AND status='Paid' ORDER BY id DESC LIMIT 1)
     ORDER BY r.id DESC
     LIMIT 100
   `).all() as any[];
@@ -284,96 +263,18 @@ export async function POST(req: Request) {
         return err('Unauthorized: refund_payments permission required', 403);
       }
 
-      const paymentId = Number(body.paymentId);
-      const refundAmount = Number(body.amount);
-      const reason = String(body.reason || 'Admin initiated refund').trim();
-
-      if (!paymentId || !refundAmount || refundAmount <= 0) {
-        return err('Valid paymentId and refund amount are required', 400);
-      }
-
-      const payment = db.prepare('SELECT * FROM payments WHERE id=?').get(paymentId) as any;
-      if (!payment) return err('Payment record not found', 404);
-
-      if (payment.status !== 'Paid') {
-        return err('Cannot refund a payment that is not marked Paid', 400);
-      }
-
-      const originalAmount = Number(payment.amount);
-      const alreadyRefunded = Number(payment.refunded_amount || 0);
-      const remainingRefundable = Math.max(0, originalAmount - alreadyRefunded);
-
-      if (refundAmount > remainingRefundable) {
-        return err(`Refund amount (₹${refundAmount}) exceeds remaining refundable balance (₹${remainingRefundable})`, 400);
-      }
-
-      const amountPaise = Math.round(refundAmount * 100);
-      const razorpayPaymentId = payment.razorpay_payment_id || payment.transaction_id;
-
-      // Initiate refund via Razorpay API or Sandbox
-      const rzRefund = await createRazorpayRefund({
-        paymentId: razorpayPaymentId,
-        amountPaise,
-        notes: {
-          reason,
-          admin_user: user.name || user.email || 'Admin',
-        },
-      });
-
-      if (rzRefund.error) {
-        logAudit(user, 'PAYMENT_REFUND_FAIL', 'Payment', String(payment.id), rzRefund.error);
-        return err(rzRefund.error, 502);
-      }
-
-      const newRefundedTotal = alreadyRefunded + refundAmount;
-      const isFull = newRefundedTotal >= originalAmount;
-      const newRefundStatus = isFull ? 'full' : 'partial';
-      const newOrderPaymentStatus = isFull ? 'Refunded' : 'Partially Refunded';
-
-      // Update payment record
-      db.prepare(`
-        UPDATE payments 
-        SET refund_status=?, refunded_amount=?, updated_at=datetime('now') 
-        WHERE id=?
-      `).run(newRefundStatus, newRefundedTotal, payment.id);
-
-      // Update order record
-      db.prepare(`
-        UPDATE orders 
-        SET payment_status=?, updated_at=datetime('now') 
-        WHERE id=?
-      `).run(newOrderPaymentStatus, payment.order_id);
-
-      // Insert record into order_refunds table
-      db.prepare(`
-        INSERT INTO order_refunds (order_id, amount, reason, method, status, gateway_refund_id, created_at)
-        VALUES (?, ?, ?, ?, 'completed', ?, datetime('now'))
-      `).run(payment.order_id, refundAmount, reason, payment.method || 'UPI', rzRefund.id);
-
-      // Insert into refunds table as well for backwards compatibility
       try {
-        db.prepare(`
-          INSERT INTO refunds (order_id, amount, reason, status, razorpay_refund_id, created_at)
-          VALUES (?, ?, ?, 'completed', ?, datetime('now'))
-        `).run(payment.order_id, refundAmount, reason, rzRefund.id);
-      } catch {}
-
-      logAudit(user, 'PAYMENT_REFUND', 'Order', String(payment.order_id), `Refunded ₹${refundAmount} (${reason})`);
-
-      return ok({
-        ok: true,
-        refund: {
-          id: rzRefund.id,
-          amount: refundAmount,
-          status: 'completed',
-          newRefundStatus,
-        },
-      });
+        const result=await requestPaymentRefund(Number(body.paymentId),Number(body.amount),String(body.reason||'Admin requested refund').slice(0,500),String(body.requestId||''),user);
+        if(result.error)return err(result.error,result.pending?503:502);
+        logAudit(user,'PAYMENT_REFUND_REQUEST','Payment',String(body.paymentId),`Refund ${result.refund?.status}`);
+        return ok(result);
+      }catch(error){return err(error instanceof Error?error.message:'Refund request failed',400);}
     }
 
     // -------------------------------------------------------------------------
     // ACTION: TEST API CONNECTION
     // -------------------------------------------------------------------------
+    if (['test_api','reconcile_check'].includes(action) && !hasPermission(user.role,'view_payments')) return err('Payment access required',403);
     if (action === 'test_api') {
       const result = await testRazorpayConnection();
       logAudit(user, 'PAYMENT_API_TEST', 'System', 'Razorpay', `Result: ${result.status}`);

@@ -1,206 +1,51 @@
-import { NextResponse } from 'next/server';
-import { db } from '../../../../../lib/server/db';
-import { verifyWebhookSignature, getRazorpayWebhookSecret } from '../../../../../lib/server/razorpay';
-import { logAudit } from '../../../../../lib/server/api';
-
-export const runtime = 'nodejs';
-
-export async function POST(req: Request) {
-  let rawBody = '';
-  try {
-    rawBody = await req.text();
-  } catch {
-    return NextResponse.json({ error: 'Could not read request body' }, { status: 400 });
-  }
-
-  const signature = req.headers.get('x-razorpay-signature') || '';
-  const webhookSecret = getRazorpayWebhookSecret();
-
-  // Strictly enforce server-side webhook signature verification
-  if (!webhookSecret) {
-    console.error('RAZORPAY_WEBHOOK_SECRET is not configured');
-    return NextResponse.json({ error: 'Webhook secret is not configured' }, { status: 500 });
-  }
-
-  if (!signature) {
-    return NextResponse.json({ error: 'Missing x-razorpay-signature header' }, { status: 400 });
-  }
-
-  const check = verifyWebhookSignature({ rawBody, signature });
-  if (!check.valid) {
-    console.warn('Webhook signature check failed:', check.error);
-    try {
-      db.prepare(`
-        INSERT INTO webhook_events (event_id, event_type, payload, signature, status, error_message, received_at)
-        VALUES (?, 'unverified', ?, ?, 'rejected', ?, datetime('now'))
-      `).run(`unverified_${Date.now()}`, rawBody.slice(0, 1000), signature, check.error || 'Invalid signature');
-    } catch {}
-    return NextResponse.json({ error: check.error || 'Invalid webhook signature' }, { status: 400 });
-  }
-
-  let event: any = null;
-  try {
-    event = JSON.parse(rawBody);
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON payload' }, { status: 400 });
-  }
-
-  const eventId = event.id || `evt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-  const eventType = String(event.event || 'unknown');
-
-  // ---------------------------------------------------------------------------
-  // IDEMPOTENCY GUARD: Prevent duplicate processing of the same event
-  // ---------------------------------------------------------------------------
-  try {
-    const existing = db.prepare('SELECT id FROM webhook_events WHERE event_id=?').get(eventId);
-    if (existing) {
-      return NextResponse.json({ received: true, idempotent: true });
-    }
-  } catch {}
-
-  try {
-    const payload = event.payload || {};
-    const paymentEntity = payload.payment?.entity;
-    const orderEntity = payload.order?.entity;
-    const refundEntity = payload.refund?.entity;
-
-    // 1. PAYMENT CAPTURED OR ORDER PAID
-    if (eventType === 'payment.captured' || eventType === 'order.paid') {
-      const razorpayPaymentId = paymentEntity?.id;
-      const razorpayOrderId = paymentEntity?.order_id || orderEntity?.id;
-      const method = paymentEntity?.method || 'UPI';
-
-      if (razorpayOrderId) {
-        const order = db.prepare('SELECT id, order_number, status, payment_status FROM orders WHERE razorpay_order_id=?').get(razorpayOrderId) as any;
-        if (order) {
-          const nextStatus = order.status === 'Order Placed' ? 'Payment Confirmed' : order.status;
-          db.prepare(`
-            UPDATE orders 
-            SET payment_status='Paid', 
-                status=?, 
-                razorpay_payment_id=COALESCE(?, razorpay_payment_id),
-                transaction_id=COALESCE(?, transaction_id),
-                updated_at=datetime('now')
-            WHERE id=?
-          `).run(nextStatus, razorpayPaymentId, razorpayPaymentId, order.id);
-
-          // Update payment record in ledger
-          db.prepare(`
-            UPDATE payments 
-            SET status='Paid', 
-                captured=1, 
-                webhook_status='verified', 
-                method=?, 
-                razorpay_payment_id=COALESCE(?, razorpay_payment_id),
-                updated_at=datetime('now')
-            WHERE order_id=? AND (razorpay_order_id=? OR status='Pending')
-          `).run(method, razorpayPaymentId, order.id, razorpayOrderId);
-
-          db.prepare(`
-            INSERT INTO order_status_history (order_id, status, note, user_id)
-            VALUES (?, ?, 'Payment captured webhook confirmed by Razorpay', NULL)
-          `).run(order.id, nextStatus);
-
-          logAudit(null, 'WEBHOOK_PAYMENT_CAPTURED', 'Order', order.order_number, `Payment ID: ${razorpayPaymentId}`);
-        }
+import crypto from 'node:crypto';
+import {NextResponse} from 'next/server';
+import {db} from '../../../../../lib/server/db';
+import {verifyWebhookSignature,getRazorpayWebhookSecret} from '../../../../../lib/server/razorpay';
+import {applyCapturedPayment,applyGatewayRefund,applyPaymentFailure,PaymentValidationError} from '../../../../../lib/server/payment-state';
+export const runtime='nodejs';
+export async function POST(req:Request){
+  const raw=await req.text().catch(()=>null);if(raw===null)return NextResponse.json({error:'Cannot read body'},{status:400});
+  if(!getRazorpayWebhookSecret())return NextResponse.json({error:'Webhook secret is not configured'},{status:500});
+  const signature=req.headers.get('x-razorpay-signature')||'';
+  if(!signature)return NextResponse.json({error:'Missing x-razorpay-signature header'},{status:400});
+  const verified=verifyWebhookSignature({rawBody:raw,signature});if(!verified.valid)return NextResponse.json({error:verified.error||'Invalid signature'},{status:400});
+  let event:any;try{event=JSON.parse(raw);}catch{return NextResponse.json({error:'Invalid JSON payload'},{status:400});}
+  const eventId=String(req.headers.get('x-razorpay-event-id')||event.id||crypto.createHash('sha256').update(raw).digest('hex')).slice(0,200);
+  const type=String(event.event||'unknown');
+  try{
+    const result=db.transaction(()=>{
+      const existing=db.prepare('SELECT id,status FROM webhook_events WHERE event_id=?').get(eventId) as any;
+      if(existing&&['processed','rejected'].includes(existing.status))return {received:true,idempotent:true};
+      if(existing)db.prepare("UPDATE webhook_events SET status='processing',error_message=NULL WHERE id=?").run(existing.id);
+      else db.prepare("INSERT INTO webhook_events (event_id,event_type,payload,signature,status) VALUES (?,?,?,?,'processing')").run(eventId,type,raw,signature);
+      const payment=event.payload?.payment?.entity;
+      if(type==='payment.captured'||type==='order.paid'){
+        if(!payment?.id||!payment?.order_id)throw new PaymentValidationError('Captured payment entity is missing');
+        const order=db.prepare('SELECT id FROM orders WHERE razorpay_order_id=?').get(payment?.order_id||event.payload?.order?.entity?.id) as any;
+        const attempt=order?null:db.prepare('SELECT order_id FROM payments WHERE razorpay_order_id=? ORDER BY id DESC LIMIT 1').get(payment?.order_id) as any;
+        if(order||attempt)applyCapturedPayment(order?.id||attempt.order_id,{...payment,status:payment?.status||'captured'},'webhook');
+      }else if(type==='payment.authorized'){
+        if(payment?.order_id)db.prepare("UPDATE payments SET status='Authorized',webhook_status='authorized',updated_at=datetime('now') WHERE razorpay_order_id=? AND status IN ('Pending','Authorized')").run(payment.order_id);
+      }else if(type==='payment.failed'){
+        if(!payment?.order_id)throw new PaymentValidationError('Failed payment entity is missing');
+        const order=db.prepare('SELECT id FROM orders WHERE razorpay_order_id=?').get(payment?.order_id) as any;
+        if(order)applyPaymentFailure(order.id,payment.order_id,payment.error_description||'Gateway failure',payment.error_code||'GATEWAY_ERROR');
+      }else if(['refund.created','refund.processed','refund.failed'].includes(type)){
+        const refund=event.payload?.refund?.entity;
+        applyGatewayRefund({...refund,status:type==='refund.processed'?'processed':type==='refund.failed'?'failed':refund?.status||'pending'});
       }
+      db.prepare("UPDATE webhook_events SET status='processed',processed_at=datetime('now') WHERE event_id=?").run(eventId);
+      return {received:true};
+    })();
+    return NextResponse.json(result);
+  }catch(error){
+    const message=error instanceof Error?error.message:'Webhook processing failed';
+    if(error instanceof PaymentValidationError){
+      db.prepare("INSERT INTO webhook_events (event_id,event_type,payload,signature,status,error_message) VALUES (?,?,?,?,'rejected',?) ON CONFLICT(event_id) DO UPDATE SET status='rejected',error_message=excluded.error_message").run(eventId,type,raw,signature,message);
+      return NextResponse.json({received:true,rejected:true});
     }
-
-    // 2. PAYMENT AUTHORIZED
-    else if (eventType === 'payment.authorized') {
-      const razorpayOrderId = paymentEntity?.order_id;
-      if (razorpayOrderId) {
-        db.prepare(`
-          UPDATE payments 
-          SET status='Authorized', webhook_status='authorized', updated_at=datetime('now')
-          WHERE razorpay_order_id=?
-        `).run(razorpayOrderId);
-      }
-    }
-
-    // 3. PAYMENT FAILED
-    else if (eventType === 'payment.failed') {
-      const razorpayOrderId = paymentEntity?.order_id;
-      const errCode = paymentEntity?.error_code || 'GATEWAY_ERROR';
-      const errDesc = paymentEntity?.error_description || 'Payment failed on gateway';
-
-      if (razorpayOrderId) {
-        const order = db.prepare('SELECT id, order_number, payment_status FROM orders WHERE razorpay_order_id=?').get(razorpayOrderId) as any;
-        if (order && order.payment_status !== 'Paid') {
-          db.prepare(`
-            UPDATE orders 
-            SET payment_status='Failed', updated_at=datetime('now') 
-            WHERE id=?
-          `).run(order.id);
-
-          db.prepare(`
-            UPDATE payments 
-            SET status='Failed', failure_code=?, failure_reason=?, webhook_status='failed', updated_at=datetime('now')
-            WHERE order_id=?
-          `).run(errCode, errDesc, order.id);
-
-          logAudit(null, 'WEBHOOK_PAYMENT_FAILED', 'Order', order.order_number, `${errCode}: ${errDesc}`);
-        }
-      }
-    }
-
-    // 4. REFUND PROCESSED
-    else if (eventType === 'refund.processed' || eventType === 'refund.created') {
-      const refundId = refundEntity?.id;
-      const paymentId = refundEntity?.payment_id;
-      const refundAmount = Number(refundEntity?.amount || 0) / 100;
-
-      if (paymentId) {
-        const payment = db.prepare('SELECT id, order_id, amount, refunded_amount FROM payments WHERE razorpay_payment_id=? OR transaction_id=?').get(paymentId, paymentId) as any;
-        if (payment) {
-          const newRefundedTotal = Number(payment.refunded_amount || 0) + refundAmount;
-          const isFullRefund = newRefundedTotal >= Number(payment.amount);
-          const refundStatus = isFullRefund ? 'full' : 'partial';
-          const orderPaymentStatus = isFullRefund ? 'Refunded' : 'Partially Refunded';
-
-          db.prepare(`
-            UPDATE payments 
-            SET refund_status=?, refunded_amount=?, updated_at=datetime('now') 
-            WHERE id=?
-          `).run(refundStatus, newRefundedTotal, payment.id);
-
-          db.prepare(`
-            UPDATE orders 
-            SET payment_status=?, updated_at=datetime('now') 
-            WHERE id=?
-          `).run(orderPaymentStatus, payment.order_id);
-
-          // Record in order_refunds if not present
-          const existingRfd = db.prepare('SELECT id FROM order_refunds WHERE gateway_refund_id=?').get(refundId);
-          if (!existingRfd) {
-            db.prepare(`
-              INSERT INTO order_refunds (order_id, amount, reason, status, gateway_refund_id, created_at)
-              VALUES (?, ?, 'Refund processed via Razorpay Webhook', 'completed', ?, datetime('now'))
-            `).run(payment.order_id, refundAmount, refundId);
-          }
-
-          logAudit(null, 'WEBHOOK_REFUND_PROCESSED', 'Payment', paymentId, `Refunded ₹${refundAmount}`);
-        }
-      }
-    }
-
-    // Log the processed event in webhook_events
-    db.prepare(`
-      INSERT INTO webhook_events (event_id, event_type, payload, signature, status, received_at, processed_at)
-      VALUES (?, ?, ?, ?, 'processed', datetime('now'), datetime('now'))
-    `).run(eventId, eventType, rawBody, signature);
-
-    return NextResponse.json({ received: true });
-  } catch (procErr: any) {
-    console.error('Webhook processing exception:', procErr);
-    try {
-      db.prepare(`
-        INSERT INTO webhook_events (event_id, event_type, payload, signature, status, error_message, received_at)
-        VALUES (?, ?, ?, ?, 'error', ?, datetime('now'))
-      `).run(eventId, eventType, rawBody, signature, procErr?.message || 'Processing error');
-    } catch {}
-
-    // Return 200 to prevent webhook flood retries if the error is an unrecoverable internal logic issue
-    return NextResponse.json({ received: true, error: procErr?.message });
+    // Transaction rolled back. A retry can safely process this event again.
+    return NextResponse.json({error:'Temporary webhook processing failure; retry required'},{status:503});
   }
 }

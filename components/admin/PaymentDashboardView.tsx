@@ -1,4 +1,6 @@
 'use client';
+import Papa from 'papaparse';
+
 
 import React, { useState, useEffect, useTransition } from 'react';
 import {
@@ -55,7 +57,9 @@ export const PaymentDashboardView: React.FC = () => {
   const [selectedTx, setSelectedTx] = useState<any | null>(null);
 
   // Refund Modal State
+  const [refundRequestId,setRefundRequestId]=useState('');
   const [refundTargetTx, setRefundTargetTx] = useState<any | null>(null);
+  useEffect(()=>{if(refundTargetTx)setRefundRequestId(crypto.randomUUID());},[refundTargetTx?.id]);
   const [refundAmount, setRefundAmount] = useState<string>('');
   const [refundReason, setRefundReason] = useState<string>('Customer Request');
   const [isRefunding, setIsRefunding] = useState(false);
@@ -118,6 +122,8 @@ export const PaymentDashboardView: React.FC = () => {
     }
   };
 
+  useEffect(()=>{setPage(1);},[search,statusFilter,methodFilter,refundFilter,startDate,endDate]);
+
   useEffect(() => {
     fetchData();
   }, [search, statusFilter, methodFilter, refundFilter, startDate, endDate, page]);
@@ -127,8 +133,8 @@ export const PaymentDashboardView: React.FC = () => {
     if (!refundTargetTx) return;
 
     const amt = parseFloat(refundAmount);
-    if (isNaN(amt) || amt <= 0) {
-      setRefundError('Please enter a valid refund amount');
+    if (!Number.isFinite(amt) || amt < 1 || Math.abs(amt*100-Math.round(amt*100))>0.00001) {
+      setRefundError('Enter at least ₹1 with at most two decimal places');
       return;
     }
 
@@ -142,6 +148,7 @@ export const PaymentDashboardView: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'refund',
+          requestId: refundRequestId,
           paymentId: refundTargetTx.id,
           amount: amt,
           reason: refundReason,
@@ -153,7 +160,7 @@ export const PaymentDashboardView: React.FC = () => {
         throw new Error(json.error || 'Refund initiation failed');
       }
 
-      setRefundSuccess(`Refund of ₹${amt.toFixed(2)} processed successfully!`);
+      setRefundSuccess(json.refund?.status==='completed'?`Refund of ₹${amt.toFixed(2)} completed.`:`Refund of ₹${amt.toFixed(2)} submitted. Gateway confirmation is pending.`);
       setTimeout(() => {
         setRefundTargetTx(null);
         setRefundSuccess(null);
@@ -312,7 +319,7 @@ export const PaymentDashboardView: React.FC = () => {
       tx.order_number || '',
       tx.razorpay_order_id || '',
       tx.razorpay_payment_id || '',
-      `"${(tx.customer_name || '').replace(/"/g, '""')}"`,
+      tx.customer_name || '',
       tx.amount || 0,
       tx.method || 'UPI',
       tx.status || '',
@@ -322,7 +329,7 @@ export const PaymentDashboardView: React.FC = () => {
       tx.gateway || 'Razorpay',
     ]);
 
-    const csvContent = [headers.join(','), ...rows.map((r: any[]) => r.join(','))].join('\n');
+    const csvContent = Papa.unparse([headers,...rows],{quotes:true,escapeFormulae:true});
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -449,6 +456,7 @@ export const PaymentDashboardView: React.FC = () => {
       </div>
 
       {/* Prominent Live Mode Alert Banner */}
+      {config.configurationError && <div role="alert" className="p-4 mb-4 rounded-xl bg-rose-500/10 text-rose-500 text-sm">{config.configurationError}</div>}
       {config.mode === 'LIVE' && config.isActive !== false && (
         <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs animate-in fade-in">
           <div className="flex items-center gap-2.5 text-rose-700 dark:text-rose-400 font-bold">
@@ -728,7 +736,7 @@ export const PaymentDashboardView: React.FC = () => {
                 className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-[var(--bg-subtle)] hover:bg-[var(--border)] text-[var(--text-main)] border border-[var(--border)] transition-colors cursor-pointer"
               >
                 <Download className="w-3.5 h-3.5" />
-                <span>Export CSV</span>
+                <span>Export Current Page</span>
               </button>
             </div>
 
@@ -913,7 +921,7 @@ export const PaymentDashboardView: React.FC = () => {
                             <button
                               onClick={() => {
                                 setRefundTargetTx(tx);
-                                setRefundAmount(String(Number(tx.amount || 0) - Number(tx.refunded_amount || 0)));
+                                setRefundAmount(String(Math.max(0, Number(tx.amount || 0) - Number(tx.refunded_amount || 0) - Number(tx.refund_pending_amount || 0))));
                               }}
                               className="px-2 py-1 rounded-lg text-[10px] font-bold bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 transition-colors cursor-pointer"
                               title="Issue Refund"
@@ -1739,7 +1747,7 @@ export const PaymentDashboardView: React.FC = () => {
                 <div className="flex justify-between pt-1 border-t border-[var(--border)]">
                   <span className="text-[var(--text-muted)]">Max Refundable:</span>
                   <span className="font-bold text-emerald-600">
-                    ₹{(Number(refundTargetTx.amount) - Number(refundTargetTx.refunded_amount || 0)).toLocaleString('en-IN')}
+                    ₹{(Math.max(0, Number(refundTargetTx.amount) - Number(refundTargetTx.refunded_amount || 0) - Number(refundTargetTx.refund_pending_amount || 0))).toLocaleString('en-IN')}
                   </span>
                 </div>
               </div>
@@ -1752,7 +1760,7 @@ export const PaymentDashboardView: React.FC = () => {
                   type="number"
                   step="0.01"
                   min="1"
-                  max={Number(refundTargetTx.amount) - Number(refundTargetTx.refunded_amount || 0)}
+                  max={Math.max(0, Number(refundTargetTx.amount) - Number(refundTargetTx.refunded_amount || 0) - Number(refundTargetTx.refund_pending_amount || 0))}
                   value={refundAmount}
                   onChange={(e) => setRefundAmount(e.target.value)}
                   required

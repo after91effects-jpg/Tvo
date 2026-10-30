@@ -1,6 +1,9 @@
+import {canAccessPaymentOrder} from '../../../lib/server/payment-access';
+import { applyCapturedPayment, applyPaymentFailure, PaymentValidationError } from '../../../lib/server/payment-state';
 import { ok, err, db, getCurrentUser, logAudit } from '../../../lib/server/api';
 import {
   createRazorpayOrder,
+  fetchRazorpayPayment,
   verifyPaymentSignature,
   getSafeConfigStatus,
   getRazorpayKeyId,
@@ -45,6 +48,8 @@ export async function POST(req: Request) {
       const order = db.prepare('SELECT * FROM orders WHERE order_number=?').get(orderNumber) as any;
       if (!order) return err('Order not found', 404);
 
+      if(!canAccessPaymentOrder(order,user,body.sessionId))return err('Order access required',403);
+      if(['Cancelled','Delivered'].includes(order.status)||['Refunded','Partially Refunded'].includes(order.payment_status))return err('This order cannot start another payment',409);
       if (order.payment_status === 'Paid') {
         return err('Order has already been paid', 400);
       }
@@ -57,6 +62,8 @@ export async function POST(req: Request) {
       const amountPaise = Math.round(totalAmount * 100);
       const isProduction = process.env.NODE_ENV === 'production' || getRazorpayMode() === 'LIVE';
 
+      const pending=db.prepare("SELECT * FROM payments WHERE order_id=? AND razorpay_order_id=? AND status IN ('Pending','Authorized') ORDER BY id DESC LIMIT 1").get(order.id,order.razorpay_order_id) as any;
+      if(pending && Math.round(Number(pending.amount)*100)===amountPaise)return ok({key_id:getRazorpayKeyId()||null,order_id:pending.razorpay_order_id,amount:amountPaise,currency:'INR',sandbox:pending.gateway==='Sandbox',reused:true});
       // Check if an existing pending payment attempt can be reused or create new
       const rzOrder = await createRazorpayOrder({
         orderNumber: order.order_number,
@@ -73,6 +80,7 @@ export async function POST(req: Request) {
         return err(rzOrder.error || 'Failed to initialize payment gateway order', 502);
       }
 
+      db.transaction(() => {
       // Update order record with generated Razorpay Order ID
       db.prepare(`
         UPDATE orders 
@@ -81,7 +89,6 @@ export async function POST(req: Request) {
       `).run(rzOrder.id, order.id);
 
       // Record payment attempt in ledger
-      try {
         db.prepare(`
           INSERT INTO payments (
             order_id, amount, currency, method, status, 
@@ -102,9 +109,7 @@ export async function POST(req: Request) {
             created_at: new Date().toISOString(),
           })
         );
-      } catch (insertErr) {
-        console.warn('Could not record pending payment row:', insertErr);
-      }
+      })();
 
       return ok({
         key_id: getRazorpayKeyId() || null,
@@ -157,73 +162,16 @@ export async function POST(req: Request) {
       }
 
       // Ensure this payment attempt matches the order's recorded razorpay_order_id if present
-      if (order.razorpay_order_id && order.razorpay_order_id !== razorpayOrderId) {
+      if (order.razorpay_order_id !== razorpayOrderId && !db.prepare('SELECT id FROM payments WHERE order_id=? AND razorpay_order_id=?').get(order.id,razorpayOrderId)) {
         logAudit(user, 'PAYMENT_ORDER_MISMATCH', 'Order', order.order_number, `Expected ${order.razorpay_order_id}, got ${razorpayOrderId}`);
         return err('Razorpay Order ID mismatch', 400);
       }
 
-      // Advance order status safely
-      const newOrderStatus = order.status === 'Order Placed' ? 'Payment Confirmed' : order.status;
-
-      db.prepare(`
-        UPDATE orders 
-        SET payment_status='Paid', 
-            status=?, 
-            razorpay_order_id=?,
-            razorpay_payment_id=?, 
-            transaction_id=?, 
-            updated_at=datetime('now') 
-        WHERE id=?
-      `).run(newOrderStatus, razorpayOrderId, razorpayPaymentId, razorpayPaymentId, order.id);
-
-      // Insert order status history entry
-      db.prepare(`
-        INSERT INTO order_status_history (order_id, status, note, user_id) 
-        VALUES (?, ?, 'Payment confirmed via verified Razorpay signature', ?)
-      `).run(order.id, newOrderStatus, user?.id ?? null);
-
-      // Update or insert payment row in payments table
-      const existingPay = db.prepare('SELECT id FROM payments WHERE order_id=? AND razorpay_order_id=?').get(order.id, razorpayOrderId) as any;
-      if (existingPay) {
-        db.prepare(`
-          UPDATE payments 
-          SET status='Paid', 
-              captured=1, 
-              razorpay_payment_id=?, 
-              transaction_id=?, 
-              verification_status='verified', 
-              updated_at=datetime('now')
-          WHERE id=?
-        `).run(razorpayPaymentId, razorpayPaymentId, existingPay.id);
-      } else {
-        db.prepare(`
-          INSERT INTO payments (
-            order_id, amount, currency, method, status, 
-            razorpay_order_id, razorpay_payment_id, transaction_id, 
-            gateway, captured, verification_status, meta, created_at, updated_at
-          )
-          VALUES (?, ?, 'INR', ?, 'Paid', ?, ?, ?, ?, 1, 'verified', ?, datetime('now'), datetime('now'))
-        `).run(
-          order.id,
-          order.total,
-          order.payment_method || 'UPI',
-          razorpayOrderId,
-          razorpayPaymentId,
-          razorpayPaymentId,
-          getRazorpayKeyId() ? 'Razorpay' : 'Sandbox',
-          JSON.stringify({ razorpay_order_id: razorpayOrderId, razorpay_payment_id: razorpayPaymentId })
-        );
-      }
-
-      logAudit(user, 'PAYMENT_SUCCESS', 'Order', order.order_number, `Payment verified: ${razorpayPaymentId}`);
-
-      return ok({
-        ok: true,
-        order_number: order.order_number,
-        payment_status: 'Paid',
-        status: newOrderStatus,
-        transaction_id: razorpayPaymentId,
-      });
+      try {
+        const payment=await fetchRazorpayPayment(razorpayPaymentId);
+        const verified=payment || {id:razorpayPaymentId,order_id:razorpayOrderId,amount:Math.round(Number(order.total)*100),currency:'INR',status:'captured',captured:true};
+        return ok(applyCapturedPayment(order.id,verified,'checkout',user));
+      } catch(error){return err(error instanceof Error?error.message:'Payment confirmation unavailable',error instanceof PaymentValidationError?409:502);}
     }
 
     // -------------------------------------------------------------------------
@@ -235,21 +183,11 @@ export async function POST(req: Request) {
       const code = String(body.code || 'USER_CANCELLED').slice(0, 50);
 
       if (orderNumber) {
-        const order = db.prepare('SELECT id, status, payment_status FROM orders WHERE order_number=?').get(orderNumber) as any;
-        if (order && order.payment_status !== 'Paid') {
-          db.prepare(`
-            UPDATE orders 
-            SET payment_status='Failed', updated_at=datetime('now') 
-            WHERE id=?
-          `).run(order.id);
-
-          db.prepare(`
-            UPDATE payments 
-            SET status='Failed', failure_reason=?, failure_code=?, updated_at=datetime('now')
-            WHERE order_id=? AND status='Pending'
-          `).run(reason, code, order.id);
-
-          logAudit(user, 'PAYMENT_FAILURE', 'Order', orderNumber, reason);
+        const order = db.prepare('SELECT * FROM orders WHERE order_number=?').get(orderNumber) as any;
+        if (order) {
+          if(!canAccessPaymentOrder(order,user,body.sessionId))return err('Order access required',403);
+          const gatewayOrder=(db.prepare('SELECT razorpay_order_id FROM orders WHERE id=?').get(order.id) as any)?.razorpay_order_id;
+          if(gatewayOrder)applyPaymentFailure(order.id,gatewayOrder,reason,code);
         }
       }
 

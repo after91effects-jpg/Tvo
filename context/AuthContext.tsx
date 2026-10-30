@@ -251,6 +251,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
 
       setLocalAuthSession(profile, uid);
+      lastActivityRef.current = Date.now();
+      setInactivityWarning(false);
       setUser(profile);
 
       if (typeof window !== 'undefined') {
@@ -340,6 +342,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
 
       setLocalAuthSession(profile, uid);
+      lastActivityRef.current = Date.now();
+      setInactivityWarning(false);
       setUser(profile);
 
       await logAuditEvent({
@@ -410,6 +414,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       setLocalAuthSession(profile, uid);
+      lastActivityRef.current = Date.now();
+      setInactivityWarning(false);
       setUser(profile);
 
       if (typeof window !== 'undefined') {

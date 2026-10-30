@@ -167,6 +167,7 @@ export const DeliveryManagementView: React.FC = () => {
 
       const delivData = await delivRes.json();
       const ordersData = await ordersRes.json();
+      if(!delivRes.ok||!ordersRes.ok)throw new Error(delivData.error||ordersData.error||'Cannot load delivery configuration');
 
       if (delivData) {
         setZones(delivData.zones || []);
@@ -793,13 +794,14 @@ export const DeliveryManagementView: React.FC = () => {
                       <div className="flex items-center gap-2">
                         <label className="text-[11px] font-medium text-[var(--text-muted)]">Driver:</label>
                         <select
+                          disabled={['Cancelled','Delivered'].includes(order.order_status)||order.delivery_slot==='Store Pickup'}
                           value={order.driver_id || ''}
                           onChange={(e) => handleAssignDriver(order.id, e.target.value ? Number(e.target.value) : null)}
                           className="flex-1 text-xs bg-[var(--surface-secondary)] border border-[var(--border)] rounded px-2 py-1 text-[var(--text-primary)]"
                         >
                           <option value="">Unassigned</option>
                           {drivers.map((d) => (
-                            <option key={d.id} value={d.id} disabled={!d.active}>
+                            <option key={d.id} value={d.id} disabled={!d.active || d.status==='off_duty'}>
                               {d.name} ({d.vehicle_type || 'Vehicle'}) {!d.active ? '[Inactive]' : ''}
                             </option>
                           ))}
@@ -807,7 +809,7 @@ export const DeliveryManagementView: React.FC = () => {
                       </div>
 
                       <div className="flex items-center gap-1.5">
-                        {order.delivery_status !== 'out_for_delivery' && order.delivery_status !== 'delivered' && (
+                        {!['Cancelled','Delivered'].includes(order.order_status) && order.driver_id && order.delivery_slot!=='Store Pickup' && order.delivery_status !== 'out_for_delivery' && order.delivery_status !== 'delivered' && (
                           <button
                             onClick={() => handleStatusChange(order.id, 'out_for_delivery')}
                             className="flex-1 py-1.5 px-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-[11px] font-medium transition-colors"
@@ -815,7 +817,7 @@ export const DeliveryManagementView: React.FC = () => {
                             Out for Delivery
                           </button>
                         )}
-                        {order.delivery_status !== 'delivered' && (
+                        {!['Cancelled','Delivered'].includes(order.order_status) && (order.driver_id || order.delivery_slot==='Store Pickup') && order.delivery_status !== 'delivered' && (
                           <button
                             onClick={() => handleStatusChange(order.id, 'delivered')}
                             className="flex-1 py-1.5 px-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[11px] font-medium transition-colors"
@@ -823,7 +825,7 @@ export const DeliveryManagementView: React.FC = () => {
                             Delivered
                           </button>
                         )}
-                        {order.delivery_status !== 'delivered' && order.delivery_status !== 'failed' && (
+                        {!['Cancelled','Delivered'].includes(order.order_status) && order.delivery_status !== 'delivered' && order.delivery_status !== 'failed' && (
                           <button
                             onClick={() => {
                               setFailureModalOrder(order);
@@ -1114,7 +1116,7 @@ export const DeliveryManagementView: React.FC = () => {
           {/* Buffer Settings */}
           <div>
             <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-1">Lead Time & Preparation Buffers</h2>
-            <p className="text-xs text-[var(--text-muted)] mb-4">Kitchen baking buffers and minimum order advance notice rules.</p>
+            <p className="text-xs text-[var(--text-muted)] mb-4">Minimum order notice controls delivery slot booking. Other preparation buffers are kitchen planning estimates.</p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {buffers.map((buf) => (
@@ -1123,6 +1125,7 @@ export const DeliveryManagementView: React.FC = () => {
                   <div className="flex items-center gap-2 mt-2">
                     <input
                       type="number"
+                      min="0"
                       defaultValue={buf.value}
                       onBlur={(e) => handleSaveBuffer(buf, Number(e.target.value))}
                       className="w-24 px-2 py-1 bg-[var(--surface-secondary)] border border-[var(--border)] rounded text-sm font-semibold text-[var(--text-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"

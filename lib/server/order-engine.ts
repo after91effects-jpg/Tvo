@@ -1,3 +1,4 @@
+import { validateReportDates } from './reporting';
 import { getProductPurchaseProfile } from '../productPurchase';
 import { getProductOptions } from '../productOptions';
 import { getSellingUnitLabel, isPieceOrDiscreteUnit } from '../sellingUnit';
@@ -85,7 +86,7 @@ export function validateSlot(
   opts?: { checkCutoff?: boolean }
 ): { ok: boolean; error?: string; slot?: any } {
   if (!date) return { ok: false, error: 'Delivery date is required' };
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { ok: false, error: 'Invalid delivery date format (YYYY-MM-DD required)' };
+  try { validateReportDates(date,''); } catch { return {ok:false,error:'Invalid delivery date format or calendar date (YYYY-MM-DD)'}; }
   const today = getTodayIST();
   if (date < today) return { ok: false, error: 'Delivery date cannot be in the past' };
 
@@ -94,22 +95,14 @@ export function validateSlot(
     const maxDaysRow = db.prepare("SELECT value FROM settings WHERE key='maximum_booking_days'").get() as any;
     const maxDays = maxDaysRow ? Number(maxDaysRow.value) : 30;
     if (maxDays > 0) {
-      const todayDate = new Date();
-      todayDate.setHours(0, 0, 0, 0);
-      const maxDate = new Date(todayDate);
-      maxDate.setDate(maxDate.getDate() + maxDays);
-      const [y, m, d] = date.split('-').map(Number);
-      const selectedDate = new Date(y, m - 1, d);
+      const maxDate = new Date(`${today}T00:00:00Z`);
+      maxDate.setUTCDate(maxDate.getUTCDate()+maxDays);
+      const selectedDate = new Date(`${date}T00:00:00Z`);
       if (selectedDate > maxDate) {
         return { ok: false, error: `Delivery dates can only be booked up to ${maxDays} days in advance` };
       }
     }
   } catch {}
-
-  // Allow Store Pickup
-  if (slotName === 'Store Pickup' || String(slotId) === 'pickup' || (slotName && slotName.toLowerCase().includes('pickup'))) {
-    return { ok: true, slot: { id: 0, name: 'Store Pickup', fee: 0, available: 1 } };
-  }
 
   const blackout = db.prepare('SELECT * FROM blackout_dates WHERE date=?').get(date) as any;
   if (blackout) return { ok: false, error: `We are closed on this date (${blackout.reason || 'Holiday/Maintenance'})` };
@@ -119,14 +112,21 @@ export function validateSlot(
     db.prepare('SELECT * FROM production_capacity WHERE date=?').get('default')) as any;
   const dailyCap = capacityRow?.daily_order_capacity ?? 100;
   const totalBooksRow = db.prepare('SELECT SUM(books) as total FROM slot_capacity WHERE date=?').get(date) as any;
-  const totalBooks = totalBooksRow?.total || 0;
+  const pickupBooks = (db.prepare("SELECT COUNT(*) AS c FROM orders WHERE delivery_date=? AND status!='Cancelled' AND delivery_slot='Store Pickup'").get(date) as any)?.c || 0;
+  const totalBooks = Number(totalBooksRow?.total || 0)+Number(pickupBooks);
   if (totalBooks >= dailyCap) {
     return { ok: false, error: 'Our kitchen is at maximum capacity for this date. Please select another date.' };
+  }
+
+  // Allow Store Pickup
+  if (slotName === 'Store Pickup' || String(slotId) === 'pickup') {
+    return { ok: true, slot: { id: 0, name: 'Store Pickup', fee: 0, available: 1 } };
   }
 
   const slot = ((slotId || slotName) && db.prepare('SELECT * FROM delivery_slots WHERE id=?').get(slotId || 0)) ||
     (slotName && db.prepare('SELECT * FROM delivery_slots WHERE name=?').get(slotName)) as any;
 
+  if (!slot) return {ok:false,error:'Select an available delivery slot'};
   if (slot) {
     if (slot.available === 0) {
       return { ok: false, error: `The ${slot.name} slot is currently inactive. Please select another time.` };
@@ -135,33 +135,37 @@ export function validateSlot(
     if (slot.days) {
       try {
         const allowedDays = JSON.parse(slot.days);
-        if (Array.isArray(allowedDays) && allowedDays.length > 0) {
+        if (!Array.isArray(allowedDays)) return {ok:false,error:'Delivery slot weekdays are invalid; please contact the bakery'};
+        if (Array.isArray(allowedDays)) {
           const dayOfWeek = getWeekdayIST(date);
           if (!allowedDays.includes(dayOfWeek)) {
             return { ok: false, error: `The ${slot.name} slot is not available on this day of the week.` };
           }
         }
-      } catch {}
+      } catch { return {ok:false,error:'Delivery slot weekdays are invalid; please contact the bakery'}; }
+    }
+    if(opts?.checkCutoff && slot.start_time){
+      const notice=Number((db.prepare("SELECT value FROM buffer_settings WHERE key='minimum_order_notice'").get() as any)?.value || 0);
+      const start=Date.parse(`${date}T${String(slot.start_time).slice(0,5)}:00+05:30`);
+      if(Number.isFinite(start)&&start-Date.now()<notice*60000)return {ok:false,error:`Minimum order notice of ${notice} minutes is required before this slot (booking cut-off)`};
     }
     const dayCap = db.prepare('SELECT * FROM slot_capacity WHERE slot_id=? AND date=?').get(slot.id, date) as any;
     const cap = dayCap ? dayCap.capacity : slot.capacity;
-    const books = dayCap ? dayCap.books : slot.books;
+    const books = dayCap ? dayCap.books : 0;
     if ((dayCap && dayCap.closed) || books >= cap) {
       return { ok: false, error: `The ${slot.name} slot is fully booked for this date. Please select another time.` };
     }
 
     // Check same-day cutoff if requested
     if (opts?.checkCutoff) {
-      const now = new Date();
-      const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
-      const ist = new Date(utc + (3600000 * 5.5));
-      const todayIST = `${ist.getFullYear()}-${String(ist.getMonth() + 1).padStart(2, '0')}-${String(ist.getDate()).padStart(2, '0')}`;
+      const ist = new Date(Date.now()+330*60000);
+      const todayIST = ist.toISOString().slice(0,10);
       if (date === todayIST && slot.start_time) {
         const [sh, sm] = slot.start_time.split(':').map(Number);
         const slotStartMinutes = (sh || 0) * 60 + (sm || 0);
         const cutoffMins = slot.cutoff_minutes ?? 120;
-        const currentMinutes = ist.getHours() * 60 + ist.getMinutes();
-        if (currentMinutes > (slotStartMinutes - cutoffMins)) {
+        const currentMinutes = ist.getUTCHours() * 60 + ist.getUTCMinutes();
+        if (currentMinutes >= (slotStartMinutes - cutoffMins)) {
           return { ok: false, error: `The cut-off time for the ${slot.name} slot has already passed for today. Please select an upcoming slot or a future date.` };
         }
       }
@@ -368,15 +372,16 @@ export function createOrder({ items, body, customerId, generateOrderNumber }: Cr
       throw new OrderInputError('Please enter a valid 6-digit delivery pincode');
     }
 
-    const pinRow = db.prepare('SELECT p.available, z.active, z.fee, z.free_delivery_threshold FROM pincodes p LEFT JOIN delivery_zones z ON p.zone_id=z.id WHERE p.pincode=?').get(pincode) as any;
-    if (pinRow && (!pinRow.available || (pinRow.active !== null && pinRow.active === 0))) {
+    const pinRow = db.prepare('SELECT p.available, z.active, z.fee, z.free_delivery_threshold, z.min_order_value FROM pincodes p LEFT JOIN delivery_zones z ON p.zone_id=z.id WHERE p.pincode=?').get(pincode) as any;
+    const pickupRequested = body.deliveryType === 'pickup' || body.deliverySlot === 'Store Pickup';
+    if (!pickupRequested && (!pinRow || !pinRow.available || !pinRow.active)) {
       throw new OrderInputError(`Delivery is not available for pincode ${pincode}. Currently we serve Gurugram and select Delhi NCR areas.`);
     }
 
     const city = (body.city || body.customer?.city || 'Gurugram').trim();
 
     // 2. Validation: delivery slot + blackout + capacity + same-day cutoff (re-checked inside transaction)
-    const slotCheck = validateSlot(body.deliveryDate, body.deliverySlot, body.deliverySlotId, { checkCutoff: true });
+    const slotCheck = validateSlot(body.deliveryDate, pickupRequested ? 'Store Pickup' : body.deliverySlot, pickupRequested ? 'pickup' : body.deliverySlotId, { checkCutoff: true });
     if (!slotCheck.ok) throw new OrderInputError(slotCheck.error || 'Delivery slot error');
 
     // 3. Validation: line items, quantity, product existence, stock, variation and addons
@@ -388,6 +393,7 @@ export function createOrder({ items, body, customerId, generateOrderNumber }: Cr
       subtotal += (line.unit + line.flavourPrice + line.addedAddonTotal) * line.it.qty;
     }
     subtotal = Math.round(subtotal);
+    if(!pickupRequested && subtotal < Number(pinRow?.min_order_value||0))throw new OrderInputError(`Minimum order for this zone is ₹${pinRow.min_order_value}`);
 
     // 5. Authoritative delivery fee from store settings / zone settings
     const freeThreshRow = db.prepare("SELECT value FROM settings WHERE key='free_delivery_threshold'").get() as any;
@@ -400,7 +406,7 @@ export function createOrder({ items, body, customerId, generateOrderNumber }: Cr
 
     const isPickup = body.deliveryType === 'pickup' || body.deliverySlot === 'Store Pickup';
     const deliveryFee = isPickup || zoneFee === 0 || (zoneFreeThreshold !== null && subtotal >= zoneFreeThreshold) ? 0 : zoneFee;
-    const slotSurcharge = isPickup ? 0 : (slotCheck.slot?.fee ? Math.round(Number(slotCheck.slot.fee)) : (Math.round(Number(body.slot_surcharge)) || 0));
+    const slotSurcharge = isPickup ? 0 : Math.round(Number(slotCheck.slot?.fee ?? 0));
     const deliveryInstructions = (body.deliveryInstructions || body.delivery_instructions || body.orderNotes || '').toString().trim().slice(0, 500);
 
     // 6. Coupon code validation
@@ -591,7 +597,7 @@ export function createOrder({ items, body, customerId, generateOrderNumber }: Cr
         customerAddress, pincode, city,
         itemsJson, JSON.stringify(body.addons || []),
         subtotal, discount, couponCode, deliveryFee, slotSurcharge, tax, total,
-        body.deliveryDate || null, body.deliverySlot || (isPickup ? 'Store Pickup' : null), isPickup ? null : (slotCheck.slot?.id ?? (body.deliverySlotId || null)),
+        body.deliveryDate || null, isPickup ? 'Store Pickup' : slotCheck.slot?.name, isPickup ? null : (slotCheck.slot?.id ?? (body.deliverySlotId || null)),
         deliveryZoneId, 'pending',
         'Order Placed', body.priority || 'Normal', body.paymentMethod || 'UPI', 'Pending',
         deliveryInstructions || null,

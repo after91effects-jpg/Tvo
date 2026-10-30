@@ -314,9 +314,7 @@ export async function POST(req: Request) {
 
     // ---- DELIVERY SLOTS ----
     if (type === 'delivery_slots' && (action === 'create' || action === 'update')) {
-      if (action === 'create') db.prepare('INSERT INTO delivery_slots (name, start_time, end_time, capacity, fee, available, days) VALUES (?,?,?,?,?,?,?)').run(body.name, body.start_time, body.end_time, body.capacity, body.fee, body.available ? 1 : 0, JSON.stringify(body.days || [0,1,2,3,4,5,6]));
-      else db.prepare('UPDATE delivery_slots SET name=?, start_time=?, end_time=?, capacity=?, fee=?, available=?, days=? WHERE id=?').run(body.name, body.start_time, body.end_time, body.capacity, body.fee, body.available ? 1 : 0, JSON.stringify(body.days || [0,1,2,3,4,5,6]), body.id);
-      return ok({ ok: true });
+      return ok(ops.saveSlot(user,body));
     }
 
     // ---- ADMINS ----
