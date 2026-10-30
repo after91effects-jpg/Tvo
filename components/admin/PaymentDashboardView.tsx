@@ -861,7 +861,7 @@ export const PaymentDashboardView: React.FC = () => {
                           {tx.razorpay_order_id ? tx.razorpay_order_id.slice(0, 16) + '...' : '—'}
                         </td>
                         <td className="py-3 px-4 font-mono text-[11px] text-[var(--text-muted)] whitespace-nowrap">
-                          {tx.razorpay_payment_id || tx.transaction_id || '—'}
+                          {tx.razorpay_payment_id || (String(tx.transaction_id || '').startsWith('pay_') ? tx.transaction_id : '—')}
                         </td>
                         <td className="py-3 px-4 whitespace-nowrap">
                           <div className="font-semibold text-[var(--text-main)]">{tx.customer_name || 'Guest'}</div>
@@ -1671,7 +1671,7 @@ export const PaymentDashboardView: React.FC = () => {
               <div className="space-y-1.5">
                 <div className="flex justify-between py-1 border-b border-[var(--border)]">
                   <span className="text-[var(--text-muted)]">Razorpay Payment ID:</span>
-                  <span className="font-mono font-semibold">{selectedTx.razorpay_payment_id || selectedTx.transaction_id || '—'}</span>
+                  <span className="font-mono font-semibold">{selectedTx.razorpay_payment_id || (String(selectedTx.transaction_id || '').startsWith('pay_') ? selectedTx.transaction_id : '—')}</span>
                 </div>
                 <div className="flex justify-between py-1 border-b border-[var(--border)]">
                   <span className="text-[var(--text-muted)]">Razorpay Order ID:</span>
