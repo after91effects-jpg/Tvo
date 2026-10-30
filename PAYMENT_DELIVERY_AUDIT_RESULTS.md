@@ -13,6 +13,7 @@ Scope: Payments & Razorpay, refunds, webhooks, checkout fees/availability, Deliv
 - Production missing credentials cannot simulate successful refunds. Provider refund amounts are checked, and missing provider status stays pending.
 - Signed webhook handling deduplicates the provider event ID (or stable body hash). Database changes and processed status commit atomically. Temporary database failures return a retryable response. Invalid financial payloads are recorded as rejected.
 - Saved gateway mode and key prefix must match before payment creation/activation. The dashboard explains mismatches without exposing credentials.
+- Webhook setup/copy uses the current website domain instead of a hardcoded old Hostinger subdomain. Settlement/storage labels accurately describe the actual configuration, and do not promise automatic payout synchronization.
 - Payment date filters use India business dates, validate calendar dates and handle invalid pagination. CSV export is correctly labelled as the current page and escapes spreadsheet formulas. Refund input requires at least ₹1 and two decimal places at most.
 - Delivery availability and final checkout share one policy for real calendar dates, past dates, booking horizon, blackouts, weekdays, inactive/unknown slots, date-specific capacity, minimum notice and India-time cutoff.
 - Historical slot booking counters do not block unrelated dates. Zero capacity and zero delivery thresholds are preserved. Pickup respects blackouts and daily kitchen capacity, does not reserve a road-delivery slot and has no driver/slot fee.
@@ -26,7 +27,7 @@ Scope: Payments & Razorpay, refunds, webhooks, checkout fees/availability, Deliv
 
 - Full automated suite: 678 passed; 21 conditional MySQL tests skipped because the local disposable MySQL harness is not running. Includes 21 payment safety tests and 8 delivery safety tests with isolated fixtures/mocked gateway responses.
 - TypeScript: passed separately from the build. ESLint: no errors; existing typing/dependency warnings remain.
-- Isolated Next.js production build: passed. All changed monetary/delivery safety cases were rechecked afterward (33 focused tests passed). Deployment commit: e98f10e. Post-deploy checks are recorded below after completion.
+- Isolated Next.js production build: passed. All changed monetary/delivery safety cases were rechecked afterward (33 focused tests passed). Deployment commits: e98f10e (core) and 8f7bd31 (final reconciliation/session corrections). Post-deploy checks are recorded below after completion.
 - Monetary edge cases are tested locally; no claim is made that a real end-to-end payment/refund has been exercised.
 
 ## Live configuration requiring owner action
@@ -42,3 +43,5 @@ Scope: Payments & Razorpay, refunds, webhooks, checkout fees/availability, Deliv
 - [Razorpay refund idempotency](https://github.com/razorpay/markdown-docs/blob/master/api/refunds/normal-refunds-idempotent.md)
 
 Live verification of the first deployment: an unknown slot is now unavailable (previously incorrectly available), and invalid calendar dates return HTTP 400 (previously accepted). Final visual and API evidence is saved under artifacts/payment-delivery/.
+
+Automatic bank settlement synchronization is not implemented; the screen now states this clearly and directs payout reconciliation to Razorpay Dashboard.

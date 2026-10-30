@@ -35,6 +35,8 @@ import {
   HelpCircle,
 } from 'lucide-react';
 
+const currentWebhookUrl = () => `${typeof window === 'undefined' ? '' : window.location.origin}/api/payments/razorpay/webhook`;
+
 type SubTab = 'overview' | 'transactions' | 'refunds' | 'settlements' | 'reconciliation' | 'analytics' | 'webhooks' | 'settings';
 
 export const PaymentDashboardView: React.FC = () => {
@@ -288,7 +290,7 @@ export const PaymentDashboardView: React.FC = () => {
   };
 
   const copyWebhookUrl = () => {
-    const url = 'https://blanchedalmond-leopard-910858.hostingersite.com/api/payments/razorpay/webhook';
+    const url = currentWebhookUrl();
     navigator.clipboard.writeText(url).then(() => {
       setCopiedWebhookUrl(true);
       setTimeout(() => setCopiedWebhookUrl(false), 2000);
@@ -1032,7 +1034,7 @@ export const PaymentDashboardView: React.FC = () => {
       {activeSubTab === 'settlements' && (
         <div className="space-y-4">
           <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-800 dark:text-amber-300">
-            <strong>Authoritative Settlement Notice:</strong> Settlement data reflects disbursements from Razorpay to the TVO Flavours merchant bank account. Settlement figures are strictly sourced from verified Razorpay settlement data and are never fabricated from order totals.
+            <strong>Authoritative Settlement Notice:</strong> Saved settlement records are shown here. Automatic bank payout synchronization is not configured; reconcile actual disbursements in the Razorpay Dashboard.
           </div>
 
           <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl overflow-hidden shadow-xs">
@@ -1057,7 +1059,7 @@ export const PaymentDashboardView: React.FC = () => {
                         <div className="max-w-md mx-auto space-y-2">
                           <p className="font-semibold text-[var(--text-main)]">No Settlement Records Yet</p>
                           <p className="text-[11px] text-[var(--text-muted)]">
-                            Razorpay settlements typically clear within T+2 banking days after capture. Live settlements will automatically appear once disbursed by the gateway.
+                            No settlement records have been synchronized. Check payout dates, fees and bank references in the Razorpay Dashboard.
                           </p>
                         </div>
                       </td>
@@ -1522,7 +1524,7 @@ export const PaymentDashboardView: React.FC = () => {
                 </button>
               </div>
               <p className="text-[10px] text-[var(--text-muted)]">
-                AES-256-GCM encrypted in SQLite. Never sent to the client.
+                Encrypted before storage. Never sent to the client.
               </p>
             </div>
 
@@ -1604,7 +1606,7 @@ export const PaymentDashboardView: React.FC = () => {
                   <input
                     type="text"
                     readOnly
-                    value="https://blanchedalmond-leopard-910858.hostingersite.com/api/payments/razorpay/webhook"
+                    value={currentWebhookUrl()}
                     className="w-full px-3.5 py-2.5 text-xs font-mono rounded-xl border border-[var(--border)] bg-[var(--bg-subtle)] text-[var(--text-main)] select-all"
                   />
                   <button
