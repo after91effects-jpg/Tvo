@@ -118,7 +118,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const checkAuth = () => {
       const session = getLocalAuthSession();
       if (session && session.user) {
+        lastActivityRef.current = Date.now();
+        setInactivityWarning(false);
         setUser(session.user);
+      } else {
+        setUser(null);
       }
       setIsAuthReady(true);
       setIsLoading(false);

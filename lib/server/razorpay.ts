@@ -734,7 +734,9 @@ export function runPaymentReconciliation(): Array<{
       const orderTotal = Number(o.total);
       const paidAmount = Number(payment.amount);
 
-      if (payment.status === 'Paid' && o.order_payment_status !== 'Paid' && o.order_payment_status !== 'Refunded' && o.order_payment_status !== 'Partially Refunded') {
+      if (o.order_payment_status === 'Paid' && payment.status !== 'Paid') {
+        recStatus='MISMATCH'; mismatchReason='Order marked Paid without a captured payment in the ledger';
+      } else if (payment.status === 'Paid' && o.order_payment_status !== 'Paid' && o.order_payment_status !== 'Refunded' && o.order_payment_status !== 'Partially Refunded') {
         recStatus = 'MISMATCH';
         mismatchReason = `Payment captured (₹${paidAmount}) but order payment_status is "${o.order_payment_status}"`;
       } else if (Math.abs(orderTotal - paidAmount) > 0.01 && payment.status === 'Paid') {
@@ -747,7 +749,7 @@ export function runPaymentReconciliation(): Array<{
       } else if (payment.status === 'Failed' || o.order_payment_status === 'Failed') {
         recStatus = 'PENDING_REVIEW';
         mismatchReason = payment.failure_reason || 'Payment failed';
-      } else if (payment.status === 'Pending') {
+      } else if (['Pending','Authorized'].includes(payment.status)) {
         recStatus = 'PENDING_REVIEW';
         mismatchReason = 'Payment pending customer action or gateway confirmation';
       } else {
@@ -763,7 +765,7 @@ export function runPaymentReconciliation(): Array<{
       orderStatus: o.order_status,
       orderPaymentStatus: o.order_payment_status,
       paymentRecordId: payment?.id || null,
-      paymentAmount: payment ? Number(payment.amount) : null,
+      paymentAmount: payment?.status==='Paid' ? Number(payment.amount) : null,
       paymentStatus: payment?.status || null,
       paymentMethod: payment?.method || o.payment_method || 'UPI',
       razorpayOrderId: payment?.razorpay_order_id || o.razorpay_order_id || null,

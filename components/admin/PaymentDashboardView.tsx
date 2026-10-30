@@ -672,7 +672,7 @@ export const PaymentDashboardView: React.FC = () => {
                 </li>
                 <li className="flex items-start gap-2">
                   <Check className="w-3.5 h-3.5 text-emerald-500 mt-0.5 shrink-0" />
-                  <span><strong>HMAC-SHA256 Signatures:</strong> Every payment callback verified with server secret before marking Paid.</span>
+                  <span><strong>HMAC-SHA256 Signatures:</strong> Payment signatures, captured state, order, amount and currency are verified before marking Paid.</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <Check className="w-3.5 h-3.5 text-emerald-500 mt-0.5 shrink-0" />
@@ -689,7 +689,7 @@ export const PaymentDashboardView: React.FC = () => {
               <div className="text-xs text-[var(--text-muted)] space-y-2">
                 <div className="flex justify-between py-1 border-b border-[var(--border)]">
                   <span>API Connection:</span>
-                  <span className="font-bold text-[var(--text-main)]">{config.configured ? 'Configured (Active)' : 'Sandbox Mode'}</span>
+                  <span className="font-bold text-[var(--text-main)]">{config.configured ? 'Credentials configured' : 'Not configured'}</span>
                 </div>
                 <div className="flex justify-between py-1 border-b border-[var(--border)]">
                   <span>Public Key ID:</span>
@@ -1098,7 +1098,7 @@ export const PaymentDashboardView: React.FC = () => {
             <div>
               <h2 className="text-sm font-bold text-[var(--text-main)]">Multi-way Payment Reconciliation</h2>
               <p className="text-xs text-[var(--text-muted)]">
-                Automated comparison: TVO Order vs TVO Payment vs Gateway Record vs Refund
+                Order ledger, payment attempts and completed refunds. Verify gateway settlements separately.
               </p>
             </div>
             <button

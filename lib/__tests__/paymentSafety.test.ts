@@ -1,7 +1,7 @@
 import {beforeEach,afterEach,describe,it,expect,vi} from 'vitest';
 import crypto from 'node:crypto';
 vi.mock('../server/db',async()=>{const Sqlite=(await import('better-sqlite3')).default;const db=new Sqlite(':memory:');db.exec(`
-CREATE TABLE orders(id INTEGER PRIMARY KEY,order_number TEXT,total REAL,status TEXT,payment_status TEXT,razorpay_order_id TEXT,razorpay_payment_id TEXT,transaction_id TEXT,payment_method TEXT,updated_at TEXT,session_id TEXT,customer_email TEXT,customer_id INTEGER);
+CREATE TABLE orders(id INTEGER PRIMARY KEY,customer_name TEXT,created_at TEXT,order_number TEXT,total REAL,status TEXT,payment_status TEXT,razorpay_order_id TEXT,razorpay_payment_id TEXT,transaction_id TEXT,payment_method TEXT,updated_at TEXT,session_id TEXT,customer_email TEXT,customer_id INTEGER);
 CREATE TABLE payments(id INTEGER PRIMARY KEY,order_id INTEGER,amount REAL,currency TEXT,method TEXT,status TEXT,razorpay_order_id TEXT,razorpay_payment_id TEXT,transaction_id TEXT,gateway TEXT,captured INTEGER DEFAULT 0,verification_status TEXT,webhook_status TEXT,refund_status TEXT,refunded_amount REAL DEFAULT 0,updated_at TEXT,failure_reason TEXT,failure_code TEXT);
 CREATE TABLE order_refunds(id INTEGER PRIMARY KEY,order_id INTEGER,amount REAL,reason TEXT,method TEXT,status TEXT,gateway_refund_id TEXT);
 CREATE TABLE refunds(id INTEGER PRIMARY KEY,order_id INTEGER,amount REAL,reason TEXT,status TEXT,razorpay_refund_id TEXT);
@@ -14,7 +14,7 @@ vi.mock('../server/razorpay',async importOriginal=>({...await importOriginal<any
 import {db} from '../server/db';
 import {applyCapturedPayment,applyGatewayRefund,applyPaymentFailure} from '../server/payment-state';
 import {requestPaymentRefund} from '../server/payment-refunds';
-import {createRazorpayRefund,gatewayConfigurationError} from '../server/razorpay';
+import {createRazorpayRefund,gatewayConfigurationError,runPaymentReconciliation} from '../server/razorpay';
 import {POST as webhook} from '../../app/api/payments/razorpay/webhook/route';
 import {POST as pay} from '../../app/api/payments/route';
 const captured={id:'pay_safety1',order_id:'order_safety1',amount:100000,currency:'INR',status:'captured',captured:true};
@@ -24,6 +24,7 @@ beforeEach(()=>{vi.clearAllMocks();db.exec('DROP TRIGGER IF EXISTS fail_history;
 afterEach(()=>{vi.unstubAllGlobals();vi.unstubAllEnvs();});
 async function event(type:string,entity:any,id?:string){return webhook(new Request('http://localhost/api/payments/razorpay/webhook',{method:'POST',headers:{'x-razorpay-signature':'test',...(id?{'x-razorpay-event-id':id}:{})},body:JSON.stringify({event:type,payload:type.startsWith('refund.')?{refund:{entity}}:{payment:{entity}}})}));}
 describe('Payment safety and durable refund operations',()=>{
+ it('does not label failed attempt amounts as paid or authorized attempts as matched',()=>{db.prepare("UPDATE payments SET status='Failed' WHERE id=1").run();expect(runPaymentReconciliation()[0].paymentAmount).toBeNull();db.prepare("UPDATE payments SET status='Authorized' WHERE id=1").run();expect(runPaymentReconciliation()[0].reconciliationStatus).toBe('PENDING_REVIEW');});
  it('rejects saved mode and key mismatches',()=>{const config={source:'database',keyId:'rzp_live_example',keySecret:'private',webhookSecret:'',mode:'TEST',isActive:true} as const;expect(gatewayConfigurationError(config)).toMatch(/do not match/);expect(gatewayConfigurationError({...config,mode:'LIVE'})).toBeNull();});
  it('validates captured amount, currency and binding, and is idempotent',()=>{for(const patch of [{amount:100},{currency:'USD'},{status:'authorized'},{order_id:'other'}])expect(()=>applyCapturedPayment(1,{...captured,...patch})).toThrow();expect(payment().status).toBe('Pending');applyCapturedPayment(1,captured);applyCapturedPayment(1,captured);expect(db.prepare('SELECT COUNT(*) c FROM order_status_history').get()).toEqual({c:1});});
  it('does not downgrade refunded orders on repeated success or failure',()=>{applyCapturedPayment(1,captured);applyGatewayRefund(refund);applyCapturedPayment(1,captured);applyPaymentFailure(1,'order_safety1','late failure','FAILED');expect((db.prepare('SELECT payment_status FROM orders').get() as any).payment_status).toBe('Partially Refunded');expect(payment().refunded_amount).toBe(250);});

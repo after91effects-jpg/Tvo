@@ -20,13 +20,13 @@ Scope: Payments & Razorpay, refunds, webhooks, checkout fees/availability, Deliv
 - Driver reassignment updates both old/new availability. Dispatch requires an active on-duty assigned driver. Final orders cannot be reassigned/dispatched. Pickup can be collected without a driver. Failure/return requires a reason.
 - Delivery completion/cancellation synchronizes public order state and releases drivers. Cancellation does not pretend a paid order has been refunded.
 - Zone, PIN, date, slot, buffer, capacity and driver inputs have stronger validation. Admin screens surface fetch failures and block invalid actions. Preparation estimates are labelled separately from the enforced minimum notice rule.
-- Successful login resets the inactivity clock, preventing an old open tab from immediately expiring a newly authenticated admin session.
+- Successful login and sign-in across tabs reset the inactivity clock. Logout propagates across tabs so a stale admin screen cannot remain after its session is removed.
 
 ## Verification
 
-- Full automated suite: 677 passed; 21 conditional MySQL tests skipped because the local disposable MySQL harness is not running. Includes 20 payment safety tests and 8 delivery safety tests with isolated fixtures/mocked gateway responses.
+- Full automated suite: 678 passed; 21 conditional MySQL tests skipped because the local disposable MySQL harness is not running. Includes 21 payment safety tests and 8 delivery safety tests with isolated fixtures/mocked gateway responses.
 - TypeScript: passed separately from the build. ESLint: no errors; existing typing/dependency warnings remain.
-- Production build and post-deploy checks: recorded below after completion.
+- Isolated Next.js production build: passed. All changed monetary/delivery safety cases were rechecked afterward (33 focused tests passed). Deployment commit: e98f10e. Post-deploy checks are recorded below after completion.
 - Monetary edge cases are tested locally; no claim is made that a real end-to-end payment/refund has been exercised.
 
 ## Live configuration requiring owner action
@@ -40,3 +40,5 @@ Scope: Payments & Razorpay, refunds, webhooks, checkout fees/availability, Deliv
 
 - [Razorpay payment API](https://d6xcmfyh68wv8.cloudfront.net/docs/api/payments/)
 - [Razorpay refund idempotency](https://github.com/razorpay/markdown-docs/blob/master/api/refunds/normal-refunds-idempotent.md)
+
+Live verification of the first deployment: an unknown slot is now unavailable (previously incorrectly available), and invalid calendar dates return HTTP 400 (previously accepted). Final visual and API evidence is saved under artifacts/payment-delivery/.
